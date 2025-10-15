@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Asistencia - CESPSIC</title>
+    
+    <!-- Google Sign-In API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <meta name="google-signin-client_id" content="799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logos">
+                <img src="https://lh3.googleusercontent.com/d/19ybSSXzb1ko_982HrRi7Kd7dPfN8Peuc" alt="UAS" class="logo">
+				<img src="https://lh3.googleusercontent.com/d/12tYxfzWgy3BVYjadXOEKlX5-uSsxIrBt" alt="CESPSIC" class="logo">
+				<img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicología" class="logo">
+            </div>
+            <h1>Servicio de atención psicológica, rescatando la inclusión del psicólogo a través del Centro de Servicios Psicológicos a la Comunidad (CESPSIC) v. 1.2.03</h1>
+        </div>
+
+        <!-- Sección de Autenticación -->
+        <div class="auth-section" id="auth-section">
+            <div class="auth-title" id="auth-title">
+                🔒 Autenticación Requerida
+            </div>
+            
+            <div class="auth-warning">
+                ⚠️ Para registrar su asistencia debe autenticarse con su cuenta Gmail institucional o personal
+            </div>
+            
+            <!-- Información del usuario autenticado -->
+            <div class="user-info" id="user-info">
+                <img id="user-avatar" class="user-avatar" src="" alt="Avatar">
+                <div class="user-email" id="user-email"></div>
+                <div class="user-name" id="user-name"></div>
+                <button class="signout-btn" onclick="signOut()">🚪 Cerrar Sesión</button>
+            </div>
+            
+            <!-- Botón de inicio de sesión con Google -->
+            <div id="signin-button-container">
+                <button class="google-signin-btn" id="main-signin-btn" onclick="requestAuthentication()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                    <span id="signin-btn-text">Iniciar Sesión con Google</span>
+                </button>
+            </div>
+
+            <!-- Enlace para revocar permisos (solo visible cuando hay permisos) -->
+            <div class="revoke-section" id="revoke-section" style="display: none;">
+                <button class="revoke-link" onclick="requestRevocation()">
+                    🔐 Revocar permisos en este dispositivo
+                </button>
+            </div>
+			
+			<div class="auth-info" style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 8px; font-size: 14px; color: #1565c0;">
+				ℹ️ <strong>Nota 1:</strong> La autenticación solo se realiza cuando usted haga clic en el botón. 
+				No se intentará automáticamente al cargar la página.<br>
+				ℹ️ <strong>Nota 2:</strong> Recuerde que necesita tener activado el permiso de ubicación para esta aplicación.<br>
+				ℹ️ <strong>Nota 3:</strong> Recuerde que necesita tener espacio en su cuenta Google para que se registre la asistencia correctamente.
+			</div>			
+        </div>
+
+        <!-- Modal de Aviso de Privacidad -->
+        <div class="modal-overlay" id="privacy-modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>🔒 Aviso de Privacidad - CESPSIC</h2>
+                </div>
+                <div class="modal-body">
+                    <div class="privacy-text">
+                        <p>Los datos personales que se recaban en esta plataforma (autentificación, registros de actividad, archivos de evidencias y de geolocalización) serán tratados por el CESPSIC de la UAS con la finalidad de gestionar la asistencia de brigadistas, practicantes y residentes; validar evidencias de actividades y fines administrativos relacionados con su labor dentro de la clínica de la universidad.</p>
+                        
+                        <p>El tratamiento es necesario para la correcta operación del servicio. Los datos se conservarán por el periodo necesario para fines administrativos y conforme a la normativa institucional.</p>
+                        
+                        <p><strong>Importante:</strong> Antes de subir evidencias que incluyan imágenes de terceros, asegúrese que no se pueda identificar a la persona o en su defecto solicite consentimiento escrito.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-accept" onclick="acceptPrivacy()">Aceptar y Continuar</button>
+					<button class="btn-reject" onclick="rejectPrivacy()">Rechazar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Confirmación de Revocación -->
+        <div class="modal-overlay" id="revoke-modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>⚠️ Revocar Permisos de Privacidad</h2>
+                </div>
+                <div class="modal-body">
+                    <p>Para revocar los permisos de privacidad debe autenticarse nuevamente. Esto registrará la revocación en nuestros sistemas de auditoría.</p>
+                    <p><strong>Una vez revocados:</strong></p>
+                    <ul>
+                        <li>Sus permisos serán eliminados de este dispositivo</li>
+                        <li>Se cerrará automáticamente su sesión</li>
+                        <li>Deberá aceptar nuevamente el aviso de privacidad para usar la aplicación</li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-reject" onclick="cancelRevocation()">Cancelar</button>
+                    <button class="btn-danger" onclick="authenticateToRevoke()">Autenticar para Revocar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulario (inicialmente deshabilitado) -->
+        <div class="form-overlay" id="form-container">
+            <form id="attendanceForm" enctype="multipart/form-data">
+                <!-- Campos ocultos (automáticos) -->
+                <input type="hidden" id="timestamp" name="timestamp">
+                <input type="hidden" id="email" name="email">
+                <input type="hidden" id="latitude" name="latitude">
+                <input type="hidden" id="longitude" name="longitude">
+                <input type="hidden" id="location_status" name="location_status">
+                <input type="hidden" id="google_user_id" name="google_user_id">
+
+                <!-- Información personal -->
+                <div class="form-section">
+                    <div class="form-row-three">
+                        <div class="form-group">
+                            <label for="nombre">Nombre <span class="required">*</span></label>
+                            <input type="text" id="nombre" name="nombre" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="apellido_paterno">Apellido Paterno <span class="required">*</span></label>
+                            <input type="text" id="apellido_paterno" name="apellido_paterno" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="apellido_materno">Apellido Materno <span class="required">*</span></label>
+                            <input type="text" id="apellido_materno" name="apellido_materno" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tipo de estudiante y Modalidad -->
+                <div class="form-section">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tipo_estudiante">Tipo de estudiante <span class="required">*</span></label>
+                            <select id="tipo_estudiante" name="tipo_estudiante" required>
+                                <option value="">Seleccione una opción</option>
+                                <option value="estancia_profesional">Estancia Profesional</option>
+                                <option value="practicas_supervisadas">Prácticas Supervisadas</option>
+                                <option value="servicio_social">Servicio Social</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="modalidad">Modalidad <span class="required">*</span></label>
+                            <select id="modalidad" name="modalidad" required>
+                                <option value="">Seleccione una opción</option>
+                                <option value="presencial">Presencial</option>
+                                <option value="virtual">Virtual</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fecha, hora y ubicación -->
+                <div class="form-section">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="fecha">Fecha</label>
+                            <input type="date" id="fecha" name="fecha" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="hora">Hora</label>
+                            <input type="time" id="hora" name="hora" readonly>
+                        </div>
+                    </div>
+                    
+                    <!-- CAMPOS DE UBICACIÓN -->
+                    <div class="form-group">
+                        <label for="ubicacion_detectada">Ubicación detectada <span class="required">*</span></label>
+                        <input type="text" id="ubicacion_detectada" name="ubicacion_detectada" 
+                               value="Esperando autenticación..." class="location-field" readonly>
+                        <div id="location_status_display" class="location-status loading">
+                            📍 Complete la autenticación para obtener ubicación GPS
+                        </div>
+                        <button type="button" id="retry_location_btn" class="location-retry-btn" style="display: none;">
+                            🔄 Reintentar ubicación
+                        </button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="direccion_completa">Dirección completa</label>
+                        <input type="text" id="direccion_completa" name="direccion_completa" 
+                               value="Esperando autenticación..." class="location-field" readonly>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="precision_gps">Precisión GPS</label>
+                            <input type="text" id="precision_gps" name="precision_gps" 
+                                   value="Esperando autenticación..." class="location-field" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="tipo_registro">Tipo de registro <span class="required">*</span></label>
+                            <select id="tipo_registro" name="tipo_registro" required>
+                                <option value="">Seleccione</option>
+                                <option value="entrada">Entrada</option>
+                                <option value="salida">Salida</option>
+                                <option value="permiso">Permiso</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Campos condicionales para Permiso y Otro -->
+                    <div id="permiso_detalle_section" class="conditional-field">
+                        <div class="form-group">
+                            <label for="permiso_detalle">Especifique el motivo del permiso <span class="required">*</span></label>
+                            <textarea id="permiso_detalle" name="permiso_detalle" rows="3" placeholder="Describa el motivo del permiso..."></textarea>
+                        </div>
+                    </div>
+
+                    <div id="otro_detalle_section" class="conditional-field">
+                        <div class="form-group">
+                            <label for="otro_detalle">Especifique el tipo de registro <span class="required">*</span></label>
+                            <textarea id="otro_detalle" name="otro_detalle" rows="3" placeholder="Describa el tipo de registro..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECCIÓN DE EVIDENCIAS FOTOGRÁFICAS (Solo para salida) -->
+                <div class="form-section" id="evidencias_section" style="display: none;">
+                    <div class="form-group">
+                        <label for="evidencias">Evidencias fotográficas (opcional)</label>
+                        <div class="evidencias-container">
+                            <div class="evidencias-info">
+                                📸 Puede subir hasta 5 imágenes como evidencia de su asistencia<br>
+                                <small>Formatos aceptados: JPG, PNG, WEBP | Tamaño máximo: 10MB por imagen</small>
+                            </div>
+                            <input type="file" id="evidencias" name="evidencias" 
+                                   accept="image/jpeg,image/png,image/webp" 
+                                   multiple 
+                                   class="evidencias-input">
+                            <div class="evidencias-preview" id="evidencias-preview"></div>
+                            <div class="evidencias-status" id="evidencias-status"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sección de salida (condicional) -->
+                <div id="salida_section" class="conditional-field">
+                    <div class="form-group">
+                        <label for="intervenciones_psicologicas">Intervenciones Psicológicas atendidas en el día</label>
+                        <input type="number" id="intervenciones_psicologicas" name="intervenciones_psicologicas" min="0" value="0">
+                    </div>
+
+                    <!-- Grupos de edad (condicional) -->
+                    <div id="grupos_edad_section" class="conditional-field">
+                        <label>Distribución por grupos de edad:</label>
+                        <div class="age-groups">
+                            <div class="form-group">
+                                <label for="ninos_ninas">Niños y niñas</label>
+                                <input type="number" id="ninos_ninas" name="ninos_ninas" min="0" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="adolescentes">Adolescentes</label>
+                                <input type="number" id="adolescentes" name="adolescentes" min="0" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="adultos">Adultos</label>
+                                <input type="number" id="adultos" name="adultos" min="0" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="mayores_60">Mayores de 60 años</label>
+                                <input type="number" id="mayores_60" name="mayores_60" min="0" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="familia">Familia</label>
+                                <input type="number" id="familia" name="familia" min="0" value="0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actividades realizadas -->
+                    <div class="form-group">
+                        <label>Actividades realizadas (seleccione todas las que apliquen):</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="entrega_folletos" name="actividades[]" value="entrega_folletos">
+                                <label for="entrega_folletos">Entrega de folletos</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="dar_informacion" name="actividades[]" value="dar_informacion">
+                                <label for="dar_informacion">Dar información y resolver dudas de la población</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="difundir_info" name="actividades[]" value="difundir_info">
+                                <label for="difundir_info">Difundir información en la facultad de psicología</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="aplicacion_encuestas" name="actividades[]" value="aplicacion_encuestas">
+                                <label for="aplicacion_encuestas">Aplicación de encuestas</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="actividades_varias" name="actividades[]" value="actividades_varias">
+                                <label for="actividades_varias">Actividades varias en la clínica</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="encuestas_satisfaccion" name="actividades[]" value="encuestas_satisfaccion">
+                                <label for="encuestas_satisfaccion">Aplicación de encuestas de satisfacción</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="entrevista_psicologica" name="actividades[]" value="entrevista_psicologica">
+                                <label for="entrevista_psicologica">Realización de entrevista psicológica e historia clínica</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="pruebas_psicologicas" name="actividades[]" value="pruebas_psicologicas">
+                                <label for="pruebas_psicologicas">Aplicación de pruebas psicológicas</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campo condicional para actividades varias -->
+                    <div id="actividades_varias_detalle" class="conditional-field">
+                        <div class="form-group">
+                            <label for="actividades_varias_texto">¿Qué otras actividades realizó? <span class="required">*</span></label>
+                            <textarea id="actividades_varias_texto" name="actividades_varias_texto" rows="3" placeholder="Describa las actividades realizadas..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Campo condicional para pruebas psicológicas -->
+                    <div id="pruebas_psicologicas_detalle" class="conditional-field">
+                        <div class="form-group">
+                            <label for="pruebas_psicologicas_texto">¿Cuáles pruebas psicológicas aplicó? <span class="required">*</span></label>
+                            <textarea id="pruebas_psicologicas_texto" name="pruebas_psicologicas_texto" rows="3" placeholder="Liste las pruebas psicológicas aplicadas..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campo de comentarios adicionales -->
+                <div class="form-section">
+                    <div class="form-group">
+                        <label for="comentarios_adicionales">Comentarios adicionales</label>
+                        <textarea id="comentarios_adicionales" name="comentarios_adicionales" rows="4" placeholder="Escriba cualquier información adicional que considere relevante..."></textarea>
+                    </div>
+                </div>
+
+                <div class="status" id="status"></div>
+                
+                <button type="submit" class="submit-btn" id="submit_btn" disabled>
+                    🔒 Autentíquese primero para continuar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="js/script.js"></script>
+</body>
+</html>
