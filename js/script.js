@@ -1606,107 +1606,115 @@ async function sendDataWithFallback(data, retryCount = 0) {
         ) && isAttendanceSubmission;
         
         if (needsVerification) {
-            console.log(`[${REQUEST_ID}] ⚠️ Respuesta requiere verificación en Sheets`);
+            console.log(`[${REQUEST_ID}] ⚠️ Respuesta requiere verificación`);
+            console.log(`[${REQUEST_ID}]    CORS: ${response.cors_blocked}`);
+            console.log(`[${REQUEST_ID}]    Timeout: ${response.timeout}`);
+            console.log(`[${REQUEST_ID}]    row_number: ${response.row_number}`);
+            console.log(`[${REQUEST_ID}]    success: ${response.success}`);
             
-            const reasons = [];
-            if (response.cors_blocked) reasons.push('CORS bloqueado');
-            if (response.timeout) reasons.push('Timeout');
-            if (!response.row_number) reasons.push('Sin row_number');
-            if (!response.success) reasons.push('success=false');
+            // ⏳ Esperar 4 segundos para que backend termine
+            console.log(`[${REQUEST_ID}] ⏳ Esperando 4 segundos...`);
+            await new Promise(resolve => setTimeout(resolve, 4000));
             
-            console.log(`[${REQUEST_ID}]    Razones: ${reasons.join(', ')}`);
+            console.log(`[${REQUEST_ID}] 🔍 Llamando verificarEnSheets...`);
             
-            // Esperar para que el backend termine de escribir
-            console.log(`[${REQUEST_ID}] ⏳ Esperando 3 segundos para sincronización...`);
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            console.log(`[${REQUEST_ID}] 🔍 Verificando en Google Sheets...`);
-            
+            let verification;
             try {
-                const verification = await verificarEnSheets(data, REQUEST_ID);
+                verification = await verificarEnSheets(data, REQUEST_ID);
+                console.log(`[${REQUEST_ID}] Resultado verificación completo:`, verification);
+            } catch (verifyError) {
+                console.error(`[${REQUEST_ID}] ❌ Error llamando verificarEnSheets:`, verifyError);
+                verification = {
+                    found: false,
+                    error: verifyError.message
+                };
+            }
+            
+            // ✅ CASO 1: Encontrado en Sheets
+            if (verification.found && verification.row_number) {
+                console.log(`[${REQUEST_ID}] ✅✅✅ ENCONTRADO en fila ${verification.row_number} ✅✅✅`);
                 
-                console.log(`[${REQUEST_ID}] Resultado verificación:`, verification);
+                response.success = true;
+                response.verified = true;
+                response.row_number = verification.row_number;
+                response.verified_via_sheets = true;
+                response.message = 'Registro verificado en Google Sheets';
                 
-                if (verification.found && verification.row_number) {
-                    // ✅ ENCONTRADO EN SHEETS
-                    console.log(`[${REQUEST_ID}] ✅✅✅ VERIFICADO EN SHEETS ✅✅✅`);
-                    console.log(`[${REQUEST_ID}] Fila encontrada: ${verification.row_number}`);
+            } 
+            // ⚠️ CASO 2: Verificación también tiene CORS
+            else if (verification.cors_blocked_verification) {
+                console.warn(`[${REQUEST_ID}] ⚠️ Verificación también bloqueada por CORS`);
+                
+                // Calcular tiempo desde envío
+                const timeSinceSubmit = Date.now() - new Date(data.client_timestamp).getTime();
+                console.log(`[${REQUEST_ID}] Tiempo desde envío: ${timeSinceSubmit}ms`);
+                
+                // Si es reciente (menos de 10 segundos), asumir éxito
+                if (timeSinceSubmit < 10000) {
+                    console.log(`[${REQUEST_ID}] ✅ Asumiendo éxito (envío reciente)`);
                     
                     response.success = true;
                     response.verified = true;
-                    response.row_number = verification.row_number;
-                    response.verified_via_sheets = true;
-                    response.verification_details = verification.matched_data;
-                    response.message = 'Registro verificado exitosamente en Google Sheets';
-                    response.verification_method = 'sheets_search';
-                    
-                } else if (verification.cors_blocked_verification) {
-                    // ⚠️ Verificación también bloqueada por CORS
-                    console.warn(`[${REQUEST_ID}] ⚠️ Verificación también bloqueada por CORS`);
-                    
-                    // Calcular tiempo desde el envío
-                    const timeSinceSubmit = Date.now() - new Date(data.client_timestamp).getTime();
-                    console.log(`[${REQUEST_ID}] Tiempo desde envío: ${timeSinceSubmit}ms`);
-                    
-                    if (timeSinceSubmit < 15000) { // 15 segundos
-                        console.log(`[${REQUEST_ID}] ✅ Asumiendo éxito (envío reciente)`);
-                        
-                        response.success = true;
-                        response.verified = true;
-                        response.row_number = null;
-                        response.assumed_success = true;
-                        response.verification_note = 'No se pudo verificar debido a CORS, pero el envío fue reciente';
-                        response.message = 'Registro probablemente exitoso (verificación bloqueada por CORS)';
-                        response.verification_method = 'assumed_recent';
-                        response.manual_verification_required = true;
-                        
-                    } else {
-                        console.error(`[${REQUEST_ID}] ❌ No se pudo verificar (envío no reciente)`);
-                        
-                        throw new Error(
-                            'No se pudo verificar el registro en Google Sheets.\n\n' +
-                            'Por favor, verifique manualmente si su asistencia se registró correctamente.\n\n' +
-                            `Busque en Sheets por:\n` +
-                            `• Email: ${data.email}\n` +
-                            `• Hora: ${new Date(data.timestamp).toLocaleTimeString()}\n` +
-                            `• Modalidad: ${data.modalidad}\n\n` +
-                            'Si NO aparece, puede reintentar el registro.'
-                        );
-                    }
-                    
+                    response.row_number = null;
+                    response.assumed_success = true;
+                    response.manual_verification_required = true;
+                    response.message = 'Registro probablemente exitoso (CORS bloqueó confirmación)';
                 } else {
-                    // ❌ No encontrado en verificación
-                    console.error(`[${REQUEST_ID}] ❌ No encontrado en verificación`);
-                    console.error(`[${REQUEST_ID}] Detalles:`, verification);
+                    // Si no es reciente, pedir verificación manual
+                    console.error(`[${REQUEST_ID}] ❌ No se pudo verificar`);
                     
                     throw new Error(
-                        'El registro no se encontró en Google Sheets después de la verificación.\n\n' +
-                        'Posibles causas:\n' +
-                        '• El registro aún no se ha sincronizado (espere 1 minuto)\n' +
-                        '• Hubo un problema al guardar\n\n' +
-                        'Por favor, verifique manualmente en Google Sheets:\n' +
+                        '⚠️ No se pudo confirmar el registro debido a restricciones del navegador.\n\n' +
+                        'POR FAVOR, VERIFIQUE MANUALMENTE en Google Sheets:\n\n' +
                         `• Email: ${data.email}\n` +
                         `• Hora: ${new Date(data.timestamp).toLocaleTimeString()}\n` +
                         `• Modalidad: ${data.modalidad}\n\n` +
-                        'Si NO aparece, puede reintentar el registro.'
+                        'Si NO encuentra el registro, puede intentar nuevamente.\n' +
+                        'Si SÍ encuentra el registro, NO lo reintente (evite duplicados).'
                     );
                 }
+            }
+            // ❌ CASO 3: No encontrado
+            else {
+                console.error(`[${REQUEST_ID}] ❌ No encontrado en verificación`);
+                console.error(`[${REQUEST_ID}] Detalles verificación:`, verification);
                 
-            } catch (verifyError) {
-                console.error(`[${REQUEST_ID}] ❌ Error en proceso de verificación:`, verifyError);
+                // Dar una segunda oportunidad - esperar 3 segundos más
+                console.log(`[${REQUEST_ID}] 🔄 Segunda verificación en 3s...`);
+                await new Promise(resolve => setTimeout(resolve, 3000));
                 
-                // Si el error es de nuestras validaciones, re-lanzarlo
-                if (verifyError.message.includes('verifique manualmente') ||
-                    verifyError.message.includes('no se encontró')) {
-                    throw verifyError;
+                let verification2;
+                try {
+                    verification2 = await verificarEnSheets(data, REQUEST_ID);
+                    console.log(`[${REQUEST_ID}] Segunda verificación:`, verification2);
+                } catch (e) {
+                    verification2 = { found: false };
                 }
                 
-                // Para otros errores de verificación, dar más contexto
-                throw new Error(
-                    `Error durante la verificación: ${verifyError.message}\n\n` +
-                    'Por favor, verifique manualmente en Google Sheets si su asistencia se registró.\n\n' +
-                    `Busque: ${data.email} - ${new Date(data.timestamp).toLocaleTimeString()}`
-                );
+                if (verification2.found && verification2.row_number) {
+                    console.log(`[${REQUEST_ID}] ✅ ENCONTRADO en segunda verificación`);
+                    
+                    response.success = true;
+                    response.verified = true;
+                    response.row_number = verification2.row_number;
+                    response.verified_via_sheets = true;
+                    response.message = 'Registro verificado (segunda verificación)';
+                } else {
+                    console.error(`[${REQUEST_ID}] ❌ No encontrado en segunda verificación`);
+                    
+                    throw new Error(
+                        '⚠️ El registro no se encontró en Google Sheets después de dos verificaciones.\n\n' +
+                        'VERIFIQUE MANUALMENTE en Google Sheets:\n\n' +
+                        `• Email: ${data.email}\n` +
+                        `• Hora: ${new Date(data.timestamp).toLocaleTimeString()}\n` +
+                        `• Modalidad: ${data.modalidad}\n\n` +
+                        'Si el registro NO está:\n' +
+                        '• Puede intentar registrar nuevamente\n\n' +
+                        'Si el registro SÍ está:\n' +
+                        '• NO lo reintente (evite duplicados)\n' +
+                        '• El sistema tiene un problema con la confirmación automática'
+                    );
+                }
             }
         }
         
@@ -1996,44 +2004,108 @@ function enviarViaFormulario(data, requestId) {
 
 // ========== FUNCIÓN AUXILIAR: Verificar en Google Sheets ==========
 async function verificarEnSheets(originalData, requestId) {
+    console.log(`[${requestId}] 🔍 Iniciando verificación en Sheets...`);
+    
     try {
-        console.log(`[${requestId}] 🔍 Iniciando verificación en Google Sheets...`);
-        
         const verificationData = {
             action: 'verify_submission',
             email: originalData.email,
             timestamp: originalData.timestamp || originalData.client_timestamp,
-            modalidad: originalData.modalidad,
-            nombre: originalData.nombre,
-            apellido_paterno: originalData.apellido_paterno
+            modalidad: originalData.modalidad
         };
         
-        console.log(`[${requestId}] Datos de verificación:`, verificationData);
+        console.log(`[${requestId}] Enviando solicitud de verificación...`);
+        console.log(`[${requestId}] Datos:`, verificationData);
         
-        // Usar el mismo método de envío
-        const response = await enviarViaFormulario(verificationData, requestId + '_verify');
-        
-        console.log(`[${requestId}] Respuesta de verificación:`, response);
-        
-        // Si hay CORS en la verificación también, esperar y asumir que se procesó
-        if (response.cors_blocked) {
-            console.warn(`[${requestId}] ⚠️ CORS en verificación - asumiendo que se encontró`);
-            return {
-                found: true,
-                row_number: null,
-                cors_blocked_verification: true,
-                message: 'Verificación bloqueada por CORS - registro probablemente exitoso'
+        // Crear un iframe para verificación (método más simple)
+        return new Promise((resolve, reject) => {
+            const verifyId = requestId + '_verify';
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.name = 'verify_frame_' + verifyId;
+            
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = GOOGLE_SCRIPT_URL;
+            form.target = iframe.name;
+            form.style.display = 'none';
+            
+            // Agregar campos
+            Object.entries(verificationData).forEach(([key, value]) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value;
+                form.appendChild(input);
+            });
+            
+            let resolved = false;
+            
+            // Timeout de 10 segundos
+            const timeout = setTimeout(() => {
+                if (!resolved) {
+                    resolved = true;
+                    cleanup();
+                    console.warn(`[${requestId}] ⏱️ Timeout en verificación`);
+                    resolve({
+                        found: false,
+                        error: 'Timeout en verificación',
+                        cors_blocked_verification: true
+                    });
+                }
+            }, 10000);
+            
+            // Intentar leer respuesta
+            iframe.onload = function() {
+                setTimeout(() => {
+                    if (resolved) return;
+                    
+                    try {
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        const text = doc.body.textContent || doc.body.innerText || '';
+                        
+                        if (text) {
+                            const response = JSON.parse(text);
+                            console.log(`[${requestId}] ✅ Respuesta verificación:`, response);
+                            resolved = true;
+                            cleanup();
+                            resolve(response);
+                        } else {
+                            throw new Error('Sin contenido');
+                        }
+                    } catch (e) {
+                        // CORS bloqueado
+                        console.warn(`[${requestId}] ⚠️ CORS en verificación`);
+                        resolved = true;
+                        cleanup();
+                        resolve({
+                            found: false,
+                            cors_blocked_verification: true
+                        });
+                    }
+                }, 2000);
             };
-        }
-        
-        return response;
+            
+            function cleanup() {
+                clearTimeout(timeout);
+                setTimeout(() => {
+                    try {
+                        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+                        if (document.body.contains(form)) document.body.removeChild(form);
+                    } catch (e) {}
+                }, 500);
+            }
+            
+            document.body.appendChild(iframe);
+            document.body.appendChild(form);
+            form.submit();
+        });
         
     } catch (error) {
-        console.error(`[${requestId}] ❌ Error en verificación:`, error);
-        return { 
-            found: false, 
-            error: error.message,
-            fallback: true 
+        console.error(`[${requestId}] ❌ Error en verificarEnSheets:`, error);
+        return {
+            found: false,
+            error: error.message
         };
     }
 }
