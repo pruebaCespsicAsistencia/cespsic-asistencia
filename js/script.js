@@ -589,22 +589,44 @@ async function revokePrivacyConsent() {
 }
 
 async function recordPrivacyAction(action) {
-    if (!currentUser) throw new Error('Usuario no autenticado');
-    
-    const privacyData = {
-        action: 'record_privacy_action',
-        timestamp: new Date().toISOString(),
-        email: currentUser.email,
-        google_user_id: currentUser.id,
-        authenticated_user_name: currentUser.name,
-        privacy_action: action,
-        privacy_version: PRIVACY_VERSION,
-        device_info: navigator.userAgent,
-        authentication_purpose: authenticationPurpose,
-        is_ios: isIOS
-    };
-    
-    await sendDataWithFallback(privacyData);
+    // ⚠️ IMPORTANTE: NO bloquear la autenticación si esto falla
+    try {
+        if (!currentUser) {
+            console.warn('⚠️ recordPrivacyAction: Usuario no autenticado, omitiendo registro');
+            return { success: false, skipped: true, reason: 'No authenticated user' };
+        }
+        
+        const privacyData = {
+            action: 'record_privacy_action',
+            timestamp: new Date().toISOString(),
+            email: currentUser.email,
+            google_user_id: currentUser.id,
+            authenticated_user_name: currentUser.name,
+            privacy_action: action,
+            privacy_version: PRIVACY_VERSION,
+            device_info: navigator.userAgent,
+            authentication_purpose: authenticationPurpose,
+            is_ios: isIOS
+        };
+        
+        console.log(`📝 Registrando acción de privacidad: ${action}`);
+        
+        // ⚠️ NO esperar respuesta, hacer fire-and-forget
+        sendDataWithFallback(privacyData, 0).then(result => {
+            console.log('✅ Acción de privacidad registrada:', result);
+        }).catch(error => {
+            console.warn('⚠️ No se pudo registrar acción de privacidad (no crítico):', error.message);
+            // NO lanzar error - esto no debe bloquear la autenticación
+        });
+        
+        // Retornar éxito inmediatamente sin esperar
+        return { success: true, async: true, message: 'Registrando en segundo plano' };
+        
+    } catch (error) {
+        console.warn('⚠️ Error en recordPrivacyAction (no crítico):', error);
+        // NO lanzar error - esto no debe bloquear la autenticación
+        return { success: false, error: error.message, non_blocking: true };
+    }
 }
 
 // ========== GOOGLE SIGN-IN ==========
@@ -831,6 +853,8 @@ function closeAuthModal() {
 
 async function handleLoginFlow() {
     try {
+        console.log('🔐 Iniciando flujo de login...');
+        
         const consentData = {
             accepted: true,
             timestamp: new Date().toISOString(),
@@ -841,9 +865,20 @@ async function handleLoginFlow() {
             is_ios: isIOS
         };
         
+        // Guardar consentimiento localmente
         safeSetItem('cespsic_privacy_accepted', JSON.stringify(consentData));
-        await recordPrivacyAction('PRIVACY_ACCEPTED');
+        console.log('✅ Consentimiento guardado localmente');
         
+        // ⚠️ Registrar acción de privacidad de forma NO BLOQUEANTE
+        try {
+            recordPrivacyAction('PRIVACY_ACCEPTED');
+            console.log('📝 Registro de privacidad iniciado (en segundo plano)');
+        } catch (privacyError) {
+            console.warn('⚠️ Error registrando privacidad (no crítico):', privacyError);
+            // Continuar de todos modos
+        }
+        
+        // Completar autenticación
         isAuthenticated = true;
         userEmail = currentUser.email;
         document.getElementById('email').value = userEmail;
@@ -854,22 +889,64 @@ async function handleLoginFlow() {
         getCurrentLocation();
         updateSubmitButton();
         
-        showStatus(`¡Bienvenido ${currentUser.name}! Autenticación exitosa.`, 'success');
+        showStatus(`✅ ¡Bienvenido ${currentUser.name}! Autenticación exitosa.`, 'success');
         setTimeout(() => hideStatus(), 3000);
+        
+        console.log('✅ Flujo de login completado exitosamente');
+        
     } catch (error) {
-        console.error('Error en flujo de login:', error);
+        console.error('❌ Error en flujo de login:', error);
+        
+        // Revertir cambios
         privacyConsent = false;
+        isAuthenticated = false;
         updatePrivacyUI();
-        showStatus('Error registrando la autenticación.', 'error');
+        
+        showStatus('❌ Error durante la autenticación: ' + error.message, 'error');
+        setTimeout(() => hideStatus(), 5000);
     }
 }
 
 async function handleRevocationFlow() {
     try {
-        await revokePrivacyConsent();
+        console.log('🔄 Iniciando flujo de revocación...');
+        
+        // ⚠️ Intentar registrar revocación de forma NO BLOQUEANTE
+        try {
+            recordPrivacyAction('PRIVACY_REVOKED');
+            console.log('📝 Registro de revocación iniciado (en segundo plano)');
+        } catch (privacyError) {
+            console.warn('⚠️ Error registrando revocación (no crítico):', privacyError);
+            // Continuar de todos modos
+        }
+        
+        // Ejecutar revocación local inmediatamente
+        safeRemoveItem('cespsic_privacy_accepted');
+        privacyConsent = false;
+        isAuthenticated = false;
+        currentUser = null;
+        userEmail = null;
+        locationValid = false;
+        currentLocation = null;
+        selectedFiles = [];
+        
+        updatePrivacyUI();
+        updateAuthenticationUI();
+        disableForm();
+        resetLocationFields();
+        resetEvidenciasSection();
+        
+        showStatus('✅ Permisos revocados exitosamente.', 'success');
+        setTimeout(() => {
+            hideStatus();
+            initializeGoogleSignIn();
+        }, 3000);
+        
+        console.log('✅ Flujo de revocación completado');
+        
     } catch (error) {
-        console.error('Error en flujo de revocación:', error);
-        showStatus('Error durante la revocación.', 'error');
+        console.error('❌ Error en flujo de revocación:', error);
+        showStatus('❌ Error al revocar: ' + error.message, 'error');
     }
 }
 
@@ -1299,6 +1376,116 @@ async function uploadEvidencias() {
     }
     
     return evidenciasInfo;
+}
+
+/**
+ * Guarda un envío fallido en localStorage para reintento posterior
+ */
+function saveFailedSubmission(data, error) {
+    try {
+        console.log('💾 Guardando envío fallido localmente...');
+        
+        const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
+        
+        const failedSubmission = {
+            data: data,
+            error: error.message || error.toString(),
+            error_type: error.name || 'Error',
+            timestamp: new Date().toISOString(),
+            retry_count: data.retry_count || 0,
+            device_type: deviceType,
+            user_email: data.email || currentUser?.email || 'unknown',
+            user_name: data.authenticated_user_name || currentUser?.name || 'unknown'
+        };
+        
+        failedSubmissions.push(failedSubmission);
+        
+        if (failedSubmissions.length > 10) {
+            failedSubmissions.shift();
+        }
+        
+        safeSetItem('failed_submissions', JSON.stringify(failedSubmissions));
+        console.log(`✅ Envío guardado (${failedSubmissions.length} pendientes)`);
+        
+    } catch (storageError) {
+        console.error('❌ Error guardando en localStorage:', storageError);
+    }
+}
+
+/**
+ * Reintenta envíos fallidos guardados previamente
+ */
+async function retryFailedSubmissions() {
+    try {
+        const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
+        
+        if (failedSubmissions.length === 0) {
+            console.log('✅ No hay envíos pendientes');
+            return;
+        }
+        
+        console.log(`🔄 Reintentando ${failedSubmissions.length} envío(s)...`);
+        
+        const successfulRetries = [];
+        
+        for (let i = 0; i < failedSubmissions.length; i++) {
+            const submission = failedSubmissions[i];
+            
+            try {
+                await sendDataWithFallback(submission.data, 0);
+                successfulRetries.push(i);
+                console.log(`✅ Reintento ${i + 1}/${failedSubmissions.length} exitoso`);
+            } catch (error) {
+                console.error(`❌ Reintento ${i + 1} fallido:`, error.message);
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+        if (successfulRetries.length > 0) {
+            const remaining = failedSubmissions.filter((_, index) => !successfulRetries.includes(index));
+            safeSetItem('failed_submissions', JSON.stringify(remaining));
+            
+            showStatus(`✅ Se recuperaron ${successfulRetries.length} registro(s)`, 'success');
+            setTimeout(() => hideStatus(), 3000);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en retryFailedSubmissions:', error);
+    }
+}
+
+function verPendientes() {
+    const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
+    
+    if (failedSubmissions.length === 0) {
+        alert('✅ No hay registros pendientes');
+        return;
+    }
+    
+    console.log(`\n📋 REGISTROS PENDIENTES: ${failedSubmissions.length}`);
+    failedSubmissions.forEach((s, i) => {
+        console.log(`${i + 1}. ${s.user_name} - ${new Date(s.timestamp).toLocaleString()}`);
+        console.log(`   Error: ${s.error}`);
+    });
+    
+    if (confirm(`Hay ${failedSubmissions.length} registro(s) pendiente(s).\n\n¿Reintentar ahora?`)) {
+        retryFailedSubmissions();
+    }
+}
+
+function limpiarPendientes() {
+    const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
+    
+    if (failedSubmissions.length === 0) {
+        alert('✅ No hay registros pendientes');
+        return;
+    }
+    
+    if (confirm(`⚠️ ¿Eliminar ${failedSubmissions.length} registro(s)?\n\nEsta acción NO se puede deshacer.`)) {
+        safeRemoveItem('failed_submissions');
+        alert('✅ Registros eliminados');
+    }
 }
 
 async function sendDataWithFallback(data, retryCount = 0) {
@@ -2598,221 +2785,6 @@ function resetLocationFields() {
     updateLocationStatus('loading', 'Complete la autenticación para obtener ubicación GPS', '');
 }
 
-// ========== FUNCIONES AUXILIARES PARA MANEJO DE ERRORES Y RECUPERACIÓN ==========
-
-/**
- * Guarda un envío fallido en localStorage para reintento posterior
- */
-function saveFailedSubmission(data, error) {
-    try {
-        console.log('💾 Guardando envío fallido localmente...');
-        
-        const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
-        
-        const failedSubmission = {
-            data: data,
-            error: error.message || error.toString(),
-            error_type: error.name || 'Error',
-            timestamp: new Date().toISOString(),
-            retry_count: data.retry_count || 0,
-            device_type: deviceType,
-            user_email: data.email || currentUser?.email || 'unknown',
-            user_name: data.authenticated_user_name || currentUser?.name || 'unknown'
-        };
-        
-        failedSubmissions.push(failedSubmission);
-        
-        // Mantener solo los últimos 10 envíos fallidos
-        if (failedSubmissions.length > 10) {
-            console.log('⚠️ Más de 10 envíos pendientes, eliminando los más antiguos');
-            failedSubmissions.shift();
-        }
-        
-        safeSetItem('failed_submissions', JSON.stringify(failedSubmissions));
-        
-        console.log(`✅ Envío fallido guardado (total pendientes: ${failedSubmissions.length})`);
-        console.log('   Usuario:', failedSubmission.user_name);
-        console.log('   Error:', failedSubmission.error);
-        
-    } catch (storageError) {
-        console.error('❌ No se pudo guardar el envío fallido en localStorage:', storageError);
-        console.error('   Esto puede deberse a:');
-        console.error('   • Modo privado del navegador');
-        console.error('   • Cuota de almacenamiento excedida');
-        console.error('   • Permisos de almacenamiento bloqueados');
-    }
-}
-
-/**
- * Reintenta envíos fallidos guardados previamente
- */
-async function retryFailedSubmissions() {
-    try {
-        const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
-        
-        if (failedSubmissions.length === 0) {
-            console.log('✅ No hay envíos pendientes de reintentar');
-            return;
-        }
-        
-        console.log(`\n${'━'.repeat(80)}`);
-        console.log(`🔄 REINTENTANDO ${failedSubmissions.length} ENVÍO(S) PENDIENTE(S)`);
-        console.log(`${'━'.repeat(80)}`);
-        
-        const successfulRetries = [];
-        const failedRetries = [];
-        
-        for (let i = 0; i < failedSubmissions.length; i++) {
-            const submission = failedSubmissions[i];
-            
-            console.log(`\n[${i + 1}/${failedSubmissions.length}] Reintentando:`);
-            console.log(`   Usuario: ${submission.user_name}`);
-            console.log(`   Fecha original: ${new Date(submission.timestamp).toLocaleString()}`);
-            console.log(`   Error previo: ${submission.error}`);
-            
-            try {
-                // Reintentar con contador en 0 para darle nuevas oportunidades
-                const result = await sendDataWithFallback(submission.data, 0);
-                
-                successfulRetries.push(i);
-                console.log(`   ✅ Reintento exitoso`);
-                
-            } catch (retryError) {
-                console.error(`   ❌ Reintento fallido:`, retryError.message);
-                failedRetries.push({
-                    index: i,
-                    submission: submission,
-                    error: retryError.message
-                });
-            }
-            
-            // Esperar entre reintentos para no saturar
-            if (i < failedSubmissions.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
-        
-        // Actualizar localStorage
-        if (successfulRetries.length > 0) {
-            const remaining = failedSubmissions.filter((_, index) => !successfulRetries.includes(index));
-            safeSetItem('failed_submissions', JSON.stringify(remaining));
-            
-            console.log(`\n${'━'.repeat(80)}`);
-            console.log(`✅ RECUPERACIÓN COMPLETA`);
-            console.log(`   Exitosos: ${successfulRetries.length}`);
-            console.log(`   Fallidos: ${failedRetries.length}`);
-            console.log(`   Pendientes: ${remaining.length}`);
-            console.log(`${'━'.repeat(80)}\n`);
-            
-            if (successfulRetries.length > 0) {
-                showStatus(
-                    `✅ Se recuperaron ${successfulRetries.length} registro(s) pendiente(s)\n\n` +
-                    `${remaining.length > 0 ? `⚠️ Quedan ${remaining.length} pendiente(s) que se reintentarán después.` : ''}`,
-                    'success'
-                );
-                setTimeout(() => hideStatus(), 5000);
-            }
-        } else {
-            console.log(`\n${'━'.repeat(80)}`);
-            console.log(`⚠️ NO SE PUDO RECUPERAR NINGÚN ENVÍO`);
-            console.log(`   Todos los reintentos fallaron`);
-            console.log(`   Los datos permanecen guardados para intentos futuros`);
-            console.log(`${'━'.repeat(80)}\n`);
-        }
-        
-    } catch (error) {
-        console.error('❌ Error general en retryFailedSubmissions:', error);
-    }
-}
-
-/**
- * Función para que los usuarios vean envíos pendientes
- */
-function verPendientes() {
-    try {
-        const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
-        
-        if (failedSubmissions.length === 0) {
-            alert('✅ No hay registros pendientes de enviar');
-            console.log('✅ No hay registros pendientes');
-            return;
-        }
-        
-        console.log('\n' + '═'.repeat(80));
-        console.log('📋 REGISTROS PENDIENTES DE ENVIAR');
-        console.log('═'.repeat(80));
-        
-        failedSubmissions.forEach((submission, index) => {
-            console.log(`\n${index + 1}. ${submission.user_name} (${submission.user_email})`);
-            console.log(`   📅 Fecha: ${new Date(submission.timestamp).toLocaleString()}`);
-            console.log(`   ❌ Error: ${submission.error}`);
-            console.log(`   🔄 Intentos: ${submission.retry_count + 1}`);
-            console.log(`   💻 Dispositivo: ${submission.device_type}`);
-            
-            if (submission.data) {
-                console.log(`   📝 Modalidad: ${submission.data.modalidad || 'N/A'}`);
-                console.log(`   📍 Ubicación: ${submission.data.ubicacion_detectada || 'N/A'}`);
-            }
-        });
-        
-        console.log('\n' + '═'.repeat(80));
-        console.log(`Total: ${failedSubmissions.length} registro(s) pendiente(s)`);
-        console.log('═'.repeat(80) + '\n');
-        
-        const message = `⚠️ Hay ${failedSubmissions.length} registro(s) pendiente(s) de enviar.\n\n` +
-                       `Detalles completos en la consola del navegador (F12).\n\n` +
-                       `Estos registros se reintentarán automáticamente cuando:\n` +
-                       `• Recargue la página\n` +
-                       `• Se restaure la conexión a Internet\n\n` +
-                       `¿Desea reintentar enviarlos ahora?`;
-        
-        if (confirm(message)) {
-            console.log('🔄 Reintentando envíos pendientes...');
-            retryFailedSubmissions().then(() => {
-                console.log('✅ Proceso de reintento completado');
-            }).catch(error => {
-                console.error('❌ Error en reintento manual:', error);
-            });
-        }
-        
-    } catch (error) {
-        console.error('❌ Error al consultar pendientes:', error);
-        alert('❌ Error al consultar registros pendientes. Ver consola para detalles.');
-    }
-}
-
-/**
- * Limpiar envíos pendientes (usar con precaución)
- */
-function limpiarPendientes() {
-    try {
-        const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
-        
-        if (failedSubmissions.length === 0) {
-            alert('✅ No hay registros pendientes para limpiar');
-            return;
-        }
-        
-        const confirmacion = confirm(
-            `⚠️ ¿Está seguro de eliminar ${failedSubmissions.length} registro(s) pendiente(s)?\n\n` +
-            `Esta acción NO se puede deshacer.\n\n` +
-            `Los registros eliminados se perderán permanentemente.`
-        );
-        
-        if (confirmacion) {
-            safeRemoveItem('failed_submissions');
-            console.log('✅ Registros pendientes eliminados');
-            alert('✅ Registros pendientes eliminados correctamente');
-        } else {
-            console.log('❌ Limpieza cancelada por el usuario');
-        }
-        
-    } catch (error) {
-        console.error('❌ Error al limpiar pendientes:', error);
-        alert('❌ Error al limpiar registros pendientes');
-    }
-}
-
 // ========== DIAGNÓSTICO ==========
 async function diagnosticarEvidencias() {
     console.log('\n🔍 DIAGNÓSTICO DE EVIDENCIAS');
@@ -2978,3 +2950,22 @@ console.log(`💻 Es Desktop: ${isDesktop ? 'Sí' : 'No'}`);
 console.log(`📍 Precisión requerida: ${REQUIRED_ACCURACY}m ${isDesktop ? '(relajada para desktop)' : '(estándar móvil)'}`);
 console.log(`🎯 Modo: ${isIOS ? 'iOS (compatibilidad especial)' : isDesktop ? 'Desktop (precisión adaptada)' : 'Android/Windows/Desktop (funcionalidad completa)'}`);
 console.log('🔍 Para diagnóstico: diagnosticComplete()');
+
+// ========== AGREGAR AL FINAL DEL ARCHIVO (antes de la última línea) ==========
+
+// Handler para promesas rechazadas no capturadas
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('❌ Promise rechazada no manejada:', event.reason);
+    
+    // Si es un error de privacidad, no es crítico
+    if (event.reason && event.reason.message && 
+        event.reason.message.includes('privacy') ||
+        event.reason.message.includes('recordPrivacyAction')) {
+        console.warn('⚠️ Error de privacidad ignorado (no crítico)');
+        event.preventDefault(); // Prevenir que se muestre en consola como error
+        return;
+    }
+    
+    // Para otros errores, registrar pero no bloquear
+    console.error('Stack:', event.reason?.stack);
+});
