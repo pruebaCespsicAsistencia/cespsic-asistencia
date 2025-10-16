@@ -1299,13 +1299,122 @@ async function uploadEvidencias() {
     return evidenciasInfo;
 }
 
-async function sendDataWithFallback(data) {
-    console.log('Enviando datos con método sin CORS...');
+async function sendDataWithFallback(data, retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 2000;
+    const REQUEST_ID = 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     
+    console.log(`\n${'━'.repeat(80)}`);
+    console.log(`[${REQUEST_ID}] 📤 INTENTO ${retryCount + 1}/${MAX_RETRIES + 1} - ENVIANDO DATOS`);
+    console.log(`${'━'.repeat(80)}`);
+    
+    try {
+        // Agregar metadata
+        data.client_timestamp = new Date().toISOString();
+        data.retry_count = retryCount;
+        data.request_id = REQUEST_ID;
+        
+        console.log(`[${REQUEST_ID}] Acción: ${data.action || 'attendance_submission'}`);
+        console.log(`[${REQUEST_ID}] Usuario: ${data.authenticated_user_name || 'N/A'}`);
+        console.log(`[${REQUEST_ID}] Email: ${data.email || 'N/A'}`);
+        
+        // ========== ENVIAR VÍA FORMULARIO ==========
+        const response = await enviarViaFormulario(data, REQUEST_ID);
+        
+        // ========== VALIDAR RESPUESTA ==========
+        console.log(`[${REQUEST_ID}] 🔍 Validando respuesta...`);
+        
+        if (!response || typeof response !== 'object') {
+            throw new Error(`Respuesta inválida del servidor (tipo: ${typeof response})`);
+        }
+        
+        // ⚠️ CRÍTICO: Verificar campo 'verified'
+        if (response.verified === undefined) {
+            console.warn(`[${REQUEST_ID}] ⚠️ Campo 'verified' no presente, inferiendo desde 'success'`);
+            response.verified = response.success === true;
+        }
+        
+        // Convertir a booleano si no lo es
+        if (typeof response.verified !== 'boolean') {
+            response.verified = Boolean(response.verified);
+        }
+        
+        console.log(`[${REQUEST_ID}] Respuesta - success: ${response.success}, verified: ${response.verified}`);
+        
+        // Validar que está verificado
+        if (!response.verified) {
+            throw new Error('La respuesta del servidor no está verificada (verified=false)');
+        }
+        
+        // Validar éxito
+        if (!response.success) {
+            throw new Error(response.message || response.error || 'Error desconocido del servidor');
+        }
+        
+        // ========== VERIFICACIÓN ADICIONAL EN SHEETS (solo para asistencia) ==========
+        if (data.action !== 'upload_evidencia' && 
+            data.action !== 'record_privacy_action' && 
+            data.action !== 'verify_submission') {
+            
+            console.log(`[${REQUEST_ID}] 🔍 Verificando escritura en Google Sheets...`);
+            
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            try {
+                const verificationResult = await verificarEnSheets(data, REQUEST_ID);
+                
+                if (!verificationResult.found) {
+                    console.warn(`[${REQUEST_ID}] ⚠️ Registro no encontrado en verificación inmediata`);
+                    response.verification_warning = 'Registro no encontrado en verificación inmediata';
+                } else {
+                    console.log(`[${REQUEST_ID}] ✅ Verificación en Sheets exitosa (fila ${verificationResult.row_number})`);
+                    response.sheet_verification = 'passed';
+                    response.verified_row = verificationResult.row_number;
+                }
+            } catch (verifyError) {
+                console.warn(`[${REQUEST_ID}] ⚠️ Error en verificación (no crítico):`, verifyError.message);
+                response.verification_warning = verifyError.message;
+            }
+        }
+        
+        console.log(`[${REQUEST_ID}] ✅ ENVÍO EXITOSO Y VERIFICADO`);
+        console.log(`${'━'.repeat(80)}\n`);
+        
+        return response;
+        
+    } catch (error) {
+        console.error(`[${REQUEST_ID}] ❌ ERROR en intento ${retryCount + 1}:`, error.message);
+        
+        // Reintentar si no hemos alcanzado el máximo
+        if (retryCount < MAX_RETRIES) {
+            console.log(`[${REQUEST_ID}] ⏳ Reintentando en ${RETRY_DELAY/1000} segundos...`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+            return sendDataWithFallback(data, retryCount + 1);
+        }
+        
+        // Si agotamos reintentos, guardar localmente
+        console.error(`[${REQUEST_ID}] ❌ TODOS LOS INTENTOS FALLARON`);
+        saveFailedSubmission(data, error);
+        
+        throw new Error(`Error después de ${MAX_RETRIES + 1} intentos: ${error.message}`);
+    }
+}
+
+// ========== FUNCIÓN AUXILIAR: Enviar vía formulario con iframe ==========
+function enviarViaFormulario(data, requestId) {
     return new Promise((resolve, reject) => {
+        const TIMEOUT = 20000; // 20 segundos
+        const MAX_READ_ATTEMPTS = 5;
+        
+        let timeoutId;
+        let resolved = false;
+        let attemptCount = 0;
+        
+        console.log(`[${requestId}] 📝 Creando formulario e iframe...`);
+        
         const iframe = document.createElement('iframe');
         iframe.style.display = 'none';
-        iframe.name = 'response_frame_' + Date.now();
+        iframe.name = 'response_frame_' + requestId;
         
         const form = document.createElement('form');
         form.method = 'POST';
@@ -1313,6 +1422,7 @@ async function sendDataWithFallback(data) {
         form.target = iframe.name;
         form.style.display = 'none';
         
+        // Agregar campos al formulario
         for (const [key, value] of Object.entries(data)) {
             const input = document.createElement('input');
             input.type = 'hidden';
@@ -1327,96 +1437,192 @@ async function sendDataWithFallback(data) {
             form.appendChild(input);
         }
         
-        iframe.onload = function() {
-            try {
-                setTimeout(() => {
-                    try {
-                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                        let responseText = '';
-                        
-                        if (iframeDoc && iframeDoc.body) {
-                            responseText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
-                        }
-                        
-                        console.log('Respuesta del iframe:', responseText);
-                        
-                        let responseData;
-                        try {
-                            responseData = JSON.parse(responseText);
-                        } catch (parseError) {
-                            responseData = {
-                                success: true,
-                                message: 'Datos enviados correctamente',
-                                method: 'form_submission',
-                                raw_response: responseText
-                            };
-                        }
-                        
-                        cleanup();
-                        resolve(responseData);
-                        
-                    } catch (error) {
-                        console.log('No se pudo leer respuesta del iframe, asumiendo éxito');
-                        cleanup();
-                        resolve({
-                            success: true,
-                            message: 'Datos enviados (respuesta no accesible)',
-                            method: 'form_submission_assumed'
-                        });
-                    }
-                }, 2000);
-                
-            } catch (error) {
-                console.log('Error procesando iframe, asumiendo éxito');
+        // Timeout
+        timeoutId = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                console.error(`[${requestId}] ⏱️ TIMEOUT después de ${TIMEOUT}ms`);
                 cleanup();
-                resolve({
-                    success: true,
-                    message: 'Datos enviados (método form)',
-                    method: 'form_submission_fallback'
-                });
+                reject(new Error(
+                    `Timeout: El servidor no respondió en ${TIMEOUT/1000} segundos. ` +
+                    `Verifique su conexión a Internet.`
+                ));
             }
-        };
+        }, TIMEOUT);
         
-        iframe.onerror = function(error) {
-            console.log('Error en iframe, pero posiblemente datos enviados:', error);
-            cleanup();
-            resolve({
-                success: true,
-                message: 'Datos enviados (error de iframe ignorado)',
-                method: 'form_submission_with_error'
-            });
-        };
-        
-        const timeoutId = setTimeout(() => {
-            console.log('Timeout en envío, asumiendo éxito');
-            cleanup();
-            resolve({
-                success: true,
-                message: 'Datos enviados (timeout)',
-                method: 'form_submission_timeout'
-            });
-        }, 15000);
-        
-        function cleanup() {
+        // Función para leer la respuesta del iframe
+        function tryReadResponse() {
+            if (resolved) return;
+            
+            attemptCount++;
+            console.log(`[${requestId}] 📥 Intento ${attemptCount}/${MAX_READ_ATTEMPTS} de leer respuesta`);
+            
             try {
-                clearTimeout(timeoutId);
-                if (document.body.contains(iframe)) {
-                    document.body.removeChild(iframe);
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                
+                if (!iframeDoc || !iframeDoc.body) {
+                    if (attemptCount < MAX_READ_ATTEMPTS) {
+                        setTimeout(tryReadResponse, 1000);
+                        return;
+                    }
+                    throw new Error('No se pudo acceder al documento del iframe');
                 }
-                if (document.body.contains(form)) {
-                    document.body.removeChild(form);
+                
+                const responseText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
+                
+                console.log(`[${requestId}] 📄 Respuesta raw (${responseText.length} chars):`, 
+                           responseText.substring(0, 300) + (responseText.length > 300 ? '...' : ''));
+                
+                if (!responseText || responseText.trim() === '') {
+                    if (attemptCount < MAX_READ_ATTEMPTS) {
+                        setTimeout(tryReadResponse, 1000);
+                        return;
+                    }
+                    throw new Error('El servidor devolvió una respuesta vacía');
                 }
-            } catch (e) {
-                console.log('Error en cleanup:', e);
+                
+                // Parsear JSON
+                let responseData;
+                try {
+                    responseData = JSON.parse(responseText);
+                    console.log(`[${requestId}] ✅ JSON parseado correctamente`);
+                } catch (parseError) {
+                    console.error(`[${requestId}] ❌ Error parseando JSON:`, parseError);
+                    throw new Error(
+                        `Respuesta del servidor no es JSON válido. ` +
+                        `Texto: "${responseText.substring(0, 100)}..."`
+                    );
+                }
+                
+                // ⚠️ ASEGURAR campo 'verified'
+                if (responseData.verified === undefined) {
+                    console.warn(`[${requestId}] ⚠️ Campo 'verified' no presente, asumiendo desde 'success'`);
+                    responseData.verified = responseData.success === true;
+                }
+                
+                // Validar estructura básica
+                if (typeof responseData !== 'object') {
+                    throw new Error('Respuesta no es un objeto JSON');
+                }
+                
+                console.log(`[${requestId}] ✅ Respuesta válida recibida`);
+                
+                resolved = true;
+                cleanup();
+                resolve(responseData);
+                
+            } catch (readError) {
+                console.error(`[${requestId}] ❌ Error leyendo respuesta:`, readError.message);
+                
+                if (attemptCount < MAX_READ_ATTEMPTS) {
+                    console.log(`[${requestId}] 🔄 Reintentando lectura en 1 segundo...`);
+                    setTimeout(tryReadResponse, 1000);
+                } else {
+                    resolved = true;
+                    cleanup();
+                    
+                    // Último recurso: devolver respuesta parcial
+                    console.warn(`[${requestId}] ⚠️ No se pudo leer respuesta después de ${MAX_READ_ATTEMPTS} intentos`);
+                    
+                    resolve({
+                        success: true,
+                        verified: false,
+                        message: 'Datos enviados pero no se pudo verificar la respuesta',
+                        warning: 'La respuesta no pudo ser leída completamente',
+                        error_reading_response: readError.message,
+                        partial_response: true
+                    });
+                }
             }
         }
         
-        document.body.appendChild(iframe);
-        document.body.appendChild(form);
+        // Handler de carga del iframe
+        iframe.onload = function() {
+            if (resolved) return;
+            
+            console.log(`[${requestId}] 📡 Iframe cargado, esperando 2s antes de leer...`);
+            setTimeout(() => {
+                if (!resolved) {
+                    tryReadResponse();
+                }
+            }, 2000);
+        };
         
-        console.log('Enviando formulario...');
-        form.submit();
+        // Handler de error del iframe
+        iframe.onerror = function(error) {
+            if (resolved) return;
+            
+            console.error(`[${requestId}] ❌ Error en iframe:`, error);
+            
+            // Intentar leer de todos modos
+            setTimeout(() => {
+                if (!resolved) {
+                    tryReadResponse();
+                }
+            }, 1000);
+        };
+        
+        // Cleanup
+        function cleanup() {
+            try {
+                clearTimeout(timeoutId);
+                
+                setTimeout(() => {
+                    try {
+                        if (document.body.contains(iframe)) {
+                            document.body.removeChild(iframe);
+                        }
+                        if (document.body.contains(form)) {
+                            document.body.removeChild(form);
+                        }
+                    } catch (e) {
+                        console.warn(`[${requestId}] Error en cleanup:`, e);
+                    }
+                }, 500);
+            } catch (e) {
+                console.warn(`[${requestId}] Error en cleanup principal:`, e);
+            }
+        }
+        
+        // Enviar formulario
+        try {
+            document.body.appendChild(iframe);
+            document.body.appendChild(form);
+            
+            console.log(`[${requestId}] 📤 Enviando formulario a: ${GOOGLE_SCRIPT_URL}`);
+            form.submit();
+            console.log(`[${requestId}] ✅ Formulario enviado`);
+            
+        } catch (submitError) {
+            resolved = true;
+            cleanup();
+            reject(new Error('Error al enviar el formulario: ' + submitError.message));
+        }
     });
+}
+
+// ========== FUNCIÓN AUXILIAR: Verificar en Google Sheets ==========
+async function verificarEnSheets(originalData, requestId) {
+    try {
+        const verificationData = {
+            action: 'verify_submission',
+            email: originalData.email,
+            timestamp: originalData.timestamp,
+            modalidad: originalData.modalidad
+        };
+        
+        console.log(`[${requestId}] 🔍 Enviando solicitud de verificación...`);
+        
+        const response = await enviarViaFormulario(verificationData, requestId + '_verify');
+        
+        console.log(`[${requestId}] Resultado verificación:`, response);
+        
+        return response;
+        
+    } catch (error) {
+        console.error(`[${requestId}] Error en verificación:`, error);
+        return { found: false, error: error.message };
+    }
 }
 
 function generateEvidenciaFileName(tipoRegistro, index) {
