@@ -23,7 +23,7 @@
 				<img src="https://lh3.googleusercontent.com/d/12tYxfzWgy3BVYjadXOEKlX5-uSsxIrBt" alt="CESPSIC" class="logo">
 				<img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicología" class="logo">
             </div>
-            <h1>Servicio de atención psicológica, rescatando la inclusión del psicólogo a través del Centro de Servicios Psicológicos a la Comunidad (CESPSIC) v. 3.7</h1>
+            <h1>Servicio de atención psicológica, rescatando la inclusión del psicólogo a través del Centro de Servicios Psicológicos a la Comunidad (CESPSIC) v. 3.8</h1>
         </div>
 
         <!-- Sección de Autenticación -->
@@ -66,6 +66,20 @@
 			<div class="revoke-section" style="margin-top: 10px; display: block;">
 			    <button class="revoke-link" onclick="limpiarCacheEnvios()" style="background: transparent; border: 1px solid #ff9800; color: #ff9800;">
 			        🗑️ Limpiar cache de envíos
+			    </button>
+			</div>
+            <!-- Botón para ver envíos pendientes -->
+            <div class="revoke-section" style="margin-top: 10px; display: block;">
+                <button class="revoke-link" onclick="verPendientes()" 
+                        style="background: transparent; border: 1px solid #2196f3; color: #2196f3;">
+                    📋 Ver envíos pendientes
+                </button>
+            </div>
+			<!-- Agregar después del botón "Ver envíos pendientes" -->
+			<div class="revoke-section" style="margin-top: 10px; display: block;">
+			    <button class="revoke-link" onclick="testVerification()" 
+			            style="background: transparent; border: 1px solid #9c27b0; color: #9c27b0;">
+			        🔬 Probar verificación
 			    </button>
 			</div>			
 			<div class="auth-info" style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 8px; font-size: 14px; color: #1565c0;">
