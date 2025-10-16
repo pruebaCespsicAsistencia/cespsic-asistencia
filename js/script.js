@@ -32,6 +32,8 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PRIVACY_VERSION = '1.0';
 
+const submissionCache = new Map(); // Cache de envíos en proceso
+
 //PRODUCCION
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyllBO0vTORygvLlbTeRWfNXz1_Dt1khrM2z_BUxbNM6jWqEGYDqaLnd7LJs9Fl9Q9X/exec';
 //const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com';
@@ -1488,83 +1490,147 @@ function limpiarPendientes() {
     }
 }
 
+function generateSubmissionId(data) {
+    // Generar ID único basado en datos clave
+    const key = `${data.email}_${data.timestamp}_${data.modalidad}_${data.tipo_registro}`;
+    return btoa(key).substring(0, 32); // Hash simple
+}
+
+function isSubmissionInProgress(submissionId) {
+    return submissionCache.has(submissionId);
+}
+
+function markSubmissionInProgress(submissionId) {
+    submissionCache.set(submissionId, {
+        timestamp: new Date().toISOString(),
+        status: 'in_progress'
+    });
+    
+    // Limpiar después de 2 minutos
+    setTimeout(() => {
+        submissionCache.delete(submissionId);
+    }, 120000);
+}
+
+function markSubmissionComplete(submissionId, result) {
+    submissionCache.set(submissionId, {
+        timestamp: new Date().toISOString(),
+        status: 'completed',
+        result: result
+    });
+    
+    // Mantener en cache por 5 minutos
+    setTimeout(() => {
+        submissionCache.delete(submissionId);
+    }, 300000);
+}
+
 async function sendDataWithFallback(data, retryCount = 0) {
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 2000;
     const REQUEST_ID = 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     
+    // ⚠️ DEDUPLICACIÓN: Generar ID único para este envío
+    const submissionId = generateSubmissionId(data);
+    
+    // ⚠️ Verificar si ya está en proceso
+    if (retryCount === 0 && isSubmissionInProgress(submissionId)) {
+        console.warn(`⚠️ Envío duplicado detectado: ${submissionId}`);
+        
+        const cached = submissionCache.get(submissionId);
+        if (cached.status === 'completed') {
+            console.log('✅ Usando resultado en cache');
+            return cached.result;
+        }
+        
+        throw new Error('Ya hay un envío idéntico en proceso. Por favor espere.');
+    }
+    
+    // Marcar como en proceso
+    if (retryCount === 0) {
+        markSubmissionInProgress(submissionId);
+    }
+    
     console.log(`\n${'━'.repeat(80)}`);
-    console.log(`[${REQUEST_ID}] 📤 INTENTO ${retryCount + 1}/${MAX_RETRIES + 1} - ENVIANDO DATOS`);
+    console.log(`[${REQUEST_ID}] 📤 INTENTO ${retryCount + 1}/${MAX_RETRIES + 1}`);
+    console.log(`[${REQUEST_ID}] Submission ID: ${submissionId}`);
     console.log(`${'━'.repeat(80)}`);
     
     try {
-        // Agregar metadata
         data.client_timestamp = new Date().toISOString();
         data.retry_count = retryCount;
         data.request_id = REQUEST_ID;
+        data.submission_id = submissionId; // Enviar al backend
         
-        console.log(`[${REQUEST_ID}] Acción: ${data.action || 'attendance_submission'}`);
-        console.log(`[${REQUEST_ID}] Usuario: ${data.authenticated_user_name || 'N/A'}`);
-        console.log(`[${REQUEST_ID}] Email: ${data.email || 'N/A'}`);
+        console.log(`[${REQUEST_ID}] Enviando...`);
         
-        // ========== ENVIAR VÍA FORMULARIO ==========
+        // ========== ENVIAR ==========
         const response = await enviarViaFormulario(data, REQUEST_ID);
         
         // ========== VALIDAR RESPUESTA ==========
         console.log(`[${REQUEST_ID}] 🔍 Validando respuesta...`);
+        console.log(`[${REQUEST_ID}] Respuesta:`, JSON.stringify(response).substring(0, 300));
         
         if (!response || typeof response !== 'object') {
-            throw new Error(`Respuesta inválida del servidor (tipo: ${typeof response})`);
+            throw new Error(`Respuesta inválida (tipo: ${typeof response})`);
         }
         
-        // ⚠️ CRÍTICO: Verificar campo 'verified'
+        // Asegurar campo verified
         if (response.verified === undefined) {
-            console.warn(`[${REQUEST_ID}] ⚠️ Campo 'verified' no presente, inferiendo desde 'success'`);
             response.verified = response.success === true;
         }
         
-        // Convertir a booleano si no lo es
-        if (typeof response.verified !== 'boolean') {
-            response.verified = Boolean(response.verified);
+        console.log(`[${REQUEST_ID}] success: ${response.success}, verified: ${response.verified}`);
+        
+        // ⚠️ Si hay CORS pero no hay error explícito, intentar verificación
+        if (response.cors_blocked && !response.row_number) {
+            console.log(`[${REQUEST_ID}] ⚠️ CORS detectado, verificando en Sheets...`);
+            
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            try {
+                const verification = await verificarEnSheets(data, REQUEST_ID);
+                
+                if (verification.found && verification.row_number) {
+                    console.log(`[${REQUEST_ID}] ✅ Verificación exitosa - fila ${verification.row_number}`);
+                    response.row_number = verification.row_number;
+                    response.verified = true;
+                    response.success = true;
+                    response.verified_via_sheets = true;
+                } else {
+                    console.warn(`[${REQUEST_ID}] ⚠️ No se encontró en verificación`);
+                }
+            } catch (verifyError) {
+                console.error(`[${REQUEST_ID}] ❌ Error en verificación:`, verifyError);
+            }
         }
         
-        console.log(`[${REQUEST_ID}] Respuesta - success: ${response.success}, verified: ${response.verified}`);
-        
-        // Validar que está verificado
-        if (!response.verified) {
-            throw new Error('La respuesta del servidor no está verificada (verified=false)');
-        }
-        
-        // Validar éxito
-        if (!response.success) {
-            throw new Error(response.message || response.error || 'Error desconocido del servidor');
-        }
-        
-        // ========== VERIFICACIÓN ADICIONAL EN SHEETS (solo para asistencia) ==========
+        // ⚠️ VALIDAR que tenga row_number (CRÍTICO para asistencia)
         if (data.action !== 'upload_evidencia' && 
             data.action !== 'record_privacy_action' && 
             data.action !== 'verify_submission') {
             
-            console.log(`[${REQUEST_ID}] 🔍 Verificando escritura en Google Sheets...`);
-            
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            
-            try {
-                const verificationResult = await verificarEnSheets(data, REQUEST_ID);
+            if (!response.row_number) {
+                console.error(`[${REQUEST_ID}] ❌ CRÍTICO: Respuesta sin row_number`);
+                console.error(`[${REQUEST_ID}] Respuesta completa:`, JSON.stringify(response));
                 
-                if (!verificationResult.found) {
-                    console.warn(`[${REQUEST_ID}] ⚠️ Registro no encontrado en verificación inmediata`);
-                    response.verification_warning = 'Registro no encontrado en verificación inmediata';
-                } else {
-                    console.log(`[${REQUEST_ID}] ✅ Verificación en Sheets exitosa (fila ${verificationResult.row_number})`);
-                    response.sheet_verification = 'passed';
-                    response.verified_row = verificationResult.row_number;
-                }
-            } catch (verifyError) {
-                console.warn(`[${REQUEST_ID}] ⚠️ Error en verificación (no crítico):`, verifyError.message);
-                response.verification_warning = verifyError.message;
+                throw new Error(
+                    'El servidor no devolvió el número de fila del registro. ' +
+                    'El registro puede haberse guardado, pero no se puede confirmar. ' +
+                    'Por favor, verifique manualmente en Google Sheets antes de reintentar.'
+                );
             }
+            
+            console.log(`[${REQUEST_ID}] ✅ row_number confirmado: ${response.row_number}`);
         }
+        
+        // Validar éxito
+        if (!response.success) {
+            throw new Error(response.message || response.error || 'Error desconocido');
+        }
+        
+        // ✅ ÉXITO - Marcar como completado
+        markSubmissionComplete(submissionId, response);
         
         console.log(`[${REQUEST_ID}] ✅ ENVÍO EXITOSO Y VERIFICADO`);
         console.log(`${'━'.repeat(80)}\n`);
@@ -1572,20 +1638,31 @@ async function sendDataWithFallback(data, retryCount = 0) {
         return response;
         
     } catch (error) {
-        console.error(`[${REQUEST_ID}] ❌ ERROR en intento ${retryCount + 1}:`, error.message);
+        console.error(`[${REQUEST_ID}] ❌ ERROR:`, error.message);
+        
+        // ⚠️ NO reintentar si el error indica que ya se guardó
+        if (error.message.includes('verifique manualmente') ||
+            error.message.includes('Ya hay un envío')) {
+            console.warn(`[${REQUEST_ID}] ⚠️ No se reintentará (posible duplicado)`);
+            throw error;
+        }
         
         // Reintentar si no hemos alcanzado el máximo
         if (retryCount < MAX_RETRIES) {
-            console.log(`[${REQUEST_ID}] ⏳ Reintentando en ${RETRY_DELAY/1000} segundos...`);
+            console.log(`[${REQUEST_ID}] ⏳ Reintentando en ${RETRY_DELAY/1000}s...`);
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
             return sendDataWithFallback(data, retryCount + 1);
         }
         
-        // Si agotamos reintentos, guardar localmente
+        // Agotar reintentos
         console.error(`[${REQUEST_ID}] ❌ TODOS LOS INTENTOS FALLARON`);
-        saveFailedSubmission(data, error);
         
-        throw new Error(`Error después de ${MAX_RETRIES + 1} intentos: ${error.message}`);
+        // Solo guardar para reintento si NO es error de duplicado
+        if (!error.message.includes('verifique manualmente')) {
+            saveFailedSubmission(data, error);
+        }
+        
+        throw error;
     }
 }
 
