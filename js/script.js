@@ -1530,10 +1530,9 @@ async function sendDataWithFallback(data, retryCount = 0) {
     const RETRY_DELAY = 2000;
     const REQUEST_ID = 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     
-    // ⚠️ DEDUPLICACIÓN: Generar ID único para este envío
+    // ⚠️ DEDUPLICACIÓN
     const submissionId = generateSubmissionId(data);
     
-    // ⚠️ Verificar si ya está en proceso
     if (retryCount === 0 && isSubmissionInProgress(submissionId)) {
         console.warn(`⚠️ Envío duplicado detectado: ${submissionId}`);
         
@@ -1546,7 +1545,6 @@ async function sendDataWithFallback(data, retryCount = 0) {
         throw new Error('Ya hay un envío idéntico en proceso. Por favor espere.');
     }
     
-    // Marcar como en proceso
     if (retryCount === 0) {
         markSubmissionInProgress(submissionId);
     }
@@ -1560,16 +1558,18 @@ async function sendDataWithFallback(data, retryCount = 0) {
         data.client_timestamp = new Date().toISOString();
         data.retry_count = retryCount;
         data.request_id = REQUEST_ID;
-        data.submission_id = submissionId; // Enviar al backend
+        data.submission_id = submissionId;
         
-        console.log(`[${REQUEST_ID}] Enviando...`);
+        console.log(`[${REQUEST_ID}] Acción: ${data.action || 'attendance_submission'}`);
+        console.log(`[${REQUEST_ID}] Usuario: ${data.authenticated_user_name || 'N/A'}`);
         
         // ========== ENVIAR ==========
+        console.log(`[${REQUEST_ID}] 📤 Enviando datos...`);
         const response = await enviarViaFormulario(data, REQUEST_ID);
         
         // ========== VALIDAR RESPUESTA ==========
         console.log(`[${REQUEST_ID}] 🔍 Validando respuesta...`);
-        console.log(`[${REQUEST_ID}] Respuesta:`, JSON.stringify(response).substring(0, 300));
+        console.log(`[${REQUEST_ID}] Respuesta recibida:`, JSON.stringify(response).substring(0, 500));
         
         if (!response || typeof response !== 'object') {
             throw new Error(`Respuesta inválida (tipo: ${typeof response})`);
@@ -1577,79 +1577,196 @@ async function sendDataWithFallback(data, retryCount = 0) {
         
         // Asegurar campo verified
         if (response.verified === undefined) {
+            console.warn(`[${REQUEST_ID}] ⚠️ Campo 'verified' no presente, inferiendo...`);
             response.verified = response.success === true;
         }
         
-        console.log(`[${REQUEST_ID}] success: ${response.success}, verified: ${response.verified}`);
+        if (typeof response.verified !== 'boolean') {
+            response.verified = Boolean(response.verified);
+        }
         
-        // ⚠️ Si hay CORS pero no hay error explícito, intentar verificación
-        if (response.cors_blocked && !response.row_number) {
-            console.log(`[${REQUEST_ID}] ⚠️ CORS detectado, verificando en Sheets...`);
+        console.log(`[${REQUEST_ID}] Estado respuesta:`);
+        console.log(`[${REQUEST_ID}]   success: ${response.success}`);
+        console.log(`[${REQUEST_ID}]   verified: ${response.verified}`);
+        console.log(`[${REQUEST_ID}]   cors_blocked: ${response.cors_blocked || false}`);
+        console.log(`[${REQUEST_ID}]   row_number: ${response.row_number || 'N/A'}`);
+        
+        // ========== VERIFICACIÓN AUTOMÁTICA EN SHEETS SI ES NECESARIO ==========
+        const isAttendanceSubmission = (
+            data.action !== 'upload_evidencia' && 
+            data.action !== 'record_privacy_action' && 
+            data.action !== 'verify_submission'
+        );
+        
+        const needsVerification = (
+            response.cors_blocked || 
+            response.timeout || 
+            !response.row_number ||
+            !response.success
+        ) && isAttendanceSubmission;
+        
+        if (needsVerification) {
+            console.log(`[${REQUEST_ID}] ⚠️ Respuesta requiere verificación en Sheets`);
             
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            const reasons = [];
+            if (response.cors_blocked) reasons.push('CORS bloqueado');
+            if (response.timeout) reasons.push('Timeout');
+            if (!response.row_number) reasons.push('Sin row_number');
+            if (!response.success) reasons.push('success=false');
+            
+            console.log(`[${REQUEST_ID}]    Razones: ${reasons.join(', ')}`);
+            
+            // Esperar para que el backend termine de escribir
+            console.log(`[${REQUEST_ID}] ⏳ Esperando 3 segundos para sincronización...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            console.log(`[${REQUEST_ID}] 🔍 Verificando en Google Sheets...`);
             
             try {
                 const verification = await verificarEnSheets(data, REQUEST_ID);
                 
+                console.log(`[${REQUEST_ID}] Resultado verificación:`, verification);
+                
                 if (verification.found && verification.row_number) {
-                    console.log(`[${REQUEST_ID}] ✅ Verificación exitosa - fila ${verification.row_number}`);
-                    response.row_number = verification.row_number;
-                    response.verified = true;
+                    // ✅ ENCONTRADO EN SHEETS
+                    console.log(`[${REQUEST_ID}] ✅✅✅ VERIFICADO EN SHEETS ✅✅✅`);
+                    console.log(`[${REQUEST_ID}] Fila encontrada: ${verification.row_number}`);
+                    
                     response.success = true;
+                    response.verified = true;
+                    response.row_number = verification.row_number;
                     response.verified_via_sheets = true;
+                    response.verification_details = verification.matched_data;
+                    response.message = 'Registro verificado exitosamente en Google Sheets';
+                    response.verification_method = 'sheets_search';
+                    
+                } else if (verification.cors_blocked_verification) {
+                    // ⚠️ Verificación también bloqueada por CORS
+                    console.warn(`[${REQUEST_ID}] ⚠️ Verificación también bloqueada por CORS`);
+                    
+                    // Calcular tiempo desde el envío
+                    const timeSinceSubmit = Date.now() - new Date(data.client_timestamp).getTime();
+                    console.log(`[${REQUEST_ID}] Tiempo desde envío: ${timeSinceSubmit}ms`);
+                    
+                    if (timeSinceSubmit < 15000) { // 15 segundos
+                        console.log(`[${REQUEST_ID}] ✅ Asumiendo éxito (envío reciente)`);
+                        
+                        response.success = true;
+                        response.verified = true;
+                        response.row_number = null;
+                        response.assumed_success = true;
+                        response.verification_note = 'No se pudo verificar debido a CORS, pero el envío fue reciente';
+                        response.message = 'Registro probablemente exitoso (verificación bloqueada por CORS)';
+                        response.verification_method = 'assumed_recent';
+                        response.manual_verification_required = true;
+                        
+                    } else {
+                        console.error(`[${REQUEST_ID}] ❌ No se pudo verificar (envío no reciente)`);
+                        
+                        throw new Error(
+                            'No se pudo verificar el registro en Google Sheets.\n\n' +
+                            'Por favor, verifique manualmente si su asistencia se registró correctamente.\n\n' +
+                            `Busque en Sheets por:\n` +
+                            `• Email: ${data.email}\n` +
+                            `• Hora: ${new Date(data.timestamp).toLocaleTimeString()}\n` +
+                            `• Modalidad: ${data.modalidad}\n\n` +
+                            'Si NO aparece, puede reintentar el registro.'
+                        );
+                    }
+                    
                 } else {
-                    console.warn(`[${REQUEST_ID}] ⚠️ No se encontró en verificación`);
+                    // ❌ No encontrado en verificación
+                    console.error(`[${REQUEST_ID}] ❌ No encontrado en verificación`);
+                    console.error(`[${REQUEST_ID}] Detalles:`, verification);
+                    
+                    throw new Error(
+                        'El registro no se encontró en Google Sheets después de la verificación.\n\n' +
+                        'Posibles causas:\n' +
+                        '• El registro aún no se ha sincronizado (espere 1 minuto)\n' +
+                        '• Hubo un problema al guardar\n\n' +
+                        'Por favor, verifique manualmente en Google Sheets:\n' +
+                        `• Email: ${data.email}\n` +
+                        `• Hora: ${new Date(data.timestamp).toLocaleTimeString()}\n` +
+                        `• Modalidad: ${data.modalidad}\n\n` +
+                        'Si NO aparece, puede reintentar el registro.'
+                    );
                 }
+                
             } catch (verifyError) {
-                console.error(`[${REQUEST_ID}] ❌ Error en verificación:`, verifyError);
+                console.error(`[${REQUEST_ID}] ❌ Error en proceso de verificación:`, verifyError);
+                
+                // Si el error es de nuestras validaciones, re-lanzarlo
+                if (verifyError.message.includes('verifique manualmente') ||
+                    verifyError.message.includes('no se encontró')) {
+                    throw verifyError;
+                }
+                
+                // Para otros errores de verificación, dar más contexto
+                throw new Error(
+                    `Error durante la verificación: ${verifyError.message}\n\n` +
+                    'Por favor, verifique manualmente en Google Sheets si su asistencia se registró.\n\n' +
+                    `Busque: ${data.email} - ${new Date(data.timestamp).toLocaleTimeString()}`
+                );
             }
         }
         
-        // ⚠️ VALIDAR que tenga row_number (CRÍTICO para asistencia)
-        if (data.action !== 'upload_evidencia' && 
-            data.action !== 'record_privacy_action' && 
-            data.action !== 'verify_submission') {
-            
-            if (!response.row_number) {
-                console.error(`[${REQUEST_ID}] ❌ CRÍTICO: Respuesta sin row_number`);
+        // ========== VALIDACIÓN FINAL DE row_number ==========
+        if (isAttendanceSubmission) {
+            if (!response.row_number && !response.assumed_success) {
+                console.error(`[${REQUEST_ID}] ❌ CRÍTICO: Sin row_number después de todas las validaciones`);
                 console.error(`[${REQUEST_ID}] Respuesta completa:`, JSON.stringify(response));
                 
                 throw new Error(
-                    'El servidor no devolvió el número de fila del registro. ' +
-                    'El registro puede haberse guardado, pero no se puede confirmar. ' +
-                    'Por favor, verifique manualmente en Google Sheets antes de reintentar.'
+                    'El servidor no devolvió el número de fila del registro.\n\n' +
+                    'El registro puede haberse guardado, pero no se puede confirmar.\n\n' +
+                    'Por favor, verifique manualmente en Google Sheets:\n' +
+                    `• Email: ${data.email}\n` +
+                    `• Hora: ${new Date(data.timestamp).toLocaleTimeString()}\n` +
+                    `• Modalidad: ${data.modalidad}\n\n` +
+                    'NO reintente hasta verificar para evitar duplicados.'
                 );
             }
             
-            console.log(`[${REQUEST_ID}] ✅ row_number confirmado: ${response.row_number}`);
+            if (response.row_number) {
+                console.log(`[${REQUEST_ID}] ✅ row_number confirmado: ${response.row_number}`);
+            } else if (response.assumed_success) {
+                console.warn(`[${REQUEST_ID}] ⚠️ Éxito asumido (sin row_number confirmado)`);
+            }
         }
         
         // Validar éxito
         if (!response.success) {
-            throw new Error(response.message || response.error || 'Error desconocido');
+            throw new Error(response.message || response.error || 'Error desconocido del servidor');
         }
         
         // ✅ ÉXITO - Marcar como completado
         markSubmissionComplete(submissionId, response);
         
-        console.log(`[${REQUEST_ID}] ✅ ENVÍO EXITOSO Y VERIFICADO`);
+        console.log(`[${REQUEST_ID}] ✅✅✅ ENVÍO EXITOSO Y VERIFICADO ✅✅✅`);
         console.log(`${'━'.repeat(80)}\n`);
         
         return response;
         
     } catch (error) {
-        console.error(`[${REQUEST_ID}] ❌ ERROR:`, error.message);
+        console.error(`[${REQUEST_ID}] ❌ ERROR en intento ${retryCount + 1}:`, error.message);
         
-        // ⚠️ NO reintentar si el error indica que ya se guardó
-        if (error.message.includes('verifique manualmente') ||
-            error.message.includes('Ya hay un envío')) {
-            console.warn(`[${REQUEST_ID}] ⚠️ No se reintentará (posible duplicado)`);
+        // ⚠️ NO reintentar si el error indica que ya se guardó o necesita verificación manual
+        const noRetryErrors = [
+            'verifique manualmente',
+            'Ya hay un envío',
+            'NO reintente hasta verificar'
+        ];
+        
+        const shouldNotRetry = noRetryErrors.some(msg => error.message.includes(msg));
+        
+        if (shouldNotRetry) {
+            console.warn(`[${REQUEST_ID}] ⚠️ No se reintentará (posible duplicado o requiere verificación)`);
             throw error;
         }
         
         // Reintentar si no hemos alcanzado el máximo
         if (retryCount < MAX_RETRIES) {
-            console.log(`[${REQUEST_ID}] ⏳ Reintentando en ${RETRY_DELAY/1000}s...`);
+            console.log(`[${REQUEST_ID}] ⏳ Reintentando en ${RETRY_DELAY/1000} segundos...`);
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
             return sendDataWithFallback(data, retryCount + 1);
         }
@@ -1657,12 +1774,12 @@ async function sendDataWithFallback(data, retryCount = 0) {
         // Agotar reintentos
         console.error(`[${REQUEST_ID}] ❌ TODOS LOS INTENTOS FALLARON`);
         
-        // Solo guardar para reintento si NO es error de duplicado
-        if (!error.message.includes('verifique manualmente')) {
+        // Solo guardar para reintento si NO es error de duplicado o verificación
+        if (!shouldNotRetry) {
             saveFailedSubmission(data, error);
         }
         
-        throw error;
+        throw new Error(`Error después de ${MAX_RETRIES + 1} intentos: ${error.message}`);
     }
 }
 
@@ -1880,24 +1997,44 @@ function enviarViaFormulario(data, requestId) {
 // ========== FUNCIÓN AUXILIAR: Verificar en Google Sheets ==========
 async function verificarEnSheets(originalData, requestId) {
     try {
+        console.log(`[${requestId}] 🔍 Iniciando verificación en Google Sheets...`);
+        
         const verificationData = {
             action: 'verify_submission',
             email: originalData.email,
-            timestamp: originalData.timestamp,
-            modalidad: originalData.modalidad
+            timestamp: originalData.timestamp || originalData.client_timestamp,
+            modalidad: originalData.modalidad,
+            nombre: originalData.nombre,
+            apellido_paterno: originalData.apellido_paterno
         };
         
-        console.log(`[${requestId}] 🔍 Enviando solicitud de verificación...`);
+        console.log(`[${requestId}] Datos de verificación:`, verificationData);
         
+        // Usar el mismo método de envío
         const response = await enviarViaFormulario(verificationData, requestId + '_verify');
         
-        console.log(`[${requestId}] Resultado verificación:`, response);
+        console.log(`[${requestId}] Respuesta de verificación:`, response);
+        
+        // Si hay CORS en la verificación también, esperar y asumir que se procesó
+        if (response.cors_blocked) {
+            console.warn(`[${requestId}] ⚠️ CORS en verificación - asumiendo que se encontró`);
+            return {
+                found: true,
+                row_number: null,
+                cors_blocked_verification: true,
+                message: 'Verificación bloqueada por CORS - registro probablemente exitoso'
+            };
+        }
         
         return response;
         
     } catch (error) {
-        console.error(`[${requestId}] Error en verificación:`, error);
-        return { found: false, error: error.message };
+        console.error(`[${requestId}] ❌ Error en verificación:`, error);
+        return { 
+            found: false, 
+            error: error.message,
+            fallback: true 
+        };
     }
 }
 
@@ -2002,45 +2139,55 @@ function fileToBase64(file) {
 async function handleSubmit(e) {
     e.preventDefault();
     
-    console.log('\n' + '='.repeat(80));
+    console.log('\n' + '█'.repeat(80));
     console.log('🚀 INICIO DE ENVÍO DE FORMULARIO');
-    console.log('='.repeat(80));
+    console.log('█'.repeat(80));
+    console.log(`Timestamp: ${new Date().toISOString()}`);
+    console.log('█'.repeat(80) + '\n');
     
-    // ========== VALIDACIONES PREVIAS ==========
-    console.log('\n📋 PASO 1: VALIDACIONES PREVIAS');
+    // ========== PASO 1: VALIDACIONES PREVIAS ==========
+    console.log('━'.repeat(80));
+    console.log('📋 PASO 1: VALIDACIONES PREVIAS');
+    console.log('━'.repeat(80));
     
     if (!isAuthenticated || !currentUser) {
-        showStatus('❌ Debe autenticarse con Google.', 'error');
-        console.error('❌ No autenticado');
+        showStatus('❌ Debe autenticarse con Google antes de registrar asistencia.', 'error');
+        console.error('❌ Usuario no autenticado');
         return;
     }
-    console.log('✅ Usuario:', currentUser.email);
+    console.log('✅ Usuario autenticado:', currentUser.email);
     
     if (!locationValid || !currentLocation) {
-        showStatus('❌ Ubicación GPS requerida.', 'error');
-        console.error('❌ Ubicación inválida');
+        showStatus('❌ Ubicación GPS requerida y válida para continuar.', 'error');
+        console.error('❌ Ubicación no válida');
         return;
     }
-    console.log('✅ Ubicación válida:', currentLocation.accuracy, 'm');
+    console.log('✅ Ubicación válida - Precisión:', currentLocation.accuracy, 'metros');
     
     if (currentLocation.accuracy > REQUIRED_ACCURACY) {
-        const deviceTypeText = isDesktop ? 'Desktop' : 'Móvil';
+        const deviceTypeText = isDesktop ? 'Desktop/Laptop' : 'Móvil';
         showStatus(
-            `❌ Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m > ${REQUIRED_ACCURACY}m (${deviceTypeText})`,
+            `❌ Precisión GPS insuficiente:\n\n` +
+            `Actual: ${Math.round(currentLocation.accuracy)}m\n` +
+            `Requerida: ${REQUIRED_ACCURACY}m o menos\n` +
+            `Dispositivo: ${deviceTypeText}\n\n` +
+            `${isDesktop ? 'Intente conectarse a WiFi o use un dispositivo móvil.' : 'Espere a tener mejor señal GPS.'}`,
             'error'
         );
-        console.error('❌ Precisión insuficiente');
+        console.error('❌ Precisión GPS insuficiente');
         return;
     }
-    console.log('✅ Precisión aceptable');
+    console.log('✅ Precisión GPS aceptable');
     
+    // Actualizar timestamp
     document.getElementById('timestamp').value = new Date().toISOString();
     
+    // Validar campos condicionales
     if (!validateConditionalFields()) {
         console.error('❌ Validación de campos condicionales fallida');
         return;
     }
-    console.log('✅ Campos condicionales OK');
+    console.log('✅ Campos condicionales validados\n');
     
     // ========== PREPARAR UI ==========
     showStatus('⏳ Guardando asistencia...', 'success');
@@ -2048,23 +2195,30 @@ async function handleSubmit(e) {
     const originalBtnText = submitBtn.textContent;
     const originalBtnStyle = submitBtn.style.background;
     submitBtn.disabled = true;
-    submitBtn.textContent = '⏳ Guardando...';
+    submitBtn.textContent = '⏳ Procesando...';
     
     try {
-        console.log('\n📊 PASO 2: INFORMACIÓN');
+        // ========== PASO 2: INFORMACIÓN DEL DISPOSITIVO ==========
+        console.log('━'.repeat(80));
+        console.log('📊 PASO 2: INFORMACIÓN DEL DISPOSITIVO');
+        console.log('━'.repeat(80));
         console.log(`   Tipo: ${deviceType}`);
-        console.log(`   Desktop: ${isDesktop}`);
-        console.log(`   Precisión: ${Math.round(currentLocation.accuracy)}m`);
-        console.log(`   Archivos: ${selectedFiles.length}`);
+        console.log(`   Es Desktop: ${isDesktop}`);
+        console.log(`   Es Móvil: ${!isDesktop}`);
+        console.log(`   Método GPS: ${isDesktop ? 'IP/WiFi' : 'GPS Nativo'}`);
+        console.log(`   Precisión GPS: ${Math.round(currentLocation.accuracy)}m`);
+        console.log(`   Archivos seleccionados: ${selectedFiles.length}\n`);
         
-        // ========== EVIDENCIAS ==========
+        // ========== PASO 3: SUBIR EVIDENCIAS ==========
         let evidenciasUrls = [];
         let successUploads = [];
         let failedUploads = [];
         
         if (selectedFiles.length > 0) {
-            console.log('\n📤 PASO 3: SUBIENDO EVIDENCIAS');
-            console.log(`   Total: ${selectedFiles.length}`);
+            console.log('━'.repeat(80));
+            console.log('📤 PASO 3: SUBIENDO EVIDENCIAS');
+            console.log('━'.repeat(80));
+            console.log(`   Total archivos: ${selectedFiles.length}`);
             
             showStatus(`📤 Subiendo ${selectedFiles.length} evidencia(s)...`, 'success');
             submitBtn.textContent = `📤 Subiendo evidencias (0/${selectedFiles.length})...`;
@@ -2078,29 +2232,33 @@ async function handleSubmit(e) {
                 console.log(`   ❌ Fallidas: ${failedUploads.length}`);
                 
                 if (selectedFiles.length > 0 && successUploads.length === 0) {
-                    const errorDetails = failedUploads.map(e => `   • ${e.originalName}: ${e.error}`).join('\n');
-                    console.error('\n⚠️ TODAS LAS EVIDENCIAS FALLARON:\n' + errorDetails);
+                    const errorDetails = failedUploads
+                        .map(e => `   • ${e.originalName}: ${e.error}`)
+                        .join('\n');
+                    
+                    console.error('\n⚠️ TODAS LAS EVIDENCIAS FALLARON:');
+                    console.error(errorDetails);
                     
                     const userDecision = confirm(
                         `⚠️ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n` +
-                        `¿Continuar SIN evidencias?\n\n` +
-                        `• Aceptar = Continuar sin evidencias\n` +
-                        `• Cancelar = Reintentar`
+                        `¿Desea continuar registrando la asistencia SIN evidencias?\n\n` +
+                        `• Clic en "Aceptar" = Continuar sin evidencias\n` +
+                        `• Clic en "Cancelar" = Reintentar o corregir archivos`
                     );
                     
                     if (!userDecision) {
-                        throw new Error('Registro cancelado. Revise los archivos e intente nuevamente.');
+                        throw new Error('Registro cancelado por el usuario. Por favor revise los archivos e intente nuevamente.');
                     }
                     
-                    console.log('⚠️ Usuario continúa sin evidencias');
+                    console.log('⚠️ Usuario decidió continuar sin evidencias');
                     showStatus('⚠️ Continuando sin evidencias...', 'warning');
                     
                 } else if (failedUploads.length > 0) {
-                    console.warn(`⚠️ ${failedUploads.length} evidencia(s) fallaron`);
+                    console.warn(`⚠️ ${failedUploads.length} evidencia(s) no se pudieron subir`);
                 }
                 
             } catch (uploadError) {
-                console.error('❌ Error subiendo evidencias:', uploadError);
+                console.error('❌ Error en proceso de subida:', uploadError);
                 
                 if (uploadError.message.includes('cancelado')) {
                     throw uploadError;
@@ -2108,31 +2266,39 @@ async function handleSubmit(e) {
                 
                 const continuar = confirm(
                     `⚠️ Error al subir evidencias:\n\n${uploadError.message}\n\n` +
-                    `¿Continuar SIN evidencias?`
+                    `¿Desea continuar SIN evidencias?`
                 );
                 
                 if (!continuar) {
                     throw new Error('Registro cancelado. Error al subir evidencias.');
                 }
             }
+            console.log('');
         } else {
-            console.log('\n📝 PASO 3: Sin evidencias');
+            console.log('━'.repeat(80));
+            console.log('📝 PASO 3: Sin evidencias para subir');
+            console.log('━'.repeat(80) + '\n');
         }
         
-        // ========== PREPARAR DATOS ==========
-        console.log('\n📝 PASO 4: PREPARANDO DATOS');
+        // ========== PASO 4: PREPARAR DATOS DEL FORMULARIO ==========
+        console.log('━'.repeat(80));
+        console.log('📝 PASO 4: PREPARANDO DATOS DEL FORMULARIO');
+        console.log('━'.repeat(80));
         
         submitBtn.textContent = '📝 Preparando datos...';
         
         const formData = new FormData(e.target);
         const data = {};
         
+        // Procesar campos del formulario
         for (let [key, value] of formData.entries()) {
             if (key === 'evidencias') continue;
             
             if (key.endsWith('[]')) {
                 const cleanKey = key.replace('[]', '');
-                if (!data[cleanKey]) data[cleanKey] = [];
+                if (!data[cleanKey]) {
+                    data[cleanKey] = [];
+                }
                 data[cleanKey].push(value);
             } else {
                 if (data[key]) {
@@ -2147,14 +2313,14 @@ async function handleSubmit(e) {
             }
         }
         
-        // Información de evidencias
+        // Agregar información de evidencias
         data.evidencias_urls = evidenciasUrls;
         data.total_evidencias = successUploads.length;
         data.evidencias_failed = failedUploads.length;
         data.evidencias_nombres = successUploads.map(e => e.fileName).join(', ');
         data.carpeta_evidencias = generateStudentFolderName();
         
-        // Datos adicionales
+        // Agregar datos adicionales
         data.modalidad = document.getElementById('modalidad').value;
         data.ubicacion_detectada = document.getElementById('ubicacion_detectada').value;
         data.direccion_completa = document.getElementById('direccion_completa').value;
@@ -2164,7 +2330,7 @@ async function handleSubmit(e) {
         data.authenticated_user_name = currentUser.name;
         data.authentication_timestamp = new Date().toISOString();
         
-        // Dispositivo
+        // Información del dispositivo
         data.device_type = deviceType;
         data.is_desktop = isDesktop;
         data.is_mobile = !isDesktop;
@@ -2172,148 +2338,212 @@ async function handleSubmit(e) {
         data.required_accuracy = REQUIRED_ACCURACY;
         data.device_info = JSON.stringify(getDeviceInfo());
         
-        // ========== VALIDACIÓN FINAL ==========
-        console.log('\n🔍 PASO 5: VALIDACIÓN FINAL');
+        console.log('✅ Datos preparados correctamente\n');
+        
+        // ========== PASO 5: VALIDACIÓN FINAL DE DATOS ==========
+        console.log('━'.repeat(80));
+        console.log('🔍 PASO 5: VALIDACIÓN FINAL DE DATOS');
+        console.log('━'.repeat(80));
         
         if (!data.modalidad || data.modalidad === '' || data.modalidad === 'undefined') {
-            throw new Error('ERROR: Campo Modalidad requerido');
+            throw new Error('ERROR CRÍTICO: El campo Modalidad es requerido y no puede estar vacío');
         }
-        console.log('✅ Modalidad:', data.modalidad);
+        console.log('✅ Modalidad válida:', data.modalidad);
         
         if (!data.email || !data.google_user_id) {
-            throw new Error('ERROR: Datos de autenticación incompletos');
+            throw new Error('ERROR CRÍTICO: Datos de autenticación incompletos');
         }
-        console.log('✅ Autenticación OK');
+        console.log('✅ Autenticación completa');
+        console.log('');
         
-        // ========== LOGGING ==========
-        console.log('\n📊 RESUMEN:');
+        // ========== LOGGING PRE-ENVÍO ==========
+        console.log('━'.repeat(80));
+        console.log('📊 RESUMEN PRE-ENVÍO');
+        console.log('━'.repeat(80));
         console.log(`   Usuario: ${currentUser.name}`);
         console.log(`   Email: ${data.email}`);
         console.log(`   Dispositivo: ${deviceType}`);
         console.log(`   Modalidad: ${data.modalidad}`);
-        console.log(`   Tipo: ${data.tipo_registro}`);
-        console.log(`   GPS: ${data.gps_method}`);
+        console.log(`   Tipo registro: ${data.tipo_registro}`);
+        console.log(`   Método GPS: ${data.gps_method}`);
         console.log(`   Precisión: ${data.precision_gps_metros}m`);
-        console.log(`   Evidencias: ${data.total_evidencias} (${data.evidencias_failed} fallidas)`);
+        console.log(`   Evidencias exitosas: ${data.total_evidencias}`);
+        console.log(`   Evidencias fallidas: ${data.evidencias_failed}`);
         console.log(`   Ubicación: ${data.ubicacion_detectada}`);
+        console.log('━'.repeat(80) + '\n');
         
-        // ========== ENVIAR ==========
-        console.log('\n📤 PASO 6: ENVIANDO');
+        // ========== PASO 6: ENVIAR FORMULARIO PRINCIPAL ==========
+        console.log('━'.repeat(80));
+        console.log('📤 PASO 6: ENVIANDO FORMULARIO PRINCIPAL AL SERVIDOR');
+        console.log('━'.repeat(80));
         
         submitBtn.textContent = '📤 Enviando al servidor...';
-        showStatus('📤 Enviando asistencia...', 'success');
+        showStatus('📤 Enviando asistencia al servidor...', 'success');
         
         let responseData;
         try {
             responseData = await sendDataWithFallback(data);
         } catch (sendError) {
-            console.error('❌ Error en envío:', sendError);
+            console.error('❌ Error crítico en envío:', sendError);
             
             const isRecoverable = sendError.message.includes('guardados localmente');
             
             if (isRecoverable) {
                 throw new Error(
-                    `⚠️ NO se pudo enviar después de múltiples intentos.\n\n` +
-                    `${sendError.message}\n\n` +
-                    `✅ Datos guardados localmente.\n` +
-                    `✅ Se reintentarán automáticamente.\n\n` +
-                    `Verifique su conexión.`
+                    `⚠️ NO se pudo enviar la asistencia después de múltiples intentos.\n\n` +
+                    `Detalles: ${sendError.message}\n\n` +
+                    `✅ Sus datos han sido guardados localmente de forma segura.\n` +
+                    `✅ Se reintentarán automáticamente la próxima vez que abra la aplicación.\n\n` +
+                    `Recomendaciones:\n` +
+                    `• Verifique su conexión a Internet\n` +
+                    `• Intente nuevamente en unos minutos\n` +
+                    `• Los datos NO se perderán`
                 );
             } else {
                 throw new Error(
-                    `❌ Error al enviar:\n\n${sendError.message}\n\n` +
-                    `Intente nuevamente.`
+                    `❌ Error al enviar la asistencia:\n\n${sendError.message}\n\n` +
+                    `Por favor, intente nuevamente. Si el problema persiste, ` +
+                    `contacte al administrador del sistema.`
                 );
             }
         }
         
-        // ========== VALIDAR RESPUESTA ==========
-        console.log('\n🔍 PASO 7: VALIDANDO RESPUESTA');
-        console.log('Respuesta:', JSON.stringify(responseData, null, 2));
+        console.log('');
+        
+        // ========== PASO 7: VALIDAR RESPUESTA DEL SERVIDOR ==========
+        console.log('━'.repeat(80));
+        console.log('🔍 PASO 7: VALIDANDO RESPUESTA DEL SERVIDOR');
+        console.log('━'.repeat(80));
+        console.log('Respuesta completa recibida:');
+        console.log(JSON.stringify(responseData, null, 2));
+        console.log('');
         
         if (!responseData) {
-            throw new Error('El servidor no devolvió respuesta');
+            throw new Error('El servidor no devolvió ninguna respuesta');
         }
         
-        // ⚠️ CRÍTICO: Validar row_number
-        if (!responseData.row_number || responseData.row_number <= 0) {
+        // ⚠️ CRÍTICO: Validar row_number (con excepción para assumed_success)
+        if (!responseData.row_number && !responseData.assumed_success) {
             console.error('❌ row_number inválido:', responseData.row_number);
+            console.error('Respuesta completa:', JSON.stringify(responseData));
             
             throw new Error(
-                `El servidor no devolvió el número de fila.\n\n` +
-                `Intente nuevamente. Si persiste, tome captura y contacte al administrador.\n\n` +
-                `Respuesta: ${JSON.stringify(responseData).substring(0, 200)}`
+                `El servidor no devolvió el número de fila del registro.\n\n` +
+                `Por favor, intente nuevamente. Si el problema persiste, ` +
+                `tome una captura de pantalla de este mensaje y contacte al administrador.\n\n` +
+                `Datos para búsqueda manual:\n` +
+                `• Email: ${data.email}\n` +
+                `• Hora: ${new Date(data.timestamp).toLocaleTimeString()}\n` +
+                `• Modalidad: ${data.modalidad}`
             );
         }
         
+        if (responseData.assumed_success) {
+            console.warn('⚠️ Éxito asumido (sin confirmación de row_number)');
+            console.warn('   El usuario debe verificar manualmente en Google Sheets');
+        }
+        
         if (!responseData.verified) {
-            throw new Error('Respuesta no verificada');
+            throw new Error('La respuesta del servidor no está verificada (verified=false)');
         }
         
         if (!responseData.success) {
-            throw new Error(responseData.message || responseData.error || 'Error desconocido');
+            throw new Error(responseData.message || responseData.error || 'Error desconocido del servidor');
         }
         
-        console.log('✅ Validación OK - row_number:', responseData.row_number);
+        console.log('✅ Validación de respuesta completada');
+        if (responseData.row_number) {
+            console.log('   ✅ row_number confirmado:', responseData.row_number);
+        } else {
+            console.log('   ⚠️ assumed_success: true (verifique manualmente)');
+        }
+        console.log('');
         
-        // ========== ÉXITO ==========
-        console.log('\n' + '='.repeat(80));
+        // ========== REGISTRO EXITOSO ==========
+        console.log('█'.repeat(80));
         console.log('✅✅✅ ASISTENCIA REGISTRADA EXITOSAMENTE ✅✅✅');
-        console.log('='.repeat(80));
+        console.log('█'.repeat(80));
         console.log(`Usuario: ${currentUser.name}`);
+        console.log(`Email: ${data.email}`);
+        console.log(`Dispositivo: ${deviceType}`);
         console.log(`Modalidad: ${data.modalidad}`);
-        console.log(`Fila: ${responseData.row_number}`);
-        console.log(`Hash: ${responseData.verification_hash?.substring(0, 16)}...`);
-        console.log('='.repeat(80) + '\n');
+        console.log(`Ubicación: ${data.ubicacion_detectada}`);
+        console.log(`Precisión: ${data.precision_gps_metros}m`);
+        console.log(`Evidencias: ${data.total_evidencias}${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} fallidas)` : ''}`);
+        if (responseData.row_number) {
+            console.log(`Fila en Sheets: ${responseData.row_number}`);
+        } else {
+            console.log(`Verificación: Requiere confirmación manual`);
+        }
+        console.log(`Hash verificación: ${responseData.verification_hash?.substring(0, 16)}...`);
+        console.log(`Request ID: ${responseData.request_id}`);
+        console.log(`Tiempo procesamiento: ${responseData.processing_time_ms}ms`);
+        console.log('█'.repeat(80) + '\n');
         
-        // Mensaje de éxito
+        // ========== MOSTRAR MENSAJE DE ÉXITO AL USUARIO ==========
         const evidenciasInfo = data.total_evidencias > 0 
-            ? `\n✅ Evidencias: ${data.total_evidencias} imagen(es)${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} fallidas)` : ''}` 
+            ? `\n✅ Evidencias: ${data.total_evidencias} imagen(es)${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} no se pudieron subir)` : ''}` 
+            : selectedFiles.length > 0 
+                ? `\n⚠️ Evidencias: No se pudo subir ninguna (registrado sin evidencias)`
+                : '';
+        
+        const rowInfo = responseData.row_number 
+            ? `✅ Fila en Google Sheets: ${responseData.row_number}`
+            : `⚠️ Por favor verifique manualmente en Google Sheets`;
+        
+        const verificationNote = responseData.assumed_success || responseData.manual_verification_required
+            ? `\n\n⚠️ IMPORTANTE: Verifique manualmente en Google Sheets que su asistencia se registró correctamente.\n` +
+              `Busque: ${data.email} - ${new Date(data.timestamp).toLocaleTimeString()}`
             : '';
         
-        const successMessage = `✅ ¡Asistencia registrada y verificada!
+        const successMessage = `✅ ¡Asistencia registrada${responseData.assumed_success ? ' (verificación manual requerida)' : ' y verificada'}!
 
-📋 DETALLES:
-━━━━━━━━━━━━━━━━━━━━━━━
-👤 ${currentUser.name}
-📧 ${data.email}
-💻 ${deviceType}
-📍 ${data.modalidad}
-📝 ${data.tipo_registro}
-🌍 ${data.ubicacion_detectada}
-🎯 ${data.precision_gps_metros}m${evidenciasInfo}
+📋 DETALLES DEL REGISTRO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 Usuario: ${currentUser.name}
+📧 Email: ${data.email}
+💻 Dispositivo: ${deviceType}
+📍 Modalidad: ${data.modalidad}
+📝 Tipo: ${data.tipo_registro}
+🌍 Ubicación: ${data.ubicacion_detectada}
+🎯 Precisión GPS: ${data.precision_gps_metros}m${evidenciasInfo}
 
-✅ Fila: ${responseData.row_number}
-🔐 ID: ${responseData.verification_hash?.substring(0, 12)}...
-━━━━━━━━━━━━━━━━━━━━━━━`;
+${rowInfo}
+🔐 ID de verificación: ${responseData.verification_hash?.substring(0, 12) || 'N/A'}...
+⏱️ Tiempo: ${responseData.processing_time_ms}ms${verificationNote}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
         showStatus(successMessage, 'success');
         
+        // Restaurar botón
         submitBtn.disabled = false;
         submitBtn.textContent = originalBtnText;
         submitBtn.style.background = originalBtnStyle;
         
+        // ========== PREGUNTAR SIGUIENTE ACCIÓN ==========
         setTimeout(() => {
-            if (confirm('✅ Asistencia registrada.\n\n¿Registrar otra asistencia?')) {
+            if (confirm('✅ Asistencia registrada correctamente.\n\n¿Desea registrar otra asistencia?')) {
                 resetFormOnly();
                 getCurrentLocation();
             } else {
                 signOut();
             }
             hideStatus();
-        }, 6000);
+        }, responseData.assumed_success ? 8000 : 6000); // Más tiempo si requiere verificación manual
         
     } catch (error) {
-        // ========== ERROR ==========
-        console.error('\n' + '='.repeat(80));
-        console.error('❌❌❌ ERROR ❌❌❌');
-        console.error('='.repeat(80));
+        // ========== MANEJO DE ERRORES ==========
+        console.error('\n' + '█'.repeat(80));
+        console.error('❌❌❌ ERROR EN ENVÍO DE FORMULARIO ❌❌❌');
+        console.error('█'.repeat(80));
         console.error('Error:', error.message);
         console.error('Stack:', error.stack);
-        console.error('='.repeat(80) + '\n');
+        console.error('█'.repeat(80) + '\n');
         
+        // Determinar tipo de error
         const isRecoverable = error.message.includes('guardados localmente');
         const isCancelled = error.message.includes('cancelado');
+        const needsManualVerification = error.message.includes('verifique manualmente');
         
         let errorMessage;
         let errorType;
@@ -2324,20 +2554,30 @@ async function handleSubmit(e) {
         } else if (isRecoverable) {
             errorMessage = error.message;
             errorType = 'warning';
+        } else if (needsManualVerification) {
+            errorMessage = error.message;
+            errorType = 'warning';
         } else {
-            errorMessage = `❌ Error al guardar:\n\n${error.message}\n\n` +
-                          `Intente nuevamente. Si persiste, tome captura y contacte al administrador.`;
+            errorMessage = `❌ Error al guardar la asistencia:\n\n${error.message}\n\n` +
+                          `Por favor, intente nuevamente. Si el problema persiste, ` +
+                          `tome una captura de pantalla de este mensaje y contacte al administrador.`;
             errorType = 'error';
         }
         
         showStatus(errorMessage, errorType);
         
+        // Restaurar botón
         submitBtn.disabled = false;
         submitBtn.textContent = originalBtnText;
         submitBtn.style.background = originalBtnStyle;
         
-        const displayTime = isRecoverable ? 12000 : isCancelled ? 5000 : 10000;
-        setTimeout(() => hideStatus(), displayTime);
+        // Mantener mensaje más tiempo para errores graves o que requieren verificación
+        const displayTime = isRecoverable ? 12000 : 
+                           needsManualVerification ? 15000 :
+                           isCancelled ? 5000 : 10000;
+        setTimeout(() => {
+            hideStatus();
+        }, displayTime);
     }
 }
 
