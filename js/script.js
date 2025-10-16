@@ -1017,6 +1017,7 @@ function signOut() {
     try {
         google.accounts.id.disableAutoSelect();
         
+        // Limpiar todo
         isAuthenticated = false;
         currentUser = null;
         userEmail = null;
@@ -1024,7 +1025,11 @@ function signOut() {
         currentLocation = null;
         locationAttempts = 0;
         selectedFiles = [];
+        
+        // Limpiar cache de envíos
+        clearSubmissionCache();
 
+        // Limpiar campos
         ['email', 'google_user_id', 'latitude', 'longitude', 'location_status'].forEach(id => {
             document.getElementById(id).value = '';
         });
@@ -1033,13 +1038,25 @@ function signOut() {
         disableForm();
         resetLocationFields();
         resetEvidenciasSection();
+        
+        // ⚠️ NUEVO: Reset completo del formulario
+        document.getElementById('attendanceForm').reset();
+        initializeForm();
+        
+        // Ocultar secciones condicionales
+        document.querySelectorAll('.conditional-field').forEach(field => {
+            field.classList.remove('show');
+        });
+        
+        document.getElementById('evidencias_section').style.display = 'none';
 
-        showStatus('Sesión cerrada correctamente.', 'success');
+        showStatus('✅ Sesión cerrada correctamente.', 'success');
         setTimeout(() => hideStatus(), 3000);
         setTimeout(() => initializeGoogleSignIn(), 1000);
+        
     } catch (error) {
         console.error('Error cerrando sesión:', error);
-        showStatus('Error al cerrar sesión.', 'error');
+        showStatus('❌ Error al cerrar sesión.', 'error');
     }
 }
 
@@ -1397,7 +1414,7 @@ async function uploadEvidencias() {
  */
 function saveFailedSubmission(data, error) {
     try {
-        console.log('💾 Guardando envío fallido localmente...');
+        console.log('💾 Guardando envío fallido...');
         
         const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
         
@@ -1409,63 +1426,94 @@ function saveFailedSubmission(data, error) {
             retry_count: data.retry_count || 0,
             device_type: deviceType,
             user_email: data.email || currentUser?.email || 'unknown',
-            user_name: data.authenticated_user_name || currentUser?.name || 'unknown'
+            user_name: data.authenticated_user_name || currentUser?.name || 'unknown',
+            submission_id: generateSubmissionId(data)
         };
         
-        failedSubmissions.push(failedSubmission);
+        // Evitar duplicados en pendientes
+        const existingIndex = failedSubmissions.findIndex(
+            s => s.submission_id === failedSubmission.submission_id
+        );
         
+        if (existingIndex !== -1) {
+            console.log('⚠️ Ya existe en pendientes, actualizando...');
+            failedSubmissions[existingIndex] = failedSubmission;
+        } else {
+            failedSubmissions.push(failedSubmission);
+        }
+        
+        // Mantener solo los últimos 10
         if (failedSubmissions.length > 10) {
             failedSubmissions.shift();
         }
         
         safeSetItem('failed_submissions', JSON.stringify(failedSubmissions));
-        console.log(`✅ Envío guardado (${failedSubmissions.length} pendientes)`);
+        console.log(`✅ Guardado (${failedSubmissions.length} pendientes)`);
         
     } catch (storageError) {
-        console.error('❌ Error guardando en localStorage:', storageError);
+        console.error('❌ Error guardando:', storageError);
     }
 }
 
-/**
- * Reintenta envíos fallidos guardados previamente
- */
+function removeFailedSubmission(submissionId) {
+    try {
+        const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
+        const filtered = failedSubmissions.filter(s => s.submission_id !== submissionId);
+        
+        safeSetItem('failed_submissions', JSON.stringify(filtered));
+        console.log(`✅ Eliminado de pendientes: ${submissionId}`);
+        
+        return filtered.length;
+    } catch (error) {
+        console.error('❌ Error eliminando:', error);
+        return -1;
+    }
+}
+
 async function retryFailedSubmissions() {
     try {
         const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
         
         if (failedSubmissions.length === 0) {
             console.log('✅ No hay envíos pendientes');
-            return;
+            return { success: 0, failed: 0 };
         }
         
         console.log(`🔄 Reintentando ${failedSubmissions.length} envío(s)...`);
         
-        const successfulRetries = [];
+        const results = { success: 0, failed: 0 };
         
         for (let i = 0; i < failedSubmissions.length; i++) {
             const submission = failedSubmissions[i];
             
+            console.log(`\n[${i + 1}/${failedSubmissions.length}] ${submission.user_name}`);
+            
             try {
                 await sendDataWithFallback(submission.data, 0);
-                successfulRetries.push(i);
-                console.log(`✅ Reintento ${i + 1}/${failedSubmissions.length} exitoso`);
+                results.success++;
+                
+                // Eliminar de pendientes si fue exitoso
+                removeFailedSubmission(submission.submission_id);
+                
             } catch (error) {
-                console.error(`❌ Reintento ${i + 1} fallido:`, error.message);
+                console.error(`❌ Falló:`, error.message);
+                results.failed++;
             }
             
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Esperar entre reintentos
+            if (i < failedSubmissions.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
         }
         
-        if (successfulRetries.length > 0) {
-            const remaining = failedSubmissions.filter((_, index) => !successfulRetries.includes(index));
-            safeSetItem('failed_submissions', JSON.stringify(remaining));
-            
-            showStatus(`✅ Se recuperaron ${successfulRetries.length} registro(s)`, 'success');
-            setTimeout(() => hideStatus(), 3000);
-        }
+        console.log(`\n✅ Exitosos: ${results.success}`);
+        console.log(`❌ Fallidos: ${results.failed}`);
+        
+        return results;
         
     } catch (error) {
         console.error('❌ Error en retryFailedSubmissions:', error);
+        return { success: 0, failed: 0, error: error.message };
     }
 }
 
@@ -1473,18 +1521,27 @@ function verPendientes() {
     const failedSubmissions = JSON.parse(safeGetItem('failed_submissions') || '[]');
     
     if (failedSubmissions.length === 0) {
-        alert('✅ No hay registros pendientes');
+        alert('✅ No hay registros pendientes de enviar');
+        console.log('✅ Sin pendientes');
         return;
     }
     
-    console.log(`\n📋 REGISTROS PENDIENTES: ${failedSubmissions.length}`);
+    console.log('\n📋 REGISTROS PENDIENTES:');
     failedSubmissions.forEach((s, i) => {
-        console.log(`${i + 1}. ${s.user_name} - ${new Date(s.timestamp).toLocaleString()}`);
-        console.log(`   Error: ${s.error}`);
+        console.log(`\n${i + 1}. ${s.user_name} (${s.user_email})`);
+        console.log(`   📅 ${new Date(s.timestamp).toLocaleString()}`);
+        console.log(`   ❌ ${s.error}`);
+        console.log(`   🔄 Intentos: ${s.retry_count + 1}`);
     });
     
-    if (confirm(`Hay ${failedSubmissions.length} registro(s) pendiente(s).\n\n¿Reintentar ahora?`)) {
-        retryFailedSubmissions();
+    if (confirm(`⚠️ Hay ${failedSubmissions.length} registro(s) pendiente(s).\n\n¿Reintentar ahora?`)) {
+        retryFailedSubmissions().then(results => {
+            if (results.success > 0) {
+                alert(`✅ ${results.success} registro(s) recuperado(s)\n❌ ${results.failed} fallido(s)`);
+            } else {
+                alert(`❌ No se pudo recuperar ningún registro`);
+            }
+        });
     }
 }
 
@@ -1496,20 +1553,40 @@ function limpiarPendientes() {
         return;
     }
     
-    if (confirm(`⚠️ ¿Eliminar ${failedSubmissions.length} registro(s)?\n\nEsta acción NO se puede deshacer.`)) {
+    console.log('\n📋 PENDIENTES:');
+    failedSubmissions.forEach((s, i) => {
+        console.log(`${i + 1}. ${s.user_name} - ${new Date(s.timestamp).toLocaleString()}`);
+    });
+    
+    if (confirm(`⚠️ ¿Eliminar ${failedSubmissions.length} registro(s) pendiente(s)?\n\nEsta acción NO se puede deshacer.`)) {
         safeRemoveItem('failed_submissions');
-        alert('✅ Registros eliminados');
+        alert('✅ Registros pendientes eliminados');
+        console.log('✅ Pendientes eliminados');
     }
 }
 
 function generateSubmissionId(data) {
-    // Generar ID único basado en datos clave
-    const key = `${data.email}_${data.timestamp}_${data.modalidad}_${data.tipo_registro}`;
-    return btoa(key).substring(0, 32); // Hash simple
+    // ID único basado en datos que realmente importan
+    const fecha = data.fecha || new Date().toISOString().split('T')[0];
+    const hora = data.hora || new Date().toTimeString().split(' ')[0].substring(0, 5);
+    
+    const key = `${data.email}_${fecha}_${hora}_${data.modalidad}_${data.tipo_registro}`;
+    return btoa(key).substring(0, 32);
 }
 
 function isSubmissionInProgress(submissionId) {
-    return submissionCache.has(submissionId);
+    const cached = submissionCache.get(submissionId);
+    
+    if (!cached) return false;
+    
+    // Si tiene más de 2 minutos, ya no está en progreso
+    const age = Date.now() - new Date(cached.timestamp).getTime();
+    if (age > 120000) { // 2 minutos
+        submissionCache.delete(submissionId);
+        return false;
+    }
+    
+    return cached.status === 'in_progress';
 }
 
 function markSubmissionInProgress(submissionId) {
@@ -1518,9 +1595,17 @@ function markSubmissionInProgress(submissionId) {
         status: 'in_progress'
     });
     
-    // Limpiar después de 2 minutos
+    console.log(`📝 Marcado en progreso: ${submissionId}`);
+    
+    // Auto-limpiar después de 2 minutos
     setTimeout(() => {
-        submissionCache.delete(submissionId);
+        if (submissionCache.has(submissionId)) {
+            const cached = submissionCache.get(submissionId);
+            if (cached.status === 'in_progress') {
+                console.log(`🧹 Auto-limpieza de cache: ${submissionId}`);
+                submissionCache.delete(submissionId);
+            }
+        }
     }, 120000);
 }
 
@@ -1531,7 +1616,9 @@ function markSubmissionComplete(submissionId, result) {
         result: result
     });
     
-    // Mantener en cache por 5 minutos
+    console.log(`✅ Marcado completo: ${submissionId}`);
+    
+    // Limpiar después de 5 minutos
     setTimeout(() => {
         submissionCache.delete(submissionId);
     }, 300000);
@@ -2666,9 +2753,13 @@ ${rowInfo}
 }
 
 function resetFormOnly() {
+    console.log('🔄 Reseteando formulario...');
+    
+    // Reset del formulario HTML
     document.getElementById('attendanceForm').reset();
     initializeForm();
     
+    // Ocultar secciones condicionales
     document.querySelectorAll('.conditional-field').forEach(field => {
         field.classList.remove('show');
     });
@@ -2676,6 +2767,7 @@ function resetFormOnly() {
     document.getElementById('evidencias_section').style.display = 'none';
     resetEvidenciasSection();
     
+    // Reset de ubicación
     document.getElementById('ubicacion_detectada').value = 'Obteniendo ubicación...';
     document.getElementById('direccion_completa').value = 'Consultando dirección...';
     document.getElementById('precision_gps').value = 'Calculando...';
@@ -2686,13 +2778,22 @@ function resetFormOnly() {
     
     document.getElementById('retry_location_btn').style.display = 'none';
     
+    // Mantener usuario autenticado
     document.getElementById('email').value = currentUser.email;
     document.getElementById('google_user_id').value = currentUser.id;
     
+    // Reset de validación
     locationValid = false;
     locationAttempts = 0;
+    
+    // ⚠️ NUEVO: Limpiar cache de este envío específico
+    // (no todo el cache, solo el de este usuario/hora)
+    clearSubmissionCache();
+    
     updateLocationStatus('loading', 'Obteniendo nueva ubicación GPS...', '');
     updateSubmitButton();
+    
+    console.log('✅ Formulario reseteado');
 }
 
 function validateConditionalFields() {
@@ -3129,11 +3230,29 @@ function resetLocationFields() {
     updateLocationStatus('loading', 'Complete la autenticación para obtener ubicación GPS', '');
 }
 
+function clearSubmissionCache() {
+    const size = submissionCache.size;
+    submissionCache.clear();
+    console.log(`🧹 Cache limpiado: ${size} entrada(s)`);
+}
+
 function limpiarCacheEnvios() {
-    if (confirm('¿Limpiar cache de envíos en proceso?\n\nUse esto solo si hay envíos atascados.')) {
-        submissionCache.clear();
-        console.log('✅ Cache limpiado');
-        alert('✅ Cache limpiado correctamente');
+    const count = submissionCache.size;
+    
+    if (count === 0) {
+        alert('✅ El cache ya está vacío');
+        return;
+    }
+    
+    // Mostrar contenido del cache
+    console.log('\n📋 CACHE ACTUAL:');
+    submissionCache.forEach((value, key) => {
+        console.log(`  ${key}: ${value.status} (${value.timestamp})`);
+    });
+    
+    if (confirm(`¿Limpiar cache de envíos?\n\n${count} entrada(s) en cache`)) {
+        clearSubmissionCache();
+        alert(`✅ Cache limpiado (${count} entrada(s) eliminadas)`);
     }
 }
 
