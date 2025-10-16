@@ -47,6 +47,18 @@ const ubicacionesUAS = [
     { name: "Universidad Autónoma de Sinaloa - Campus Central", lat: 24.7990, lng: -107.3950, radius: 200 }
 ];
 
+// ========== LOGGING MEJORADO ==========
+console.log('\n' + '█'.repeat(80));
+console.log('🚀 CESPSIC - SISTEMA DE CONTROL DE ASISTENCIA v1.2.04');
+console.log('█'.repeat(80));
+console.log(`📅 Cargado: ${new Date().toLocaleString()}`);
+console.log(`🌐 URL Backend: ${GOOGLE_SCRIPT_URL}`);
+console.log(`🔑 Client ID: ${GOOGLE_CLIENT_ID?.substring(0, 20)}...`);
+console.log(`📱 Dispositivo: ${deviceType}`);
+console.log(`💻 Es Desktop: ${isDesktop}`);
+console.log(`🎯 Precisión requerida: ${REQUIRED_ACCURACY}m`);
+console.log('█'.repeat(80) + '\n');
+
 // ========== FUNCIONES DE DETECCIÓN DE DISPOSITIVO ==========
 function detectDesktop() {
     const ua = navigator.userAgent.toLowerCase();
@@ -3126,6 +3138,43 @@ function limpiarCacheEnvios() {
 }
 
 // ========== DIAGNÓSTICO ==========
+async function testVerification() {
+    if (!currentUser || !isAuthenticated) {
+        alert('❌ Debe estar autenticado para probar la verificación');
+        return;
+    }
+    
+    console.log('\n' + '='.repeat(80));
+    console.log('🔬 PRUEBA DE VERIFICACIÓN');
+    console.log('='.repeat(80));
+    
+    const testData = {
+        email: currentUser.email,
+        timestamp: new Date().toISOString(),
+        modalidad: 'presencial'
+    };
+    
+    console.log('Datos de prueba:', testData);
+    
+    try {
+        const result = await verificarEnSheets(testData, 'test_' + Date.now());
+        
+        console.log('Resultado:', result);
+        console.log('='.repeat(80) + '\n');
+        
+        if (result.found) {
+            alert(`✅ Verificación funciona correctamente\n\nEncontrado en fila: ${result.row_number}`);
+        } else if (result.cors_blocked_verification) {
+            alert('⚠️ Verificación bloqueada por CORS\n\nEsto es normal en algunos navegadores.');
+        } else {
+            alert('⚠️ No se encontraron registros recientes\n\nEsto es normal si no hay registros.');
+        }
+    } catch (error) {
+        console.error('Error en prueba:', error);
+        alert('❌ Error en prueba: ' + error.message);
+    }
+}
+
 async function diagnosticarEvidencias() {
     console.log('\n🔍 DIAGNÓSTICO DE EVIDENCIAS');
     console.log('============================\n');
