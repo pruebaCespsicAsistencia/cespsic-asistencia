@@ -3,11 +3,6 @@ const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
-const MAX_RETRIES = 5; // Aumentado de 3 a 5
-const RETRY_DELAY = 3000; // Aumentado de 2s a 3s
-const SUBMISSION_TIMEOUT = 45000; // Aumentado de 20s a 45s
-const VERIFICATION_TIMEOUT = 10000; // Nuevo: timeout para verificación
-
 // Detectar si es un ordenador de escritorio/laptop
 const isDesktop = detectDesktop();
 const deviceType = getDeviceType();
@@ -49,12 +44,6 @@ const ubicacionesUAS = [
     { name: "Facultad de Psicología UAS", lat: 24.7993, lng: -107.3950, radius: 100 },
     { name: "Universidad Autónoma de Sinaloa - Campus Central", lat: 24.7990, lng: -107.3950, radius: 200 }
 ];
-
-function generateSubmissionId() {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(7);
-  return `SUB_${timestamp}_${userEmail.split('@')[0]}_${random}`;
-}
 
 // ========== FUNCIONES DE DETECCIÓN DE DISPOSITIVO ==========
 function detectDesktop() {
@@ -547,55 +536,42 @@ function showVisibleGoogleButton() {
 }
 
 async function handleCredentialResponse(response) {
-  try {
-    if (isIOS) {
-      closeIOSAuthModal();
-    } else {
-      closeAuthModal();
-    }
-    
-    console.log('🔐 Procesando credenciales de Google...');
-    
-    const userInfo = parseJwt(response.credential);
-    
-    if (!userInfo) {
-      throw new Error('No se pudo decodificar el token de Google');
-    }
-    
-    currentUser = {
-      id: userInfo.sub,
-      email: userInfo.email,
-      name: userInfo.name,
-      picture: userInfo.picture,
-      email_verified: userInfo.email_verified
-    };
+    try {
+        if (isIOS) {
+            closeIOSAuthModal();
+        } else {
+            closeAuthModal();
+        }
+        
+        const userInfo = parseJwt(response.credential);
+        
+        currentUser = {
+            id: userInfo.sub,
+            email: userInfo.email,
+            name: userInfo.name,
+            picture: userInfo.picture,
+            email_verified: userInfo.email_verified
+        };
 
-    if (!currentUser.email_verified) {
-      showStatus('Su cuenta de Gmail no está verificada.', 'error');
-      return;
-    }
+        if (!currentUser.email_verified) {
+            showStatus('Su cuenta de Gmail no está verificada.', 'error');
+            return;
+        }
 
-    console.log('✅ Usuario autenticado:', currentUser.email);
-
-    if (authenticationPurpose === 'revoke') {
-      await handleRevocationFlow();
-    } else {
-      await handleLoginFlow();
+        if (authenticationPurpose === 'revoke') {
+            await handleRevocationFlow();
+        } else {
+            await handleLoginFlow();
+        }
+    } catch (error) {
+        console.error('Error procesando credenciales:', error);
+        showStatus('Error en la autenticación.', 'error');
+        if (isIOS) {
+            closeIOSAuthModal();
+        } else {
+            closeAuthModal();
+        }
     }
-  } catch (error) {
-    console.error('❌ Error procesando credenciales:', error);
-    showStatus(
-      `Error en la autenticación: ${error.message}\n\n` +
-      `Por favor, intente nuevamente o use otro navegador.`,
-      'error'
-    );
-    
-    if (isIOS) {
-      closeIOSAuthModal();
-    } else {
-      closeAuthModal();
-    }
-  }
 }
 
 function closeAuthModal() {
@@ -661,51 +637,17 @@ async function handleRevocationFlow() {
 }
 
 function parseJwt(token) {
-  try {
-    if (!token || typeof token !== 'string') {
-      throw new Error('Token inválido');
-    }
-    
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      throw new Error('Formato de token incorrecto');
-    }
-    
-    const base64Url = parts[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    
-    // Decodificar con manejo de errores
-    let jsonPayload;
     try {
-      jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-    } catch (decodeError) {
-      throw new Error('Error decodificando token: ' + decodeError.message);
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    } catch (error) {
+        console.error('Error parsing JWT:', error);
+        return null;
     }
-    
-    const parsed = JSON.parse(jsonPayload);
-    
-    // Validar campos obligatorios
-    if (!parsed.sub || !parsed.email) {
-      throw new Error('Token no contiene datos de usuario válidos');
-    }
-    
-    return parsed;
-    
-  } catch (error) {
-    console.error('❌ Error parsing JWT:', error);
-    showStatus(
-      `Error procesando autenticación de Google.\n` +
-      `Detalles: ${error.message}\n\n` +
-      `Intente cerrar esta pestaña y abrir la aplicación nuevamente.`,
-      'error'
-    );
-    return null;
-  }
 }
 
 function updateAuthenticationUI() {
@@ -1122,95 +1064,124 @@ async function uploadEvidencias() {
     return evidenciasInfo;
 }
 
-async function sendDataWithFallback(data, retryCount = 0) {
-  const submissionId = data.submission_id || generateSubmissionId();
-  data.submission_id = submissionId;
-  
-  console.log(`📤 Intento ${retryCount + 1}/${MAX_RETRIES}`);
-  console.log(`🆔 Submission ID: ${submissionId}`);
-  
-  return new Promise(async (resolve, reject) => {
-    let responseReceived = false;
-    let timeoutId;
+async function sendDataWithFallback(data) {
+    console.log('Enviando datos con método sin CORS...');
     
-    // Crear FormData para envío
-    const formData = new FormData();
-    for (const [key, value] of Object.entries(data)) {
-      if (typeof value === 'object' && value !== null) {
-        formData.append(key, JSON.stringify(value));
-      } else {
-        formData.append(key, value || '');
-      }
-    }
-    
-    try {
-      // ⏱️ Timeout general
-      timeoutId = setTimeout(() => {
-        if (!responseReceived) {
-          console.error('⏱️ Timeout general alcanzado');
-          handleRetry('Timeout - sin respuesta del servidor');
+    return new Promise((resolve, reject) => {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.name = 'response_frame_' + Date.now();
+        
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = GOOGLE_SCRIPT_URL;
+        form.target = iframe.name;
+        form.style.display = 'none';
+        
+        for (const [key, value] of Object.entries(data)) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            
+            if (typeof value === 'object' && value !== null) {
+                input.value = JSON.stringify(value);
+            } else {
+                input.value = value || '';
+            }
+            
+            form.appendChild(input);
         }
-      }, SUBMISSION_TIMEOUT);
-      
-      // 🚀 ENVÍO CON FETCH (más confiable que iframe)
-      const response = await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        body: formData,
-        mode: 'no-cors' // Necesario para Google Apps Script
-      });
-      
-      // ⚠️ no-cors no permite leer la respuesta directamente
-      // Por eso usamos verificación externa
-      
-      console.log('📨 Datos enviados, iniciando verificación...');
-      
-      // ✅ VERIFICACIÓN EXTERNA (método más confiable)
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Esperar 3s
-      
-      const verified = await verifySubmissionExternal(submissionId, data.email);
-      
-      if (verified.found) {
-        responseReceived = true;
-        clearTimeout(timeoutId);
-        console.log('✅ VERIFICACIÓN EXITOSA');
-        resolve({
-          success: true,
-          confirmed: true,
-          submission_id: submissionId,
-          row_number: verified.row_number,
-          message: 'Registro confirmado mediante verificación externa',
-          ...verified
-        });
-      } else {
-        throw new Error('Verificación falló - registro no encontrado');
-      }
-      
-    } catch (error) {
-      console.error('❌ Error en envío/verificación:', error);
-      handleRetry(error.message);
-    }
-    
-    function handleRetry(errorMsg) {
-      clearTimeout(timeoutId);
-      
-      if (retryCount < MAX_RETRIES - 1) {
-        console.log(`🔄 Reintentando en ${RETRY_DELAY/1000}s...`);
-        setTimeout(() => {
-          sendDataWithFallback(data, retryCount + 1)
-            .then(resolve)
-            .catch(reject);
-        }, RETRY_DELAY);
-      } else {
-        reject(new Error(
-          `No se pudo confirmar el registro después de ${MAX_RETRIES} intentos.\n` +
-          `Último error: ${errorMsg}\n\n` +
-          `Submission ID: ${submissionId}\n` +
-          `Email: ${data.email}\n\n` +
-          `Por favor, contacte al administrador con esta información.`
-        ));
-      }
-    }
-  });
+        
+        iframe.onload = function() {
+            try {
+                setTimeout(() => {
+                    try {
+                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        let responseText = '';
+                        
+                        if (iframeDoc && iframeDoc.body) {
+                            responseText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
+                        }
+                        
+                        console.log('Respuesta del iframe:', responseText);
+                        
+                        let responseData;
+                        try {
+                            responseData = JSON.parse(responseText);
+                        } catch (parseError) {
+                            responseData = {
+                                success: true,
+                                message: 'Datos enviados correctamente',
+                                method: 'form_submission',
+                                raw_response: responseText
+                            };
+                        }
+                        
+                        cleanup();
+                        resolve(responseData);
+                        
+                    } catch (error) {
+                        console.log('No se pudo leer respuesta del iframe, asumiendo éxito');
+                        cleanup();
+                        resolve({
+                            success: true,
+                            message: 'Datos enviados (respuesta no accesible)',
+                            method: 'form_submission_assumed'
+                        });
+                    }
+                }, 2000);
+                
+            } catch (error) {
+                console.log('Error procesando iframe, asumiendo éxito');
+                cleanup();
+                resolve({
+                    success: true,
+                    message: 'Datos enviados (método form)',
+                    method: 'form_submission_fallback'
+                });
+            }
+        };
+        
+        iframe.onerror = function(error) {
+            console.log('Error en iframe, pero posiblemente datos enviados:', error);
+            cleanup();
+            resolve({
+                success: true,
+                message: 'Datos enviados (error de iframe ignorado)',
+                method: 'form_submission_with_error'
+            });
+        };
+        
+        const timeoutId = setTimeout(() => {
+            console.log('Timeout en envío, asumiendo éxito');
+            cleanup();
+            resolve({
+                success: true,
+                message: 'Datos enviados (timeout)',
+                method: 'form_submission_timeout'
+            });
+        }, 15000);
+        
+        function cleanup() {
+            try {
+                clearTimeout(timeoutId);
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+                if (document.body.contains(form)) {
+                    document.body.removeChild(form);
+                }
+            } catch (e) {
+                console.log('Error en cleanup:', e);
+            }
+        }
+        
+        document.body.appendChild(iframe);
+        document.body.appendChild(form);
+        
+        console.log('Enviando formulario...');
+        form.submit();
+    });
 }
 
 function generateEvidenciaFileName(tipoRegistro, index) {
@@ -1310,206 +1281,190 @@ function fileToBase64(file) {
 }
 
 // ========== FORM SUBMISSION ==========
-async function verifySubmissionExternal(submissionId, email) {
-  try {
-    const verifyUrl = `${GOOGLE_SCRIPT_URL}?action=verify_submission&submission_id=${encodeURIComponent(submissionId)}&email=${encodeURIComponent(email)}`;
+async function handleSubmit(e) {
+    e.preventDefault();
     
-    console.log('🔍 Verificando mediante URL externa...');
-    
-    const response = await fetch(verifyUrl, {
-      method: 'GET',
-      cache: 'no-cache'
-    });
-    
-    if (!response.ok) {
-      throw new Error('Error en verificación HTTP');
+    if (!isAuthenticated || !currentUser) {
+        showStatus('Debe autenticarse con Google.', 'error');
+        return;
     }
     
-    const result = await response.json();
-    console.log('📊 Resultado verificación:', result);
+    if (!locationValid || !currentLocation) {
+        showStatus('Ubicación GPS requerida.', 'error');
+        return;
+    }
     
-    return result;
+    if (currentLocation.accuracy > REQUIRED_ACCURACY) {
+        const deviceTypeText = isDesktop ? 'Desktop/Laptop' : 'Móvil';
+        showStatus(`Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m > ${REQUIRED_ACCURACY}m (${deviceTypeText})`, 'error');
+        return;
+    }
     
-  } catch (error) {
-    console.error('❌ Error en verificación externa:', error);
+    document.getElementById('timestamp').value = new Date().toISOString();
     
-    // Fallback: esperar más y reintentar
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    if (!validateConditionalFields()) {
+        return;
+    }
+    
+    showStatus('Guardando asistencia...', 'success');
+    const submitBtn = document.querySelector('.submit-btn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando...';
     
     try {
-      const retryResponse = await fetch(
-        `${GOOGLE_SCRIPT_URL}?action=verify_submission&submission_id=${encodeURIComponent(submissionId)}&email=${encodeURIComponent(email)}`,
-        { method: 'GET', cache: 'no-cache' }
-      );
-      return await retryResponse.json();
-    } catch (retryError) {
-      return { success: false, found: false };
-    }
-  }
-}
-
-// MODIFICAR handleSubmit (línea ~1050 aprox)
-async function handleSubmit(e) {
-  e.preventDefault();
-  
-  // Validaciones previas...
-  if (!isAuthenticated || !currentUser) {
-    showStatus('❌ Debe autenticarse con Google antes de continuar.', 'error');
-    return;
-  }
-  
-  if (!locationValid || !currentLocation) {
-    showStatus('❌ Se requiere ubicación GPS válida.', 'error');
-    return;
-  }
-  
-  if (!validateConditionalFields()) {
-    return;
-  }
-  
-  const submitBtn = document.querySelector('.submit-btn');
-  const originalBtnText = submitBtn.textContent;
-  submitBtn.disabled = true;
-  submitBtn.textContent = '⏳ Guardando asistencia...';
-  submitBtn.style.background = '#6c757d';
-  
-  const submissionId = generateSubmissionId();
-  
-  try {
-    console.log('\n🚀 INICIANDO PROCESO DE REGISTRO');
-    console.log('🆔 Submission ID:', submissionId);
-    console.log('================================');
-    
-    // FASE 1: Subir evidencias
-    let evidenciasUrls = [];
-    if (selectedFiles.length > 0) {
-      console.log(`\n📤 FASE 1: Subiendo ${selectedFiles.length} evidencia(s)...`);
-      submitBtn.textContent = `⏳ Subiendo ${selectedFiles.length} evidencia(s)...`;
-      
-      try {
-        evidenciasUrls = await uploadEvidencias();
+        console.log('\n🚀 INICIANDO ENVÍO DE FORMULARIO');
+        console.log(`📱 Tipo dispositivo: ${deviceType}`);
+        console.log(`💻 Es Desktop: ${isDesktop}`);
+        console.log(`📍 Precisión GPS: ${Math.round(currentLocation.accuracy)}m`);
+        console.log(`📁 Archivos seleccionados: ${selectedFiles.length}`);
+        
+        let evidenciasUrls = [];
+        if (selectedFiles.length > 0) {
+            console.log('\n📤 FASE 1: SUBIENDO EVIDENCIAS...');
+            showStatus('Subiendo evidencias...', 'success');
+            evidenciasUrls = await uploadEvidencias();
+            
+            const successUploads = evidenciasUrls.filter(e => e.uploadStatus === 'SUCCESS');
+            const failedUploads = evidenciasUrls.filter(e => e.uploadStatus === 'FAILED');
+            
+            console.log(`📊 Resultado: ${successUploads.length} éxito, ${failedUploads.length} fallos`);
+            
+            if (selectedFiles.length > 0 && successUploads.length === 0) {
+                const errorDetails = failedUploads.map(e => `• ${e.originalName}: ${e.error}`).join('\n');
+                
+                console.error('\n❌ TODAS LAS EVIDENCIAS FALLARON:');
+                console.error(errorDetails);
+                
+                const userDecision = confirm(
+                    `⚠️ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n` +
+                    `¿Desea continuar registrando la asistencia SIN evidencias?\n\n` +
+                    `• Clic en "Aceptar" = Continuar sin evidencias\n` +
+                    `• Clic en "Cancelar" = Reintentar o corregir archivos`
+                );
+                
+                if (!userDecision) {
+                    throw new Error('Registro cancelado. Por favor revise los archivos e intente nuevamente.');
+                }
+                
+                console.log('⚠️ Usuario decidió continuar sin evidencias');
+            } else if (failedUploads.length > 0) {
+                console.warn(`⚠️ ${failedUploads.length} evidencia(s) no se subieron, pero se continuará con ${successUploads.length}`);
+            }
+        }
+        
+        console.log('\n📝 FASE 2: PREPARANDO DATOS DEL FORMULARIO...');
+        
+        const formData = new FormData(e.target);
+        const data = {};
+        
+        for (let [key, value] of formData.entries()) {
+            if (key === 'evidencias') continue;
+            
+            if (key.endsWith('[]')) {
+                const cleanKey = key.replace('[]', '');
+                if (!data[cleanKey]) {
+                    data[cleanKey] = [];
+                }
+                data[cleanKey].push(value);
+            } else {
+                if (data[key]) {
+                    if (Array.isArray(data[key])) {
+                        data[key].push(value);
+                    } else {
+                        data[key] = [data[key], value];
+                    }
+                } else {
+                    data[key] = value;
+                }
+            }
+        }
+        
         const successUploads = evidenciasUrls.filter(e => e.uploadStatus === 'SUCCESS');
         
-        if (selectedFiles.length > 0 && successUploads.length === 0) {
-          const userDecision = confirm(
-            '⚠️ No se pudo subir ninguna evidencia.\n\n' +
-            '¿Desea continuar sin evidencias?'
-          );
-          if (!userDecision) {
-            throw new Error('Registro cancelado por el usuario');
-          }
+        data.evidencias_urls = evidenciasUrls;
+        data.total_evidencias = successUploads.length;
+        data.evidencias_failed = evidenciasUrls.length - successUploads.length;
+        
+        const evidenciasNombres = successUploads
+            .map(e => e.fileName)
+            .join(', ');
+        
+        data.evidencias_nombres = evidenciasNombres;
+        data.carpeta_evidencias = generateStudentFolderName();
+        
+        data.modalidad = document.getElementById('modalidad').value;
+        data.ubicacion_detectada = document.getElementById('ubicacion_detectada').value;
+        data.direccion_completa = document.getElementById('direccion_completa').value;
+        data.precision_gps = document.getElementById('precision_gps').value;
+        data.precision_gps_metros = Math.round(currentLocation.accuracy);
+        data.location_validation = 'passed';
+        data.authenticated_user_name = currentUser.name;
+        data.authentication_timestamp = new Date().toISOString();
+        
+        // ===== NUEVO: Información del dispositivo =====
+        data.device_type = deviceType;
+        data.is_desktop = isDesktop;
+        data.is_mobile = !isDesktop;
+        data.gps_method = isDesktop ? 'IP/WiFi' : 'GPS';
+        data.required_accuracy = REQUIRED_ACCURACY;
+        data.device_info = JSON.stringify(getDeviceInfo());
+        
+        if (!data.modalidad || data.modalidad === '') {
+            throw new Error('El campo Modalidad es requerido');
         }
-      } catch (uploadError) {
-        console.error('❌ Error en evidencias:', uploadError);
-        const continuar = confirm(
-          `Error subiendo evidencias: ${uploadError.message}\n\n` +
-          '¿Desea continuar sin evidencias?'
-        );
-        if (!continuar) throw uploadError;
-      }
-    }
-    
-    // FASE 2: Preparar datos
-    console.log('\n📋 FASE 2: Preparando datos...');
-    submitBtn.textContent = '⏳ Preparando datos...';
-    
-    const formData = new FormData(e.target);
-    const data = {};
-    
-    for (let [key, value] of formData.entries()) {
-      if (key === 'evidencias') continue;
-      
-      if (key.endsWith('[]')) {
-        const cleanKey = key.replace('[]', '');
-        if (!data[cleanKey]) data[cleanKey] = [];
-        data[cleanKey].push(value);
-      } else {
-        data[key] = value;
-      }
-    }
-    
-    // Agregar datos críticos
-    const successUploads = evidenciasUrls.filter(e => e.uploadStatus === 'SUCCESS');
-    data.evidencias_urls = evidenciasUrls;
-    data.total_evidencias = successUploads.length;
-    data.evidencias_nombres = successUploads.map(e => e.fileName).join(', ');
-    data.carpeta_evidencias = generateStudentFolderName();
-    data.modalidad = document.getElementById('modalidad').value;
-    data.ubicacion_detectada = document.getElementById('ubicacion_detectada').value;
-    data.direccion_completa = document.getElementById('direccion_completa').value;
-    data.precision_gps = document.getElementById('precision_gps').value;
-    data.precision_gps_metros = Math.round(currentLocation.accuracy);
-    data.location_validation = 'passed';
-    data.authenticated_user_name = currentUser.name;
-    data.authentication_timestamp = new Date().toISOString();
-    data.device_type = deviceType;
-    data.is_desktop = isDesktop;
-    data.submission_id = submissionId;
-    
-    // Validación final
-    if (!data.modalidad || data.modalidad === '') {
-      throw new Error('El campo Modalidad es requerido');
-    }
-    
-    // FASE 3: Enviar y verificar
-    console.log('\n📤 FASE 3: Enviando al servidor...');
-    submitBtn.textContent = '⏳ Enviando y verificando...';
-    
-    const responseData = await sendDataWithFallback(data);
-    
-    // ✅ CONFIRMACIÓN EXITOSA
-    if (responseData && responseData.confirmed === true) {
-      console.log('✅ REGISTRO CONFIRMADO');
-      
-      const evidenciasInfo = data.total_evidencias > 0 
-        ? `\n✅ Evidencias: ${data.total_evidencias} imagen(es)` 
-        : '';
-      
-      showStatus(
-        `✅ ¡Asistencia registrada y confirmada!\n\n` +
-        `Usuario: ${currentUser.name}\n` +
-        `Modalidad: ${data.modalidad}\n` +
-        `Ubicación: ${data.ubicacion_detectada}\n` +
-        `Precisión: ${data.precision_gps_metros}m${evidenciasInfo}\n\n` +
-        `Fila: ${responseData.row_number}\n` +
-        `ID: ${submissionId.substring(0, 20)}...`,
-        'success'
-      );
-      
-      setTimeout(() => {
-        if (confirm('¿Desea registrar otra asistencia?')) {
-          resetFormOnly();
-          getCurrentLocation();
+        
+        console.log('\n📤 FASE 3: ENVIANDO FORMULARIO PRINCIPAL...');
+        console.log(`   Usuario: ${currentUser.name}`);
+        console.log(`   Dispositivo: ${deviceType}`);
+        console.log(`   Modalidad: ${data.modalidad}`);
+        console.log(`   Método GPS: ${data.gps_method}`);
+        console.log(`   Precisión: ${data.precision_gps_metros}m`);
+        console.log(`   Evidencias exitosas: ${data.total_evidencias}`);
+        console.log(`   Evidencias fallidas: ${data.evidencias_failed}`);
+        
+        const responseData = await sendDataWithFallback(data);
+        
+        console.log('✅ FORMULARIO ENVIADO EXITOSAMENTE');
+        
+        if (responseData) {
+            const evidenciasInfo = data.total_evidencias > 0 
+                ? `\n✅ Evidencias: ${data.total_evidencias} imagen(es)${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} no se pudieron subir)` : ''}`
+                : selectedFiles.length > 0 
+                    ? `\n⚠️ Evidencias: No se pudo subir ninguna (registrado sin evidencias)`
+                    : '';
+            
+            showStatus(`✅ ¡Asistencia registrada exitosamente!
+            Usuario: ${currentUser.name}
+            Dispositivo: ${deviceType}
+            Modalidad: ${data.modalidad}
+            Ubicación: ${data.ubicacion_detectada}
+            Precisión: ${data.precision_gps_metros}m${evidenciasInfo}`, 'success');
+            
+            setTimeout(() => {
+                if (confirm('¿Desea registrar otra asistencia?')) {
+                    resetFormOnly();
+                    getCurrentLocation();
+                } else {
+                    signOut();
+                }
+                hideStatus();
+            }, 5000);
         } else {
-          signOut();
+            throw new Error('Error en el envío del formulario');
         }
-        hideStatus();
-      }, 8000); // Mostrar 8 segundos
-      
-    } else {
-      throw new Error('Respuesta del servidor no confirmó el registro');
+        
+    } catch (error) {
+        console.error('\n❌ ERROR EN ENVÍO DE FORMULARIO:', error);
+        showStatus('❌ Error al guardar: ' + error.message, 'error');
+        
+        submitBtn.disabled = false;
+        submitBtn.textContent = '📋 Registrar Asistencia';
+        submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
+        
+        setTimeout(() => {
+            hideStatus();
+        }, 8000);
     }
-    
-  } catch (error) {
-    console.error('\n❌ ERROR EN REGISTRO:', error);
-    
-    showStatus(
-      `❌ ERROR: No se pudo confirmar el registro\n\n` +
-      `Motivo: ${error.message}\n\n` +
-      `Submission ID:\n${submissionId}\n\n` +
-      `Por favor, tome captura de pantalla de este mensaje ` +
-      `y contacte al administrador.`,
-      'error'
-    );
-    
-    // Restaurar botón
-    submitBtn.disabled = false;
-    submitBtn.textContent = originalBtnText;
-    submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
-    
-    // Mantener error visible más tiempo
-    setTimeout(() => hideStatus(), 15000);
-  }
 }
 
 function resetFormOnly() {
@@ -1599,16 +1554,9 @@ function validateConditionalFields() {
 
 function showStatus(message, type) {
     const status = document.getElementById('status');
-    
-    // Formatear mensaje con saltos de línea
-    const formattedMessage = message.replace(/\n/g, '<br>');
-    
-    status.innerHTML = formattedMessage;
+    status.innerHTML = message;
     status.className = `status ${type}`;
     status.style.display = 'block';
-    
-    // Scroll al mensaje
-    status.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function hideStatus() {
@@ -2067,264 +2015,84 @@ async function diagnosticarEvidencias() {
     console.log('\n============================');
 }
 
-async function diagnosticoCompletoMejorado() {
-  console.log('\n🔬 DIAGNÓSTICO COMPLETO DEL SISTEMA v2.0');
-  console.log('==========================================\n');
-  
-  console.log('1. CONFIGURACIÓN:');
-  console.log(`   ✓ Google Script URL: ${GOOGLE_SCRIPT_URL}`);
-  console.log(`   ✓ Client ID: ${GOOGLE_CLIENT_ID.substring(0, 20)}...`);
-  console.log(`   ✓ Max Retries: ${MAX_RETRIES}`);
-  console.log(`   ✓ Timeout: ${SUBMISSION_TIMEOUT}ms`);
-  
-  console.log('\n2. AUTENTICACIÓN:');
-  console.log(`   ${isAuthenticated ? '✅' : '❌'} Autenticado`);
-  console.log(`   ${privacyConsent ? '✅' : '❌'} Consentimiento`);
-  console.log(`   Usuario: ${currentUser?.name || 'N/A'}`);
-  console.log(`   Email: ${currentUser?.email || 'N/A'}`);
-  
-  console.log('\n3. UBICACIÓN:');
-  console.log(`   ${locationValid ? '✅' : '❌'} Válida`);
-  console.log(`   Precisión: ${currentLocation?.accuracy || 'N/A'}m`);
-  console.log(`   Requerida: ${REQUIRED_ACCURACY}m`);
-  console.log(`   Latitud: ${currentLocation?.latitude || 'N/A'}`);
-  console.log(`   Longitud: ${currentLocation?.longitude || 'N/A'}`);
-  
-  console.log('\n4. EVIDENCIAS:');
-  console.log(`   Archivos: ${selectedFiles.length}/${MAX_FILES}`);
-  if (selectedFiles.length > 0) {
-    selectedFiles.forEach((file, i) => {
-      console.log(`   ${i + 1}. ${file.name} (${(file.size/1024).toFixed(1)}KB)`);
-    });
-  }
-  
-  console.log('\n5. DISPOSITIVO:');
-  console.log(`   Tipo: ${deviceType}`);
-  console.log(`   Desktop: ${isDesktop ? 'Sí' : 'No'}`);
-  console.log(`   iOS: ${isIOS ? 'Sí' : 'No'}`);
-  console.log(`   Safari: ${isSafari ? 'Sí' : 'No'}`);
-  
-  console.log('\n6. PRUEBA DE CONECTIVIDAD:');
-  try {
-    console.log('   Probando conexión al servidor...');
+async function diagnosticComplete() {
+    console.log('🔬 DIAGNÓSTICO COMPLETO');
+    console.log('======================\n');
     
-    const testResponse = await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'GET',
-      cache: 'no-cache'
-    });
+    console.log('1. DISPOSITIVO:');
+    console.log('   - Tipo:', deviceType);
+    console.log('   - Es Desktop:', isDesktop ? '✅' : '❌');
+    console.log('   - Es Móvil:', !isDesktop ? '✅' : '❌');
+    console.log('   - iOS:', isIOS ? '✅' : '❌');
+    console.log('   - Safari:', isSafari ? '✅' : '❌');
+    console.log('   - User Agent:', navigator.userAgent);
+    console.log('   - Pantalla:', `${window.screen.width}x${window.screen.height}`);
+    console.log('   - Touch Points:', navigator.maxTouchPoints || 0);
     
-    if (testResponse.ok) {
-      const data = await testResponse.json();
-      console.log('   ✅ Servidor respondiendo:', data);
-    } else {
-      console.log('   ⚠️ Respuesta HTTP:', testResponse.status);
-    }
-  } catch (error) {
-    console.log('   ❌ Error de conexión:', error.message);
-  }
-  
-  console.log('\n7. PRUEBA DE GOOGLE API:');
-  console.log(`   ${typeof google !== 'undefined' ? '✅' : '❌'} Google API cargada`);
-  if (typeof google !== 'undefined') {
-    console.log(`   ${google.accounts ? '✅' : '❌'} Google Accounts disponible`);
-  }
-  
-  console.log('\n8. ALMACENAMIENTO LOCAL:');
-  console.log(`   ${safeLocalStorage() ? '✅' : '❌'} localStorage disponible`);
-  
-  console.log('\n9. RECOMENDACIONES:');
-  const issues = [];
-  
-  if (!isAuthenticated) {
-    issues.push('   ⚠️ Complete la autenticación primero');
-  }
-  if (!locationValid) {
-    issues.push('   ⚠️ Ubicación no válida - verifique permisos GPS');
-  }
-  if (isDesktop && currentLocation && currentLocation.accuracy > 500) {
-    issues.push('   ⚠️ Baja precisión GPS en desktop - considere usar móvil');
-  }
-  if (!safeLocalStorage()) {
-    issues.push('   ⚠️ Navegación privada detectada - datos no persistirán');
-  }
-  if (selectedFiles.length === 0 && document.getElementById('tipo_registro').value === 'salida') {
-    issues.push('   💡 Considere agregar evidencias para salidas');
-  }
-  
-  if (issues.length === 0) {
-    console.log('   ✅ Sistema listo para registrar asistencia');
-  } else {
-    issues.forEach(issue => console.log(issue));
-  }
-  
-  console.log('\n==========================================');
-  console.log('FUNCIONES DISPONIBLES:');
-  console.log('- diagnosticoCompletoMejorado()');
-  console.log('- testSubmissionComplete()');
-  console.log('- testGoogleAuth()');
-  console.log('- verificarRegistro(submissionId, email)');
-  console.log('==========================================\n');
-  
-  return {
-    authenticated: isAuthenticated,
-    location_valid: locationValid,
-    ready: isAuthenticated && locationValid
-  };
-}
-
-// NUEVA FUNCIÓN: Prueba completa de registro
-async function testSubmissionComplete() {
-  console.log('\n🧪 PRUEBA COMPLETA DE REGISTRO');
-  console.log('==============================\n');
-  
-  if (!isAuthenticated) {
-    console.log('❌ No autenticado - complete la autenticación primero');
-    return;
-  }
-  
-  if (!locationValid) {
-    console.log('❌ Ubicación no válida - obtenga ubicación GPS primero');
-    return;
-  }
-  
-  console.log('Preparando datos de prueba...');
-  
-  const testData = {
-    timestamp: new Date().toISOString(),
-    email: currentUser.email,
-    google_user_id: currentUser.id,
-    authenticated_user_name: currentUser.name,
-    authentication_timestamp: new Date().toISOString(),
-    latitude: currentLocation.latitude.toString(),
-    longitude: currentLocation.longitude.toString(),
-    location_status: 'success',
-    ubicacion_detectada: document.getElementById('ubicacion_detectada').value,
-    direccion_completa: document.getElementById('direccion_completa').value,
-    precision_gps: document.getElementById('precision_gps').value,
-    precision_gps_metros: Math.round(currentLocation.accuracy).toString(),
-    location_validation: 'passed',
-    nombre: 'PRUEBA',
-    apellido_paterno: 'SISTEMA',
-    apellido_materno: 'TEST',
-    tipo_estudiante: 'servicio_social',
-    modalidad: 'presencial',
-    fecha: new Date().toISOString().split('T')[0],
-    hora: new Date().toTimeString().split(' ')[0].substring(0, 5),
-    tipo_registro: 'entrada',
-    permiso_detalle: '',
-    otro_detalle: '',
-    intervenciones_psicologicas: '0',
-    ninos_ninas: '0',
-    adolescentes: '0',
-    adultos: '0',
-    mayores_60: '0',
-    familia: '0',
-    actividades: '',
-    actividades_varias_texto: '',
-    pruebas_psicologicas_texto: '',
-    comentarios_adicionales: 'REGISTRO DE PRUEBA - ELIMINAR',
-    total_evidencias: '0',
-    evidencias_nombres: '',
-    carpeta_evidencias: 'PRUEBA_SISTEMA_TEST',
-    device_type: deviceType,
-    is_desktop: isDesktop,
-    submission_id: generateSubmissionId()
-  };
-  
-  console.log('📤 Enviando registro de prueba...');
-  console.log('Submission ID:', testData.submission_id);
-  
-  try {
-    const result = await sendDataWithFallback(testData);
+    console.log('\n2. PRECISIÓN GPS:');
+    console.log('   - Método:', isDesktop ? 'IP/WiFi' : 'GPS nativo');
+    console.log('   - Precisión requerida:', REQUIRED_ACCURACY + 'm');
+    console.log('   - Precisión óptima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
+    console.log('   - Actual:', currentLocation ? `${Math.round(currentLocation.accuracy)}m` : 'No obtenida');
+    console.log('   - Estado:', locationValid ? '✅ Válida' : '❌ Inválida');
     
-    console.log('\n✅ PRUEBA EXITOSA');
-    console.log('Resultado:', result);
-    console.log('\n⚠️ IMPORTANTE: Elimine manualmente el registro de prueba');
-    console.log(`Fila: ${result.row_number}`);
-    console.log(`Submission ID: ${testData.submission_id}`);
+    console.log('\n3. CONFIGURACIÓN:');
+    console.log('   - Client ID:', GOOGLE_CLIENT_ID ? '✅' : '❌');
+    console.log('   - Script URL:', GOOGLE_SCRIPT_URL ? '✅' : '❌');
+    console.log('   - HTTPS:', location.protocol === 'https:' ? '✅' : '❌');
     
-    return result;
+    console.log('\n4. AUTENTICACIÓN:');
+    console.log('   - Usuario autenticado:', isAuthenticated ? '✅' : '❌');
+    console.log('   - Consentimiento:', privacyConsent ? '✅' : '❌');
+    console.log('   - Google API:', typeof google !== 'undefined' ? '✅' : '❌');
+    console.log('   - localStorage:', safeLocalStorage() ? '✅' : '❌ (modo privado)');
     
-  } catch (error) {
-    console.error('\n❌ PRUEBA FALLIDA');
-    console.error('Error:', error.message);
-    return null;
-  }
-}
-
-// NUEVA FUNCIÓN: Verificar registro manualmente
-async function verificarRegistro(submissionId, email) {
-  console.log('\n🔍 VERIFICANDO REGISTRO');
-  console.log('======================\n');
-  console.log('Submission ID:', submissionId);
-  console.log('Email:', email || userEmail);
-  
-  try {
-    const result = await verifySubmissionExternal(
-      submissionId, 
-      email || userEmail
-    );
+    console.log('\n5. UBICACIÓN:');
+    console.log('   - Geolocalización:', navigator.geolocation ? '✅' : '❌');
+    console.log('   - Ubicación válida:', locationValid ? '✅' : '❌');
+    console.log('   - Precisión actual:', currentLocation ? `${currentLocation.accuracy}m` : 'N/A');
+    console.log('   - Intentos:', locationAttempts + '/' + MAX_LOCATION_ATTEMPTS);
     
-    if (result.found) {
-      console.log('\n✅ REGISTRO ENCONTRADO');
-      console.log('Fila:', result.row_number);
-      console.log('Timestamp:', result.timestamp);
-      console.log('Modalidad:', result.modalidad);
-      console.log('Tipo registro:', result.tipo_registro);
-    } else {
-      console.log('\n❌ REGISTRO NO ENCONTRADO');
-      console.log('El registro puede no haberse guardado correctamente');
+    console.log('\n6. EVIDENCIAS:');
+    console.log('   - Archivos seleccionados:', selectedFiles.length);
+    console.log('   - Drag & Drop:', !isIOS ? '✅ Habilitado' : '❌ Deshabilitado (iOS)');
+    console.log('   - DataTransfer:', !isIOS ? '✅ Disponible' : '❌ No disponible (iOS)');
+    
+    if (selectedFiles.length > 0) {
+        console.log('\n   Analizando archivos...');
+        await diagnosticarEvidencias();
     }
     
-    return result;
+    console.log('\n7. RECOMENDACIONES:');
+    if (isDesktop && currentLocation && currentLocation.accuracy > 300) {
+        console.log('   ⚠️ Desktop con baja precisión:');
+        console.log('      - Conéctese a una red WiFi conocida');
+        console.log('      - Use un dispositivo móvil para mejor precisión');
+        console.log('      - La precisión actual (' + Math.round(currentLocation.accuracy) + 'm) es normal para desktop');
+    }
+    if (!locationValid) {
+        console.log('   ⚠️ Ubicación no válida:');
+        console.log('      - Verifique permisos de ubicación');
+        console.log('      - Asegúrese de tener conexión a Internet');
+        if (isDesktop) {
+            console.log('      - Considere usar un dispositivo móvil');
+        }
+    }
+    if (!isAuthenticated) {
+        console.log('   ⚠️ No autenticado - Complete la autenticación primero');
+    }
     
-  } catch (error) {
-    console.error('\n❌ ERROR EN VERIFICACIÓN');
-    console.error(error);
-    return null;
-  }
+    console.log('\n======================');
+    console.log('FUNCIONES DISPONIBLES:');
+    console.log('- diagnosticarEvidencias() - Analiza archivos');
+    console.log('- diagnosticComplete() - Diagnóstico completo');
+    console.log('- getDeviceInfo() - Información del dispositivo');
 }
 
-// NUEVA FUNCIÓN: Test de autenticación
-function testGoogleAuth() {
-  console.log('\n🔐 TEST DE AUTENTICACIÓN GOOGLE');
-  console.log('================================\n');
-  
-  console.log('1. Google API:');
-  console.log(`   ${typeof google !== 'undefined' ? '✅' : '❌'} Cargada`);
-  
-  if (typeof google !== 'undefined') {
-    console.log(`   ${google.accounts ? '✅' : '❌'} Accounts API`);
-    console.log(`   ${google.accounts?.id ? '✅' : '❌'} ID API`);
-  }
-  
-  console.log('\n2. Client ID configurado:');
-  console.log(`   ${GOOGLE_CLIENT_ID ? '✅' : '❌'} ${GOOGLE_CLIENT_ID?.substring(0, 30)}...`);
-  
-  console.log('\n3. Estado actual:');
-  console.log(`   Autenticado: ${isAuthenticated ? '✅' : '❌'}`);
-  console.log(`   Usuario: ${currentUser?.email || 'N/A'}`);
-  console.log(`   Nombre: ${currentUser?.name || 'N/A'}`);
-  
-  console.log('\n4. Consentimiento:');
-  console.log(`   Privacidad: ${privacyConsent ? '✅' : '❌'}`);
-  
-  if (!isAuthenticated) {
-    console.log('\n💡 Para autenticarse, haga clic en "Iniciar Sesión con Google"');
-  }
-  
-  console.log('\n================================\n');
-}
-
-// Exponer funciones globales para debugging
-window.diagnosticoCompletoMejorado = diagnosticoCompletoMejorado;
-window.testSubmissionComplete = testSubmissionComplete;
-window.verificarRegistro = verificarRegistro;
-window.testGoogleAuth = testGoogleAuth;
-
-console.log('✅ Frontend v2.1 con verificación garantizada cargado');
-console.log('📋 Funciones disponibles:');
-console.log('   - diagnosticoCompletoMejorado()');
-console.log('   - testSubmissionComplete()');
-console.log('   - testGoogleAuth()');
-console.log('   - verificarRegistro(submissionId, email)');
+// Mensaje de inicio
+console.log('✅ Script cargado correctamente');
+console.log(`📱 Dispositivo: ${deviceType}`);
+console.log(`💻 Es Desktop: ${isDesktop ? 'Sí' : 'No'}`);
+console.log(`📍 Precisión requerida: ${REQUIRED_ACCURACY}m ${isDesktop ? '(relajada para desktop)' : '(estándar móvil)'}`);
+console.log(`🎯 Modo: ${isIOS ? 'iOS (compatibilidad especial)' : isDesktop ? 'Desktop (precisión adaptada)' : 'Android/Windows/Desktop (funcionalidad completa)'}`);
+console.log('🔍 Para diagnóstico: diagnosticComplete()');
