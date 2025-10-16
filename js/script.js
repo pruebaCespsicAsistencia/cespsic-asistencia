@@ -1669,8 +1669,8 @@ async function sendDataWithFallback(data, retryCount = 0) {
 // ========== FUNCIÓN AUXILIAR: Enviar vía formulario con iframe ==========
 function enviarViaFormulario(data, requestId) {
     return new Promise((resolve, reject) => {
-        const TIMEOUT = 20000; // 20 segundos
-        const MAX_READ_ATTEMPTS = 5;
+        const TIMEOUT = 25000; // 25 segundos
+        const MAX_READ_ATTEMPTS = 6;
         
         let timeoutId;
         let resolved = false;
@@ -1681,14 +1681,16 @@ function enviarViaFormulario(data, requestId) {
         const iframe = document.createElement('iframe');
         iframe.style.display = 'none';
         iframe.name = 'response_frame_' + requestId;
+        iframe.id = 'iframe_' + requestId;
         
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = GOOGLE_SCRIPT_URL;
         form.target = iframe.name;
         form.style.display = 'none';
+        form.id = 'form_' + requestId;
         
-        // Agregar campos al formulario
+        // Agregar campos
         for (const [key, value] of Object.entries(data)) {
             const input = document.createElement('input');
             input.type = 'hidden';
@@ -1707,26 +1709,26 @@ function enviarViaFormulario(data, requestId) {
         timeoutId = setTimeout(() => {
             if (!resolved) {
                 resolved = true;
-                console.error(`[${requestId}] ⏱️ TIMEOUT después de ${TIMEOUT}ms`);
+                console.error(`[${requestId}] ⏱️ TIMEOUT (${TIMEOUT}ms)`);
                 cleanup();
                 
-                // En caso de timeout, asumir éxito parcial (el servidor puede haber procesado)
+                // Retornar respuesta que requiera verificación
                 resolve({
-                    success: true,
+                    success: false,
                     verified: false,
-                    message: 'Timeout - El servidor no respondió a tiempo',
-                    warning: 'El registro puede haberse guardado. Verifique manualmente en Google Sheets.',
-                    timeout: true
+                    timeout: true,
+                    cors_blocked: true,
+                    message: 'Timeout - Requiere verificación en Google Sheets'
                 });
             }
         }, TIMEOUT);
         
-        // Función para leer la respuesta del iframe
+        // Función para leer respuesta
         function tryReadResponse() {
             if (resolved) return;
             
             attemptCount++;
-            console.log(`[${requestId}] 📥 Intento ${attemptCount}/${MAX_READ_ATTEMPTS} de leer respuesta`);
+            console.log(`[${requestId}] 📥 Intento ${attemptCount}/${MAX_READ_ATTEMPTS}`);
             
             try {
                 const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
@@ -1736,91 +1738,86 @@ function enviarViaFormulario(data, requestId) {
                         setTimeout(tryReadResponse, 1000);
                         return;
                     }
-                    throw new Error('No se pudo acceder al documento del iframe');
+                    throw new Error('No se pudo acceder al iframe');
                 }
                 
                 const responseText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
                 
-                console.log(`[${requestId}] 📄 Respuesta raw (${responseText.length} chars):`, 
-                           responseText.substring(0, 300) + (responseText.length > 300 ? '...' : ''));
+                console.log(`[${requestId}] 📄 Respuesta (${responseText.length} chars):`, 
+                           responseText.substring(0, 300));
                 
                 if (!responseText || responseText.trim() === '') {
                     if (attemptCount < MAX_READ_ATTEMPTS) {
                         setTimeout(tryReadResponse, 1000);
                         return;
                     }
-                    throw new Error('El servidor devolvió una respuesta vacía');
+                    throw new Error('Respuesta vacía del servidor');
                 }
                 
                 // Parsear JSON
                 let responseData;
                 try {
                     responseData = JSON.parse(responseText);
-                    console.log(`[${requestId}] ✅ JSON parseado correctamente`);
+                    console.log(`[${requestId}] ✅ JSON parseado`);
                 } catch (parseError) {
-                    console.error(`[${requestId}] ❌ Error parseando JSON:`, parseError);
-                    throw new Error(
-                        `Respuesta del servidor no es JSON válido. ` +
-                        `Texto: "${responseText.substring(0, 100)}..."`
-                    );
+                    console.error(`[${requestId}] ❌ Error parseando JSON`);
+                    throw new Error(`Respuesta no es JSON: "${responseText.substring(0, 100)}"`);
                 }
                 
-                // ⚠️ ASEGURAR campo 'verified'
+                // Asegurar campo verified
                 if (responseData.verified === undefined) {
-                    console.warn(`[${requestId}] ⚠️ Campo 'verified' no presente, asumiendo desde 'success'`);
+                    console.warn(`[${requestId}] ⚠️ Campo 'verified' no presente`);
                     responseData.verified = responseData.success === true;
                 }
                 
-                // Validar estructura básica
+                // Validar estructura
                 if (typeof responseData !== 'object') {
-                    throw new Error('Respuesta no es un objeto JSON');
+                    throw new Error('Respuesta no es objeto JSON');
                 }
                 
-                console.log(`[${requestId}] ✅ Respuesta válida recibida`);
+                console.log(`[${requestId}] ✅ Respuesta válida`);
+                console.log(`[${requestId}]    success: ${responseData.success}`);
+                console.log(`[${requestId}]    verified: ${responseData.verified}`);
+                console.log(`[${requestId}]    row_number: ${responseData.row_number || 'N/A'}`);
                 
                 resolved = true;
                 cleanup();
                 resolve(responseData);
                 
             } catch (readError) {
-                // ⚠️ IMPORTANTE: Error CORS es ESPERADO y NO ES FATAL
+                // ⚠️ MANEJO ESPECIAL DE CORS
                 if (readError.message && readError.message.includes('cross-origin')) {
-                    console.warn(`[${requestId}] ⚠️ Error CORS esperado (normal con Google Apps Script)`);
-                    console.warn(`[${requestId}] ⚠️ Asumiendo éxito del envío...`);
+                    console.warn(`[${requestId}] ⚠️ Error CORS (esperado)`);
                     
-                    // Para errores CORS, asumir que el envío fue exitoso
-                    // (Google Apps Script recibió y procesó los datos)
                     resolved = true;
                     cleanup();
                     
+                    // NO asumir éxito, requerir verificación
                     resolve({
-                        success: true,
-                        verified: true, // Asumir verificado en caso de CORS
-                        message: 'Datos enviados correctamente (respuesta bloqueada por CORS)',
+                        success: false,
+                        verified: false,
                         cors_blocked: true,
-                        note: 'El servidor procesó la solicitud pero la respuesta no pudo ser leída debido a políticas CORS'
+                        message: 'CORS - Requiere verificación',
+                        note: 'El servidor puede haber procesado el envío'
                     });
                     return;
                 }
                 
-                // Para otros errores, continuar intentando
-                console.error(`[${requestId}] ❌ Error leyendo respuesta:`, readError.message);
+                console.error(`[${requestId}] ❌ Error:`, readError.message);
                 
                 if (attemptCount < MAX_READ_ATTEMPTS) {
-                    console.log(`[${requestId}] 🔄 Reintentando lectura en 1 segundo...`);
+                    console.log(`[${requestId}] 🔄 Reintentando en 1s...`);
                     setTimeout(tryReadResponse, 1000);
                 } else {
                     resolved = true;
                     cleanup();
                     
-                    // Último recurso: asumir éxito parcial
-                    console.warn(`[${requestId}] ⚠️ No se pudo leer respuesta después de ${MAX_READ_ATTEMPTS} intentos`);
-                    
+                    // Respuesta parcial
                     resolve({
-                        success: true,
+                        success: false,
                         verified: false,
-                        message: 'Datos enviados pero no se pudo verificar la respuesta',
-                        warning: 'La respuesta no pudo ser leída completamente',
+                        cors_blocked: true,
+                        message: 'No se pudo leer respuesta - Requiere verificación',
                         error_reading_response: readError.message,
                         partial_response: true
                     });
@@ -1828,29 +1825,21 @@ function enviarViaFormulario(data, requestId) {
             }
         }
         
-        // Handler de carga del iframe
+        // Handler de carga
         iframe.onload = function() {
             if (resolved) return;
-            
-            console.log(`[${requestId}] 📡 Iframe cargado, esperando 2s antes de leer...`);
+            console.log(`[${requestId}] 📡 Iframe cargado, esperando 2s...`);
             setTimeout(() => {
-                if (!resolved) {
-                    tryReadResponse();
-                }
+                if (!resolved) tryReadResponse();
             }, 2000);
         };
         
-        // Handler de error del iframe
+        // Handler de error
         iframe.onerror = function(error) {
             if (resolved) return;
-            
-            console.warn(`[${requestId}] ⚠️ Evento de error en iframe (puede ser normal):`, error);
-            
-            // Intentar leer de todos modos
+            console.warn(`[${requestId}] ⚠️ Error en iframe:`, error);
             setTimeout(() => {
-                if (!resolved) {
-                    tryReadResponse();
-                }
+                if (!resolved) tryReadResponse();
             }, 1000);
         };
         
@@ -1858,37 +1847,32 @@ function enviarViaFormulario(data, requestId) {
         function cleanup() {
             try {
                 clearTimeout(timeoutId);
-                
                 setTimeout(() => {
                     try {
-                        if (document.body.contains(iframe)) {
-                            document.body.removeChild(iframe);
-                        }
-                        if (document.body.contains(form)) {
-                            document.body.removeChild(form);
-                        }
+                        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+                        if (document.body.contains(form)) document.body.removeChild(form);
                     } catch (e) {
-                        console.warn(`[${requestId}] Error en cleanup:`, e);
+                        console.warn(`[${requestId}] Error cleanup:`, e);
                     }
                 }, 500);
             } catch (e) {
-                console.warn(`[${requestId}] Error en cleanup principal:`, e);
+                console.warn(`[${requestId}] Error cleanup principal:`, e);
             }
         }
         
-        // Enviar formulario
+        // Enviar
         try {
             document.body.appendChild(iframe);
             document.body.appendChild(form);
             
-            console.log(`[${requestId}] 📤 Enviando formulario a: ${GOOGLE_SCRIPT_URL}`);
+            console.log(`[${requestId}] 📤 Enviando a: ${GOOGLE_SCRIPT_URL}`);
             form.submit();
-            console.log(`[${requestId}] ✅ Formulario enviado, esperando respuesta...`);
+            console.log(`[${requestId}] ✅ Formulario enviado`);
             
         } catch (submitError) {
             resolved = true;
             cleanup();
-            reject(new Error('Error al enviar el formulario: ' + submitError.message));
+            reject(new Error('Error al enviar: ' + submitError.message));
         }
     });
 }
@@ -2026,40 +2010,37 @@ async function handleSubmit(e) {
     console.log('\n📋 PASO 1: VALIDACIONES PREVIAS');
     
     if (!isAuthenticated || !currentUser) {
-        showStatus('❌ Debe autenticarse con Google antes de registrar asistencia.', 'error');
-        console.error('❌ Usuario no autenticado');
+        showStatus('❌ Debe autenticarse con Google.', 'error');
+        console.error('❌ No autenticado');
         return;
     }
-    console.log('✅ Usuario autenticado:', currentUser.email);
+    console.log('✅ Usuario:', currentUser.email);
     
     if (!locationValid || !currentLocation) {
-        showStatus('❌ Ubicación GPS requerida y válida para continuar.', 'error');
-        console.error('❌ Ubicación no válida');
+        showStatus('❌ Ubicación GPS requerida.', 'error');
+        console.error('❌ Ubicación inválida');
         return;
     }
-    console.log('✅ Ubicación válida:', currentLocation.accuracy, 'metros');
+    console.log('✅ Ubicación válida:', currentLocation.accuracy, 'm');
     
     if (currentLocation.accuracy > REQUIRED_ACCURACY) {
-        const deviceTypeText = isDesktop ? 'Desktop/Laptop' : 'Móvil';
+        const deviceTypeText = isDesktop ? 'Desktop' : 'Móvil';
         showStatus(
-            `❌ Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m > ${REQUIRED_ACCURACY}m (${deviceTypeText})\n\n` +
-            `Por favor, ${isDesktop ? 'conéctese a una red WiFi o use un dispositivo móvil' : 'espere a tener mejor señal GPS'}.`,
+            `❌ Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m > ${REQUIRED_ACCURACY}m (${deviceTypeText})`,
             'error'
         );
-        console.error('❌ Precisión GPS insuficiente');
+        console.error('❌ Precisión insuficiente');
         return;
     }
-    console.log('✅ Precisión GPS aceptable');
+    console.log('✅ Precisión aceptable');
     
-    // Actualizar timestamp
     document.getElementById('timestamp').value = new Date().toISOString();
     
-    // Validar campos condicionales
     if (!validateConditionalFields()) {
         console.error('❌ Validación de campos condicionales fallida');
         return;
     }
-    console.log('✅ Campos condicionales validados');
+    console.log('✅ Campos condicionales OK');
     
     // ========== PREPARAR UI ==========
     showStatus('⏳ Guardando asistencia...', 'success');
@@ -2070,71 +2051,64 @@ async function handleSubmit(e) {
     submitBtn.textContent = '⏳ Guardando...';
     
     try {
-        console.log('\n📊 PASO 2: INFORMACIÓN DEL DISPOSITIVO');
+        console.log('\n📊 PASO 2: INFORMACIÓN');
         console.log(`   Tipo: ${deviceType}`);
-        console.log(`   Es Desktop: ${isDesktop}`);
-        console.log(`   Precisión GPS: ${Math.round(currentLocation.accuracy)}m`);
-        console.log(`   Archivos seleccionados: ${selectedFiles.length}`);
+        console.log(`   Desktop: ${isDesktop}`);
+        console.log(`   Precisión: ${Math.round(currentLocation.accuracy)}m`);
+        console.log(`   Archivos: ${selectedFiles.length}`);
         
-        // ========== SUBIR EVIDENCIAS ==========
+        // ========== EVIDENCIAS ==========
         let evidenciasUrls = [];
         let successUploads = [];
         let failedUploads = [];
         
         if (selectedFiles.length > 0) {
             console.log('\n📤 PASO 3: SUBIENDO EVIDENCIAS');
-            console.log(`   Total archivos: ${selectedFiles.length}`);
+            console.log(`   Total: ${selectedFiles.length}`);
             
             showStatus(`📤 Subiendo ${selectedFiles.length} evidencia(s)...`, 'success');
             submitBtn.textContent = `📤 Subiendo evidencias (0/${selectedFiles.length})...`;
             
             try {
                 evidenciasUrls = await uploadEvidencias();
-                
                 successUploads = evidenciasUrls.filter(e => e.uploadStatus === 'SUCCESS');
                 failedUploads = evidenciasUrls.filter(e => e.uploadStatus === 'FAILED');
                 
                 console.log(`   ✅ Exitosas: ${successUploads.length}`);
                 console.log(`   ❌ Fallidas: ${failedUploads.length}`);
                 
-                // Si TODAS fallaron, preguntar al usuario
                 if (selectedFiles.length > 0 && successUploads.length === 0) {
-                    const errorDetails = failedUploads
-                        .map(e => `   • ${e.originalName}: ${e.error}`)
-                        .join('\n');
-                    
-                    console.error('\n⚠️ TODAS LAS EVIDENCIAS FALLARON:');
-                    console.error(errorDetails);
+                    const errorDetails = failedUploads.map(e => `   • ${e.originalName}: ${e.error}`).join('\n');
+                    console.error('\n⚠️ TODAS LAS EVIDENCIAS FALLARON:\n' + errorDetails);
                     
                     const userDecision = confirm(
                         `⚠️ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n` +
-                        `¿Desea continuar registrando la asistencia SIN evidencias?\n\n` +
-                        `• Clic en "Aceptar" = Continuar sin evidencias\n` +
-                        `• Clic en "Cancelar" = Reintentar o corregir archivos`
+                        `¿Continuar SIN evidencias?\n\n` +
+                        `• Aceptar = Continuar sin evidencias\n` +
+                        `• Cancelar = Reintentar`
                     );
                     
                     if (!userDecision) {
-                        throw new Error('Registro cancelado por el usuario. Por favor revise los archivos e intente nuevamente.');
+                        throw new Error('Registro cancelado. Revise los archivos e intente nuevamente.');
                     }
                     
-                    console.log('⚠️ Usuario decidió continuar sin evidencias');
+                    console.log('⚠️ Usuario continúa sin evidencias');
                     showStatus('⚠️ Continuando sin evidencias...', 'warning');
                     
                 } else if (failedUploads.length > 0) {
-                    console.warn(`⚠️ ${failedUploads.length} evidencia(s) fallaron, pero continuando con ${successUploads.length}`);
+                    console.warn(`⚠️ ${failedUploads.length} evidencia(s) fallaron`);
                 }
                 
             } catch (uploadError) {
-                console.error('❌ Error en proceso de subida:', uploadError);
+                console.error('❌ Error subiendo evidencias:', uploadError);
                 
-                if (uploadError.message.includes('cancelado por el usuario')) {
-                    throw uploadError; // Re-lanzar si el usuario canceló
+                if (uploadError.message.includes('cancelado')) {
+                    throw uploadError;
                 }
                 
-                // Para otros errores, preguntar si continuar
                 const continuar = confirm(
                     `⚠️ Error al subir evidencias:\n\n${uploadError.message}\n\n` +
-                    `¿Desea continuar SIN evidencias?`
+                    `¿Continuar SIN evidencias?`
                 );
                 
                 if (!continuar) {
@@ -2142,32 +2116,26 @@ async function handleSubmit(e) {
                 }
             }
         } else {
-            console.log('\n📝 PASO 3: Sin evidencias para subir');
+            console.log('\n📝 PASO 3: Sin evidencias');
         }
         
-        // ========== PREPARAR DATOS DEL FORMULARIO ==========
-        console.log('\n📝 PASO 4: PREPARANDO DATOS DEL FORMULARIO');
+        // ========== PREPARAR DATOS ==========
+        console.log('\n📝 PASO 4: PREPARANDO DATOS');
         
         submitBtn.textContent = '📝 Preparando datos...';
         
         const formData = new FormData(e.target);
         const data = {};
         
-        // Procesar campos del formulario
         for (let [key, value] of formData.entries()) {
-            if (key === 'evidencias') continue; // Omitir campo de archivos
+            if (key === 'evidencias') continue;
             
             if (key.endsWith('[]')) {
-                // Campos con múltiples valores (checkboxes)
                 const cleanKey = key.replace('[]', '');
-                if (!data[cleanKey]) {
-                    data[cleanKey] = [];
-                }
+                if (!data[cleanKey]) data[cleanKey] = [];
                 data[cleanKey].push(value);
             } else {
-                // Campos normales
                 if (data[key]) {
-                    // Si ya existe, convertir a array
                     if (Array.isArray(data[key])) {
                         data[key].push(value);
                     } else {
@@ -2179,20 +2147,14 @@ async function handleSubmit(e) {
             }
         }
         
-        // ========== AGREGAR INFORMACIÓN DE EVIDENCIAS ==========
+        // Información de evidencias
         data.evidencias_urls = evidenciasUrls;
         data.total_evidencias = successUploads.length;
         data.evidencias_failed = failedUploads.length;
-        
-        // Nombres de archivos exitosos
-        const evidenciasNombres = successUploads
-            .map(e => e.fileName)
-            .join(', ');
-        
-        data.evidencias_nombres = evidenciasNombres;
+        data.evidencias_nombres = successUploads.map(e => e.fileName).join(', ');
         data.carpeta_evidencias = generateStudentFolderName();
         
-        // ========== AGREGAR DATOS ADICIONALES ==========
+        // Datos adicionales
         data.modalidad = document.getElementById('modalidad').value;
         data.ubicacion_detectada = document.getElementById('ubicacion_detectada').value;
         data.direccion_completa = document.getElementById('direccion_completa').value;
@@ -2202,7 +2164,7 @@ async function handleSubmit(e) {
         data.authenticated_user_name = currentUser.name;
         data.authentication_timestamp = new Date().toISOString();
         
-        // Información del dispositivo
+        // Dispositivo
         data.device_type = deviceType;
         data.is_desktop = isDesktop;
         data.is_mobile = !isDesktop;
@@ -2210,142 +2172,129 @@ async function handleSubmit(e) {
         data.required_accuracy = REQUIRED_ACCURACY;
         data.device_info = JSON.stringify(getDeviceInfo());
         
-        // ========== VALIDACIÓN FINAL DE DATOS ==========
-        console.log('\n🔍 PASO 5: VALIDACIÓN FINAL DE DATOS');
+        // ========== VALIDACIÓN FINAL ==========
+        console.log('\n🔍 PASO 5: VALIDACIÓN FINAL');
         
         if (!data.modalidad || data.modalidad === '' || data.modalidad === 'undefined') {
-            throw new Error('ERROR CRÍTICO: El campo Modalidad es requerido y no puede estar vacío');
+            throw new Error('ERROR: Campo Modalidad requerido');
         }
-        console.log('✅ Modalidad válida:', data.modalidad);
+        console.log('✅ Modalidad:', data.modalidad);
         
         if (!data.email || !data.google_user_id) {
-            throw new Error('ERROR CRÍTICO: Datos de autenticación incompletos');
+            throw new Error('ERROR: Datos de autenticación incompletos');
         }
-        console.log('✅ Autenticación completa');
+        console.log('✅ Autenticación OK');
         
-        // ========== LOGGING PRE-ENVÍO ==========
-        console.log('\n📊 RESUMEN PRE-ENVÍO:');
+        // ========== LOGGING ==========
+        console.log('\n📊 RESUMEN:');
         console.log(`   Usuario: ${currentUser.name}`);
         console.log(`   Email: ${data.email}`);
         console.log(`   Dispositivo: ${deviceType}`);
         console.log(`   Modalidad: ${data.modalidad}`);
-        console.log(`   Tipo registro: ${data.tipo_registro}`);
-        console.log(`   Método GPS: ${data.gps_method}`);
+        console.log(`   Tipo: ${data.tipo_registro}`);
+        console.log(`   GPS: ${data.gps_method}`);
         console.log(`   Precisión: ${data.precision_gps_metros}m`);
-        console.log(`   Evidencias exitosas: ${data.total_evidencias}`);
-        console.log(`   Evidencias fallidas: ${data.evidencias_failed}`);
+        console.log(`   Evidencias: ${data.total_evidencias} (${data.evidencias_failed} fallidas)`);
         console.log(`   Ubicación: ${data.ubicacion_detectada}`);
         
-        // ========== ENVIAR FORMULARIO PRINCIPAL ==========
-        console.log('\n📤 PASO 6: ENVIANDO FORMULARIO PRINCIPAL');
+        // ========== ENVIAR ==========
+        console.log('\n📤 PASO 6: ENVIANDO');
         
         submitBtn.textContent = '📤 Enviando al servidor...';
-        showStatus('📤 Enviando asistencia al servidor...', 'success');
+        showStatus('📤 Enviando asistencia...', 'success');
         
         let responseData;
         try {
             responseData = await sendDataWithFallback(data);
         } catch (sendError) {
-            console.error('❌ Error crítico en envío:', sendError);
+            console.error('❌ Error en envío:', sendError);
             
-            // Determinar si es un error recuperable
             const isRecoverable = sendError.message.includes('guardados localmente');
             
             if (isRecoverable) {
                 throw new Error(
-                    `⚠️ NO se pudo enviar la asistencia después de múltiples intentos.\n\n` +
-                    `Detalles: ${sendError.message}\n\n` +
-                    `✅ Sus datos han sido guardados localmente de forma segura.\n` +
-                    `✅ Se reintentarán automáticamente la próxima vez que abra la aplicación.\n\n` +
-                    `Recomendaciones:\n` +
-                    `• Verifique su conexión a Internet\n` +
-                    `• Intente nuevamente en unos minutos\n` +
-                    `• Los datos NO se perderán`
+                    `⚠️ NO se pudo enviar después de múltiples intentos.\n\n` +
+                    `${sendError.message}\n\n` +
+                    `✅ Datos guardados localmente.\n` +
+                    `✅ Se reintentarán automáticamente.\n\n` +
+                    `Verifique su conexión.`
                 );
             } else {
                 throw new Error(
-                    `❌ Error al enviar la asistencia:\n\n${sendError.message}\n\n` +
-                    `Por favor, intente nuevamente. Si el problema persiste, ` +
-                    `contacte al administrador del sistema.`
+                    `❌ Error al enviar:\n\n${sendError.message}\n\n` +
+                    `Intente nuevamente.`
                 );
             }
         }
         
         // ========== VALIDAR RESPUESTA ==========
-        console.log('\n🔍 PASO 7: VALIDANDO RESPUESTA DEL SERVIDOR');
-        console.log('Respuesta recibida:', JSON.stringify(responseData, null, 2));
+        console.log('\n🔍 PASO 7: VALIDANDO RESPUESTA');
+        console.log('Respuesta:', JSON.stringify(responseData, null, 2));
         
         if (!responseData) {
-            throw new Error('El servidor no devolvió ninguna respuesta');
+            throw new Error('El servidor no devolvió respuesta');
+        }
+        
+        // ⚠️ CRÍTICO: Validar row_number
+        if (!responseData.row_number || responseData.row_number <= 0) {
+            console.error('❌ row_number inválido:', responseData.row_number);
+            
+            throw new Error(
+                `El servidor no devolvió el número de fila.\n\n` +
+                `Intente nuevamente. Si persiste, tome captura y contacte al administrador.\n\n` +
+                `Respuesta: ${JSON.stringify(responseData).substring(0, 200)}`
+            );
         }
         
         if (!responseData.verified) {
-            throw new Error('La respuesta del servidor no está verificada');
+            throw new Error('Respuesta no verificada');
         }
         
         if (!responseData.success) {
-            throw new Error(responseData.message || responseData.error || 'Error desconocido del servidor');
+            throw new Error(responseData.message || responseData.error || 'Error desconocido');
         }
         
-        if (!responseData.row_number) {
-            throw new Error('El servidor no devolvió el número de fila del registro');
-        }
+        console.log('✅ Validación OK - row_number:', responseData.row_number);
         
-        console.log('✅ Respuesta válida del servidor');
-        console.log(`✅ Fila en Google Sheets: ${responseData.row_number}`);
-        console.log(`✅ Hash de verificación: ${responseData.verification_hash}`);
-        
-        // ========== REGISTRO EXITOSO ==========
+        // ========== ÉXITO ==========
         console.log('\n' + '='.repeat(80));
         console.log('✅✅✅ ASISTENCIA REGISTRADA EXITOSAMENTE ✅✅✅');
         console.log('='.repeat(80));
         console.log(`Usuario: ${currentUser.name}`);
-        console.log(`Email: ${data.email}`);
-        console.log(`Dispositivo: ${deviceType}`);
         console.log(`Modalidad: ${data.modalidad}`);
-        console.log(`Ubicación: ${data.ubicacion_detectada}`);
-        console.log(`Precisión: ${data.precision_gps_metros}m`);
-        console.log(`Evidencias: ${data.total_evidencias}${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} fallidas)` : ''}`);
-        console.log(`Fila en Sheets: ${responseData.row_number}`);
-        console.log(`Hash verificación: ${responseData.verification_hash?.substring(0, 16)}...`);
-        console.log(`Request ID: ${responseData.request_id}`);
-        console.log(`Tiempo procesamiento: ${responseData.processing_time_ms}ms`);
+        console.log(`Fila: ${responseData.row_number}`);
+        console.log(`Hash: ${responseData.verification_hash?.substring(0, 16)}...`);
         console.log('='.repeat(80) + '\n');
         
-        // ========== MOSTRAR MENSAJE DE ÉXITO ==========
+        // Mensaje de éxito
         const evidenciasInfo = data.total_evidencias > 0 
-            ? `\n✅ Evidencias: ${data.total_evidencias} imagen(es)${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} no se pudieron subir)` : ''}` 
-            : selectedFiles.length > 0 
-                ? `\n⚠️ Evidencias: No se pudo subir ninguna (registrado sin evidencias)`
-                : '';
+            ? `\n✅ Evidencias: ${data.total_evidencias} imagen(es)${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} fallidas)` : ''}` 
+            : '';
         
-        const successMessage = `✅ ¡Asistencia registrada y verificada exitosamente!
+        const successMessage = `✅ ¡Asistencia registrada y verificada!
 
-📋 DETALLES DEL REGISTRO:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 Usuario: ${currentUser.name}
-📧 Email: ${data.email}
-💻 Dispositivo: ${deviceType}
-📍 Modalidad: ${data.modalidad}
-📝 Tipo: ${data.tipo_registro}
-🌍 Ubicación: ${data.ubicacion_detectada}
-🎯 Precisión GPS: ${data.precision_gps_metros}m${evidenciasInfo}
+📋 DETALLES:
+━━━━━━━━━━━━━━━━━━━━━━━
+👤 ${currentUser.name}
+📧 ${data.email}
+💻 ${deviceType}
+📍 ${data.modalidad}
+📝 ${data.tipo_registro}
+🌍 ${data.ubicacion_detectada}
+🎯 ${data.precision_gps_metros}m${evidenciasInfo}
 
-✅ Fila en Google Sheets: ${responseData.row_number}
-🔐 ID de verificación: ${responseData.verification_hash?.substring(0, 12)}...
-⏱️ Tiempo: ${responseData.processing_time_ms}ms
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+✅ Fila: ${responseData.row_number}
+🔐 ID: ${responseData.verification_hash?.substring(0, 12)}...
+━━━━━━━━━━━━━━━━━━━━━━━`;
 
         showStatus(successMessage, 'success');
         
-        // Restaurar botón
         submitBtn.disabled = false;
         submitBtn.textContent = originalBtnText;
         submitBtn.style.background = originalBtnStyle;
         
-        // ========== PREGUNTAR SIGUIENTE ACCIÓN ==========
         setTimeout(() => {
-            if (confirm('✅ Asistencia registrada correctamente.\n\n¿Desea registrar otra asistencia?')) {
+            if (confirm('✅ Asistencia registrada.\n\n¿Registrar otra asistencia?')) {
                 resetFormOnly();
                 getCurrentLocation();
             } else {
@@ -2355,15 +2304,14 @@ async function handleSubmit(e) {
         }, 6000);
         
     } catch (error) {
-        // ========== MANEJO DE ERRORES ==========
+        // ========== ERROR ==========
         console.error('\n' + '='.repeat(80));
-        console.error('❌❌❌ ERROR EN ENVÍO DE FORMULARIO ❌❌❌');
+        console.error('❌❌❌ ERROR ❌❌❌');
         console.error('='.repeat(80));
         console.error('Error:', error.message);
         console.error('Stack:', error.stack);
         console.error('='.repeat(80) + '\n');
         
-        // Determinar tipo de error
         const isRecoverable = error.message.includes('guardados localmente');
         const isCancelled = error.message.includes('cancelado');
         
@@ -2377,24 +2325,19 @@ async function handleSubmit(e) {
             errorMessage = error.message;
             errorType = 'warning';
         } else {
-            errorMessage = `❌ Error al guardar la asistencia:\n\n${error.message}\n\n` +
-                          `Por favor, intente nuevamente. Si el problema persiste, ` +
-                          `tome una captura de pantalla de este mensaje y contacte al administrador.`;
+            errorMessage = `❌ Error al guardar:\n\n${error.message}\n\n` +
+                          `Intente nuevamente. Si persiste, tome captura y contacte al administrador.`;
             errorType = 'error';
         }
         
         showStatus(errorMessage, errorType);
         
-        // Restaurar botón
         submitBtn.disabled = false;
         submitBtn.textContent = originalBtnText;
         submitBtn.style.background = originalBtnStyle;
         
-        // Mantener mensaje más tiempo para errores graves
         const displayTime = isRecoverable ? 12000 : isCancelled ? 5000 : 10000;
-        setTimeout(() => {
-            hideStatus();
-        }, displayTime);
+        setTimeout(() => hideStatus(), displayTime);
     }
 }
 
@@ -2860,6 +2803,14 @@ function resetLocationFields() {
     });
     document.getElementById('retry_location_btn').style.display = 'none';
     updateLocationStatus('loading', 'Complete la autenticación para obtener ubicación GPS', '');
+}
+
+function limpiarCacheEnvios() {
+    if (confirm('¿Limpiar cache de envíos en proceso?\n\nUse esto solo si hay envíos atascados.')) {
+        submissionCache.clear();
+        console.log('✅ Cache limpiado');
+        alert('✅ Cache limpiado correctamente');
+    }
 }
 
 // ========== DIAGNÓSTICO ==========
