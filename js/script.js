@@ -2314,6 +2314,7 @@ async function handleSubmit(e) {
     console.log('🚀 INICIO DE ENVÍO DE FORMULARIO');
     console.log('█'.repeat(80));
     console.log(`Timestamp: ${new Date().toISOString()}`);
+    console.log(`Usuario: ${currentUser?.name || 'N/A'}`);
     console.log('█'.repeat(80) + '\n');
     
     // ========== PASO 1: VALIDACIONES PREVIAS ==========
@@ -2525,6 +2526,11 @@ async function handleSubmit(e) {
             throw new Error('ERROR CRÍTICO: Datos de autenticación incompletos');
         }
         console.log('✅ Autenticación completa');
+        
+        if (!data.tipo_registro || data.tipo_registro === '') {
+            throw new Error('ERROR: Debe seleccionar un Tipo de Registro');
+        }
+        console.log('✅ Tipo de registro válido:', data.tipo_registro);
         console.log('');
         
         // ========== LOGGING PRE-ENVÍO ==========
@@ -2534,6 +2540,9 @@ async function handleSubmit(e) {
         console.log(`   Usuario: ${currentUser.name}`);
         console.log(`   Email: ${data.email}`);
         console.log(`   Dispositivo: ${deviceType}`);
+        console.log(`   Fecha: ${data.fecha}`);
+        console.log(`   Hora: ${data.hora}`);
+        console.log(`   Tipo Estudiante: ${data.tipo_estudiante}`);
         console.log(`   Modalidad: ${data.modalidad}`);
         console.log(`   Tipo registro: ${data.tipo_registro}`);
         console.log(`   Método GPS: ${data.gps_method}`);
@@ -2545,7 +2554,7 @@ async function handleSubmit(e) {
         
         // ========== PASO 6: ENVIAR FORMULARIO PRINCIPAL ==========
         console.log('━'.repeat(80));
-        console.log('📤 PASO 6: ENVIANDO FORMULARIO PRINCIPAL AL SERVIDOR');
+        console.log('📤 PASO 6: ENVIANDO FORMULARIO AL SERVIDOR');
         console.log('━'.repeat(80));
         
         submitBtn.textContent = '📤 Enviando al servidor...';
@@ -2557,24 +2566,35 @@ async function handleSubmit(e) {
         } catch (sendError) {
             console.error('❌ Error crítico en envío:', sendError);
             
+            // Verificar si es error de duplicado
+            const isDuplicateError = sendError.message && (
+                sendError.message.includes('DUPLICATE') ||
+                sendError.message.includes('duplicado') ||
+                sendError.message.includes('idéntico')
+            );
+            
+            if (isDuplicateError) {
+                throw new Error(
+                    `⚠️ REGISTRO DUPLICADO\n\n${sendError.message}\n\n` +
+                    `Ya existe un registro idéntico en el sistema.\n` +
+                    `Por favor, verifique en Google Sheets.`
+                );
+            }
+            
             const isRecoverable = sendError.message.includes('guardados localmente');
             
             if (isRecoverable) {
                 throw new Error(
-                    `⚠️ NO se pudo enviar la asistencia después de múltiples intentos.\n\n` +
-                    `Detalles: ${sendError.message}\n\n` +
-                    `✅ Sus datos han sido guardados localmente de forma segura.\n` +
-                    `✅ Se reintentarán automáticamente la próxima vez que abra la aplicación.\n\n` +
-                    `Recomendaciones:\n` +
-                    `• Verifique su conexión a Internet\n` +
-                    `• Intente nuevamente en unos minutos\n` +
-                    `• Los datos NO se perderán`
+                    `⚠️ NO se pudo enviar después de múltiples intentos.\n\n` +
+                    `${sendError.message}\n\n` +
+                    `✅ Datos guardados localmente.\n` +
+                    `✅ Se reintentarán automáticamente.\n\n` +
+                    `Verifique su conexión.`
                 );
             } else {
                 throw new Error(
-                    `❌ Error al enviar la asistencia:\n\n${sendError.message}\n\n` +
-                    `Por favor, intente nuevamente. Si el problema persiste, ` +
-                    `contacte al administrador del sistema.`
+                    `❌ Error al enviar:\n\n${sendError.message}\n\n` +
+                    `Por favor, intente nuevamente.`
                 );
             }
         }
@@ -2585,12 +2605,25 @@ async function handleSubmit(e) {
         console.log('━'.repeat(80));
         console.log('🔍 PASO 7: VALIDANDO RESPUESTA DEL SERVIDOR');
         console.log('━'.repeat(80));
-        console.log('Respuesta completa recibida:');
+        console.log('Respuesta recibida:');
         console.log(JSON.stringify(responseData, null, 2));
         console.log('');
         
         if (!responseData) {
             throw new Error('El servidor no devolvió ninguna respuesta');
+        }
+        
+        // ⚠️ DETECTAR ERROR DE DUPLICADO EN LA RESPUESTA
+        if (responseData.duplicate_detected || responseData.error === 'DUPLICATE_SUBMISSION') {
+            console.error('❌ Duplicado detectado por el servidor');
+            
+            throw new Error(
+                responseData.user_message || 
+                `⚠️ REGISTRO DUPLICADO DETECTADO\n\n` +
+                `Ya existe un registro idéntico en Google Sheets.\n` +
+                `Fila existente: ${responseData.existing_row || 'N/A'}\n\n` +
+                `No se permite registrar la misma asistencia dos veces.`
+            );
         }
         
         // ⚠️ CRÍTICO: Validar row_number (con excepción para assumed_success)
@@ -2601,9 +2634,10 @@ async function handleSubmit(e) {
             throw new Error(
                 `El servidor no devolvió el número de fila del registro.\n\n` +
                 `Por favor, intente nuevamente. Si el problema persiste, ` +
-                `tome una captura de pantalla de este mensaje y contacte al administrador.\n\n` +
+                `tome una captura de pantalla y contacte al administrador.\n\n` +
                 `Datos para búsqueda manual:\n` +
                 `• Email: ${data.email}\n` +
+                `• Fecha: ${data.fecha}\n` +
                 `• Hora: ${new Date(data.timestamp).toLocaleTimeString()}\n` +
                 `• Modalidad: ${data.modalidad}`
             );
@@ -2637,7 +2671,10 @@ async function handleSubmit(e) {
         console.log(`Usuario: ${currentUser.name}`);
         console.log(`Email: ${data.email}`);
         console.log(`Dispositivo: ${deviceType}`);
+        console.log(`Fecha: ${data.fecha} ${data.hora}`);
+        console.log(`Tipo Estudiante: ${data.tipo_estudiante}`);
         console.log(`Modalidad: ${data.modalidad}`);
+        console.log(`Tipo Registro: ${data.tipo_registro}`);
         console.log(`Ubicación: ${data.ubicacion_detectada}`);
         console.log(`Precisión: ${data.precision_gps_metros}m`);
         console.log(`Evidencias: ${data.total_evidencias}${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} fallidas)` : ''}`);
@@ -2646,10 +2683,16 @@ async function handleSubmit(e) {
         } else {
             console.log(`Verificación: Requiere confirmación manual`);
         }
-        console.log(`Hash verificación: ${responseData.verification_hash?.substring(0, 16)}...`);
+        console.log(`Hash: ${responseData.verification_hash?.substring(0, 16)}...`);
         console.log(`Request ID: ${responseData.request_id}`);
-        console.log(`Tiempo procesamiento: ${responseData.processing_time_ms}ms`);
+        console.log(`Tiempo: ${responseData.processing_time_ms}ms`);
         console.log('█'.repeat(80) + '\n');
+        
+        // ⚠️ LIMPIAR CACHE Y PENDIENTES
+        const submissionId = generateSubmissionId(data);
+        removeFailedSubmission(submissionId);
+        markSubmissionComplete(submissionId, responseData);
+        console.log('✅ Cache y pendientes actualizados\n');
         
         // ========== MOSTRAR MENSAJE DE ÉXITO AL USUARIO ==========
         const evidenciasInfo = data.total_evidencias > 0 
@@ -2663,8 +2706,8 @@ async function handleSubmit(e) {
             : `⚠️ Por favor verifique manualmente en Google Sheets`;
         
         const verificationNote = responseData.assumed_success || responseData.manual_verification_required
-            ? `\n\n⚠️ IMPORTANTE: Verifique manualmente en Google Sheets que su asistencia se registró correctamente.\n` +
-              `Busque: ${data.email} - ${new Date(data.timestamp).toLocaleTimeString()}`
+            ? `\n\n⚠️ IMPORTANTE: Verifique manualmente en Google Sheets:\n` +
+              `Busque: ${data.email} - ${data.fecha} ${data.hora}`
             : '';
         
         const successMessage = `✅ ¡Asistencia registrada${responseData.assumed_success ? ' (verificación manual requerida)' : ' y verificada'}!
@@ -2674,13 +2717,15 @@ async function handleSubmit(e) {
 👤 Usuario: ${currentUser.name}
 📧 Email: ${data.email}
 💻 Dispositivo: ${deviceType}
+📅 Fecha/Hora: ${data.fecha} ${data.hora}
+👨‍🎓 Tipo: ${data.tipo_estudiante}
 📍 Modalidad: ${data.modalidad}
-📝 Tipo: ${data.tipo_registro}
+📝 Registro: ${data.tipo_registro}
 🌍 Ubicación: ${data.ubicacion_detectada}
-🎯 Precisión GPS: ${data.precision_gps_metros}m${evidenciasInfo}
+🎯 Precisión: ${data.precision_gps_metros}m${evidenciasInfo}
 
 ${rowInfo}
-🔐 ID de verificación: ${responseData.verification_hash?.substring(0, 12) || 'N/A'}...
+🔐 ID: ${responseData.verification_hash?.substring(0, 12) || 'N/A'}...
 ⏱️ Tiempo: ${responseData.processing_time_ms}ms${verificationNote}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
@@ -2697,10 +2742,11 @@ ${rowInfo}
                 resetFormOnly();
                 getCurrentLocation();
             } else {
-                signOut();
+                // NO cerrar sesión automáticamente, solo limpiar formulario
+                resetFormOnly();
+                hideStatus();
             }
-            hideStatus();
-        }, responseData.assumed_success ? 8000 : 6000); // Más tiempo si requiere verificación manual
+        }, responseData.assumed_success ? 8000 : 6000);
         
     } catch (error) {
         // ========== MANEJO DE ERRORES ==========
@@ -2715,23 +2761,38 @@ ${rowInfo}
         const isRecoverable = error.message.includes('guardados localmente');
         const isCancelled = error.message.includes('cancelado');
         const needsManualVerification = error.message.includes('verifique manualmente');
+        const isDuplicateError = error.message && (
+            error.message.includes('DUPLICATE') ||
+            error.message.includes('duplicado') ||
+            error.message.includes('idéntico')
+        );
         
         let errorMessage;
         let errorType;
         
-        if (isCancelled) {
+        if (isDuplicateError) {
+            errorMessage = error.message;
+            errorType = 'warning';
+            
+            // Limpiar cache para este envío
+            clearSubmissionCache();
+            
+        } else if (isCancelled) {
             errorMessage = `⚠️ Registro cancelado\n\n${error.message}`;
             errorType = 'warning';
+            
         } else if (isRecoverable) {
             errorMessage = error.message;
             errorType = 'warning';
+            
         } else if (needsManualVerification) {
             errorMessage = error.message;
             errorType = 'warning';
+            
         } else {
             errorMessage = `❌ Error al guardar la asistencia:\n\n${error.message}\n\n` +
                           `Por favor, intente nuevamente. Si el problema persiste, ` +
-                          `tome una captura de pantalla de este mensaje y contacte al administrador.`;
+                          `tome una captura de pantalla y contacte al administrador.`;
             errorType = 'error';
         }
         
@@ -2742,10 +2803,12 @@ ${rowInfo}
         submitBtn.textContent = originalBtnText;
         submitBtn.style.background = originalBtnStyle;
         
-        // Mantener mensaje más tiempo para errores graves o que requieren verificación
-        const displayTime = isRecoverable ? 12000 : 
+        // Tiempo de visualización del mensaje
+        const displayTime = isDuplicateError ? 10000 :
+                           isRecoverable ? 12000 : 
                            needsManualVerification ? 15000 :
                            isCancelled ? 5000 : 10000;
+        
         setTimeout(() => {
             hideStatus();
         }, displayTime);
