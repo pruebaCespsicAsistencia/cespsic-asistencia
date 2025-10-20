@@ -419,10 +419,10 @@ function initializeGoogleSignIn() {
             callback: handleCredentialResponse,
             auto_select: false,
             cancel_on_tap_outside: true,
-            // ✅ CRÍTICO: Usar popup en lugar de redirect
-            ux_mode: 'popup',
-            // ✅ Permitir cookies de terceros
-            use_fedcm_for_prompt: false
+            // ✅ CAMBIO CRÍTICO: Usar redirect en lugar de popup para evitar CORS
+            ux_mode: 'redirect',  // Cambiado de 'popup' a 'redirect'
+            // Alternativamente, puedes probar con popup pero sin use_fedcm_for_prompt
+            // use_fedcm_for_prompt: false  // Ya está comentado
         });
         
         google.accounts.id.disableAutoSelect();
@@ -435,13 +435,41 @@ function initializeGoogleSignIn() {
     }
 }
 
+function showGoogleOneTap() {
+    try {
+        google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleCredentialResponse,
+            auto_select: false,
+            cancel_on_tap_outside: false
+        });
+        
+        // Mostrar One Tap
+        google.accounts.id.prompt((notification) => {
+            if (notification.isNotDisplayed()) {
+                console.warn('One Tap no se pudo mostrar:', notification.getNotDisplayedReason());
+                // Fallback: mostrar botón tradicional
+                showGoogleButtonInModal();
+            } else if (notification.isSkippedMoment()) {
+                console.warn('One Tap fue cerrado por el usuario');
+            }
+        });
+    } catch (error) {
+        console.error('Error con One Tap:', error);
+        showGoogleButtonInModal();
+    }
+}
+
 function proceedWithGoogleSignIn() {
     console.log('🔐 Iniciando proceso de autenticación...');
     
     try {
-        // ✅ MÉTODO 1: Usar renderButton con popup (más confiable)
-        showGoogleButtonInModal();
-        
+        // ✅ Intentar One Tap primero, luego botón
+        if (!isIOS) {
+            showGoogleOneTap();
+        } else {
+            showGoogleButtonInModal();
+        }
     } catch (error) {
         console.error('❌ Error en autenticación:', error);
         showStatus('Error al iniciar autenticación: ' + error.message, 'error');
@@ -510,17 +538,28 @@ function showGoogleButtonInModal() {
     modal.appendChild(container);
     document.body.appendChild(modal);
     
-    // Renderizar botón de Google
+    // ✅ RENDERIZAR BOTÓN CON CONFIGURACIÓN CORRECTA
     setTimeout(() => {
         const buttonDiv = document.getElementById('google-signin-button');
         if (buttonDiv) {
             try {
+                // ✅ Reinicializar con configuración correcta antes de renderizar
+                google.accounts.id.initialize({
+                    client_id: GOOGLE_CLIENT_ID,
+                    callback: handleCredentialResponse,
+                    auto_select: false,
+                    // ✅ NO especificar ux_mode aquí, dejar que el botón maneje
+                });
+                
                 google.accounts.id.renderButton(buttonDiv, {
                     theme: 'filled_blue',
                     size: 'large',
                     text: 'signin_with',
                     shape: 'rectangular',
-                    width: 280
+                    width: 280,
+                    // ✅ AÑADIR estas opciones
+                    locale: 'es',
+                    logo_alignment: 'left'
                 });
                 console.log('✅ Botón de Google renderizado');
             } catch (renderError) {
@@ -557,6 +596,7 @@ function showGoogleButtonInModal() {
         }
     };
 }
+
 // ========== iOS: BOTÓN GOOGLE (USA MODAL HTML EXISTENTE) ==========
 function showIOSGoogleButton() {
     const modal = document.getElementById('privacy-modal');
