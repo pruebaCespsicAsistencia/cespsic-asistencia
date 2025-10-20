@@ -352,7 +352,10 @@ async function revokePrivacyConsent() {
 }
 
 async function recordPrivacyAction(action) {
-    if (!currentUser) throw new Error('Usuario no autenticado');
+    if (!currentUser) {
+        console.warn('⚠️ Usuario no autenticado al registrar privacidad');
+        throw new Error('Usuario no autenticado');
+    }
     
     const privacyData = {
         action: 'record_privacy_action',
@@ -367,7 +370,16 @@ async function recordPrivacyAction(action) {
         is_ios: isIOS
     };
     
-    await sendDataWithFallback(privacyData);
+    console.log('📤 Datos de privacidad a enviar:', privacyData);
+    
+    try {
+        const response = await sendDataWithFallback(privacyData);
+        console.log('✅ Respuesta del servidor (privacidad):', response);
+        return response;
+    } catch (error) {
+        console.error('❌ Error enviando datos de privacidad:', error);
+        throw error;
+    }
 }
 
 // ========== GOOGLE SIGN-IN ==========
@@ -730,7 +742,16 @@ async function handleLoginFlow() {
         };
         
         safeSetItem('cespsic_privacy_accepted', JSON.stringify(consentData));
-        await recordPrivacyAction('PRIVACY_ACCEPTED');
+        
+        // ✅ REGISTRAR ACCIÓN DE PRIVACIDAD CON MEJOR MANEJO DE ERRORES
+        try {
+            console.log('📤 Enviando acción de privacidad al servidor...');
+            const privacyResponse = await recordPrivacyAction('PRIVACY_ACCEPTED');
+            console.log('✅ Respuesta de privacidad:', privacyResponse);
+        } catch (privacyError) {
+            console.warn('⚠️ No se pudo registrar la acción de privacidad en el servidor:', privacyError);
+            // ⚠️ NO detener el flujo, solo advertir
+        }
         
         isAuthenticated = true;
         userEmail = currentUser.email;
@@ -744,6 +765,7 @@ async function handleLoginFlow() {
         
         showStatus(`¡Bienvenido ${currentUser.name}! Autenticación exitosa.`, 'success');
         setTimeout(() => hideStatus(), 3000);
+        
     } catch (error) {
         console.error('Error en flujo de login:', error);
         privacyConsent = false;
@@ -1235,6 +1257,21 @@ async function sendDataWithFallback(data) {
                         
                         if (!responseText || responseText.trim() === '') {
                             console.warn('⚠️ Respuesta vacía del servidor');
+                            console.log('Datos enviados:', data);
+                            console.log('Action:', data.action);
+                            
+                            // ✅ Para acciones de privacidad, no es crítico
+                            if (data.action === 'record_privacy_action') {
+                                console.log('ℹ️ Acción de privacidad - continuando sin respuesta del servidor');
+                                cleanup();
+                                resolve({
+                                    success: true,
+                                    message: 'Acción registrada localmente (servidor no respondió)',
+                                    local_only: true
+                                });
+                                return;
+                            }
+                            
                             cleanup();
                             reject(new Error('El servidor no respondió correctamente. Verifique su conexión.'));
                             return;
