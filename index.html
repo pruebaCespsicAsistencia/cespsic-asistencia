@@ -7,11 +7,8 @@
     
     <!-- Google Sign-In API -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-	<!--CONFIGURACIÓN PRODUCCION-->	
-    <!--meta name="google-signin-client_id" content="799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com"-->
-    <!--PRUEBAS-->	
-    <meta name="google-signin-client_id" content="154864030871-ck4l5krb7qm68kmp6a7rcq7h072ldm6g.apps.googleusercontent.com">
-	
+    <meta name="google-signin-client_id" content="799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com">
+    
     <!-- CSS -->
     <link rel="stylesheet" href="css/styles.css">
 </head>
@@ -23,7 +20,7 @@
 				<img src="https://lh3.googleusercontent.com/d/12tYxfzWgy3BVYjadXOEKlX5-uSsxIrBt" alt="CESPSIC" class="logo">
 				<img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicología" class="logo">
             </div>
-            <h1>Servicio de atención psicológica, rescatando la inclusión del psicólogo a través del Centro de Servicios Psicológicos a la Comunidad (CESPSIC) v. 3.8.2</h1>
+            <h1>Servicio de atención psicológica, rescatando la inclusión del psicólogo a través del Centro de Servicios Psicológicos a la Comunidad (CESPSIC) v. 2.0.1</h1>
         </div>
 
         <!-- Sección de Autenticación -->
@@ -63,25 +60,7 @@
                     🔐 Revocar permisos en este dispositivo
                 </button>
             </div>
-			<div class="revoke-section" style="margin-top: 10px; display: block;">
-			    <button class="revoke-link" onclick="limpiarCacheEnvios()" style="background: transparent; border: 1px solid #ff9800; color: #ff9800;">
-			        🗑️ Limpiar cache de envíos
-			    </button>
-			</div>
-            <!-- Botón para ver envíos pendientes -->
-            <div class="revoke-section" style="margin-top: 10px; display: block;">
-                <button class="revoke-link" onclick="verPendientes()" 
-                        style="background: transparent; border: 1px solid #2196f3; color: #2196f3;">
-                    📋 Ver envíos pendientes
-                </button>
-            </div>
-			<!-- Agregar después del botón "Ver envíos pendientes" -->
-			<div class="revoke-section" style="margin-top: 10px; display: block;">
-			    <button class="revoke-link" onclick="testVerification()" 
-			            style="background: transparent; border: 1px solid #9c27b0; color: #9c27b0;">
-			        🔬 Probar verificación
-			    </button>
-			</div>			
+			
 			<div class="auth-info" style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 8px; font-size: 14px; color: #1565c0;">
 				ℹ️ <strong>Nota 1:</strong> La autenticación solo se realiza cuando usted haga clic en el botón. 
 				No se intentará automáticamente al cargar la página.<br>
