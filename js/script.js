@@ -419,24 +419,144 @@ function initializeGoogleSignIn() {
             callback: handleCredentialResponse,
             auto_select: false,
             cancel_on_tap_outside: true,
-            ux_mode: 'popup'
+            // ✅ CRÍTICO: Usar popup en lugar de redirect
+            ux_mode: 'popup',
+            // ✅ Permitir cookies de terceros
+            use_fedcm_for_prompt: false
         });
+        
         google.accounts.id.disableAutoSelect();
         google.accounts.id.cancel();
+        
+        console.log('✅ Google Sign-In inicializado correctamente');
     } catch (error) {
-        console.error('Error inicializando Google Sign-In:', error);
-        showStatus('Error cargando sistema de autenticación.', 'error');
+        console.error('❌ Error inicializando Google Sign-In:', error);
+        showStatus('Error cargando sistema de autenticación: ' + error.message, 'error');
     }
 }
 
 function proceedWithGoogleSignIn() {
-    if (isIOS) {
-        showIOSGoogleButton();
-    } else {
-        showVisibleGoogleButton();
+    console.log('🔐 Iniciando proceso de autenticación...');
+    
+    try {
+        // ✅ MÉTODO 1: Usar renderButton con popup (más confiable)
+        showGoogleButtonInModal();
+        
+    } catch (error) {
+        console.error('❌ Error en autenticación:', error);
+        showStatus('Error al iniciar autenticación: ' + error.message, 'error');
     }
 }
 
+function showGoogleButtonInModal() {
+    // Remover modal existente si hay
+    const existingModal = document.getElementById('google-auth-modal');
+    if (existingModal) existingModal.remove();
+    
+    // Crear modal
+    const modal = document.createElement('div');
+    modal.id = 'google-auth-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: fadeIn 0.3s ease-out;
+    `;
+    
+    const container = document.createElement('div');
+    container.style.cssText = `
+        background: white;
+        padding: 40px;
+        border-radius: 15px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        text-align: center;
+        max-width: 400px;
+        width: 90%;
+        animation: slideUp 0.3s ease-out;
+    `;
+    
+    container.innerHTML = `
+        <div style="margin-bottom: 20px;">
+            <svg width="48" height="48" viewBox="0 0 48 48" style="margin-bottom: 15px;">
+                <path fill="#4285F4" d="M24 9.5c3.9 0 6.9 1.7 8.5 3.1l6.3-6.3C34.7 2.3 29.8 0 24 0 14.6 0 6.7 5.7 3.1 13.9l7.4 5.7C12.2 13.3 17.6 9.5 24 9.5z"/>
+                <path fill="#34A853" d="M46.1 24.5c0-1.5-.1-3-.4-4.5H24v9h12.7c-.6 3.1-2.3 5.7-4.9 7.5l7.4 5.7c4.3-4 6.9-9.9 6.9-17.7z"/>
+                <path fill="#FBBC05" d="M10.5 28.5c-.6-1.7-.9-3.5-.9-5.5s.3-3.8.9-5.5L3.1 11.8C1.1 15.7 0 20.2 0 25s1.1 9.3 3.1 13.2l7.4-5.7z"/>
+                <path fill="#EA4335" d="M24 48c5.8 0 10.7-1.9 14.3-5.2l-7.4-5.7c-1.9 1.3-4.4 2.1-6.9 2.1-6.4 0-11.8-4.3-13.7-10.1l-7.4 5.7C6.7 42.3 14.6 48 24 48z"/>
+            </svg>
+            <h3 style="margin: 0 0 10px 0; color: #333; font-size: 20px;">Iniciar Sesión</h3>
+            <p style="margin: 0 0 20px 0; color: #666; font-size: 14px;">
+                Autentíquese con su cuenta de Google para continuar
+            </p>
+        </div>
+        <div id="google-signin-button" style="display: flex; justify-content: center; margin-bottom: 20px;"></div>
+        <button id="cancel-auth-btn" style="
+            padding: 10px 20px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+        ">Cancelar</button>
+    `;
+    
+    modal.appendChild(container);
+    document.body.appendChild(modal);
+    
+    // Renderizar botón de Google
+    setTimeout(() => {
+        const buttonDiv = document.getElementById('google-signin-button');
+        if (buttonDiv) {
+            try {
+                google.accounts.id.renderButton(buttonDiv, {
+                    theme: 'filled_blue',
+                    size: 'large',
+                    text: 'signin_with',
+                    shape: 'rectangular',
+                    width: 280
+                });
+                console.log('✅ Botón de Google renderizado');
+            } catch (renderError) {
+                console.error('❌ Error renderizando botón:', renderError);
+                buttonDiv.innerHTML = '<p style="color: #dc3545;">Error al cargar botón de Google. Recargue la página.</p>';
+            }
+        }
+    }, 100);
+    
+    // Botón cancelar
+    document.getElementById('cancel-auth-btn').onclick = () => {
+        closeAuthModal();
+        if (privacyConsent && !isAuthenticated) {
+            privacyConsent = false;
+            updatePrivacyUI();
+            showStatus('Debe completar la autenticación para continuar.', 'error');
+            setTimeout(() => hideStatus(), 5000);
+        }
+    };
+    
+    // Cerrar con Escape
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            closeAuthModal();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+    
+    // Cerrar al hacer clic fuera
+    modal.onclick = (e) => {
+        if (e.target === modal) {
+            closeAuthModal();
+        }
+    };
+}
 // ========== iOS: BOTÓN GOOGLE (USA MODAL HTML EXISTENTE) ==========
 function showIOSGoogleButton() {
     const modal = document.getElementById('privacy-modal');
@@ -537,13 +657,20 @@ function showVisibleGoogleButton() {
 
 async function handleCredentialResponse(response) {
     try {
-        if (isIOS) {
-            closeIOSAuthModal();
-        } else {
-            closeAuthModal();
+        console.log('🔐 Credencial recibida de Google');
+        closeAuthModal();
+        
+        if (!response || !response.credential) {
+            throw new Error('Credencial inválida recibida de Google');
         }
         
         const userInfo = parseJwt(response.credential);
+        
+        if (!userInfo) {
+            throw new Error('No se pudo decodificar la credencial');
+        }
+        
+        console.log('✅ Usuario decodificado:', userInfo.email);
         
         currentUser = {
             id: userInfo.sub,
@@ -554,7 +681,7 @@ async function handleCredentialResponse(response) {
         };
 
         if (!currentUser.email_verified) {
-            showStatus('Su cuenta de Gmail no está verificada.', 'error');
+            showStatus('Su cuenta de Gmail no está verificada. Por favor verifique su correo.', 'error');
             return;
         }
 
@@ -564,32 +691,24 @@ async function handleCredentialResponse(response) {
             await handleLoginFlow();
         }
     } catch (error) {
-        console.error('Error procesando credenciales:', error);
-        showStatus('Error en la autenticación.', 'error');
-        if (isIOS) {
-            closeIOSAuthModal();
-        } else {
-            closeAuthModal();
+        console.error('❌ Error procesando credenciales:', error);
+        showStatus('Error en la autenticación: ' + error.message, 'error');
+        closeAuthModal();
+        
+        // Si era para login, revertir consentimiento
+        if (authenticationPurpose === 'login' && privacyConsent && !isAuthenticated) {
+            privacyConsent = false;
+            updatePrivacyUI();
         }
     }
 }
 
 function closeAuthModal() {
-    if (privacyConsent && !isAuthenticated) {
-        privacyConsent = false;
-        updatePrivacyUI();
-        showStatus('Debe completar la autenticación.', 'error');
-        setTimeout(() => hideStatus(), 5000);
+    const modal = document.getElementById('google-auth-modal');
+    if (modal) {
+        modal.style.animation = 'fadeOut 0.3s ease-out';
+        setTimeout(() => modal.remove(), 300);
     }
-    
-    const authOverlay = document.getElementById('google-auth-overlay');
-    if (authOverlay) authOverlay.remove();
-    
-    setTimeout(() => {
-        document.querySelectorAll('div[style*="position: fixed"][style*="z-index"]').forEach(overlay => {
-            if (overlay.style.zIndex >= 10000) overlay.remove();
-        });
-    }, 500);
 }
 
 async function handleLoginFlow() {
@@ -2164,6 +2283,38 @@ async function diagnosticComplete() {
     console.log('- getDeviceInfo() - Información del dispositivo');
 }
 
+// ========== ANIMACIONES CSS ==========
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    
+    @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
+    
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    #cancel-auth-btn:hover {
+        background: #e0e0e0 !important;
+        border-color: #bbb !important;
+    }
+`;
+document.head.appendChild(style);
+
+console.log('✅ Sistema de autenticación corregido cargado');
 // Mensaje de inicio
 console.log('✅ Script cargado correctamente');
 console.log(`📱 Dispositivo: ${deviceType}`);
