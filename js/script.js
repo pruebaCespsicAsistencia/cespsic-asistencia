@@ -1065,7 +1065,7 @@ async function uploadEvidencias() {
 }
 
 async function sendDataWithFallback(data) {
-    console.log('Enviando datos con método sin CORS...');
+    console.log('📤 Enviando datos al servidor...');
     
     return new Promise((resolve, reject) => {
         const iframe = document.createElement('iframe');
@@ -1092,6 +1092,9 @@ async function sendDataWithFallback(data) {
             form.appendChild(input);
         }
         
+        let responseReceived = false;
+        let timeoutId;
+        
         iframe.onload = function() {
             try {
                 setTimeout(() => {
@@ -1103,63 +1106,72 @@ async function sendDataWithFallback(data) {
                             responseText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
                         }
                         
-                        console.log('Respuesta del iframe:', responseText);
+                        console.log('📥 Respuesta del servidor:', responseText);
+                        
+                        if (!responseText || responseText.trim() === '') {
+                            console.warn('⚠️ Respuesta vacía del servidor');
+                            cleanup();
+                            reject(new Error('El servidor no respondió correctamente. Verifique su conexión.'));
+                            return;
+                        }
                         
                         let responseData;
                         try {
                             responseData = JSON.parse(responseText);
+                            
+                            // ✅ VALIDAR RESPUESTA EXPLÍCITAMENTE
+                            if (responseData.success === true) {
+                                // Verificar que tenga datos críticos
+                                if (responseData.row_number && responseData.sheet_verified) {
+                                    console.log('✅ Registro confirmado en fila:', responseData.row_number);
+                                    responseReceived = true;
+                                    cleanup();
+                                    resolve(responseData);
+                                } else {
+                                    console.warn('⚠️ Respuesta exitosa pero sin confirmación de Sheet');
+                                    cleanup();
+                                    reject(new Error('No se pudo verificar el registro en Google Sheets. Contacte al administrador.'));
+                                }
+                            } else {
+                                // ❌ Error explícito del servidor
+                                console.error('❌ Error del servidor:', responseData.message);
+                                cleanup();
+                                reject(new Error(responseData.message || 'Error desconocido del servidor'));
+                            }
+                            
                         } catch (parseError) {
-                            responseData = {
-                                success: true,
-                                message: 'Datos enviados correctamente',
-                                method: 'form_submission',
-                                raw_response: responseText
-                            };
+                            console.error('❌ Error parseando respuesta JSON:', parseError);
+                            console.log('Respuesta recibida:', responseText);
+                            cleanup();
+                            reject(new Error('El servidor respondió con un formato inválido. Respuesta: ' + responseText.substring(0, 100)));
                         }
                         
-                        cleanup();
-                        resolve(responseData);
-                        
                     } catch (error) {
-                        console.log('No se pudo leer respuesta del iframe, asumiendo éxito');
+                        console.error('❌ Error procesando respuesta del iframe:', error);
                         cleanup();
-                        resolve({
-                            success: true,
-                            message: 'Datos enviados (respuesta no accesible)',
-                            method: 'form_submission_assumed'
-                        });
+                        reject(new Error('No se pudo procesar la respuesta del servidor: ' + error.message));
                     }
                 }, 2000);
                 
             } catch (error) {
-                console.log('Error procesando iframe, asumiendo éxito');
+                console.error('❌ Error en onload del iframe:', error);
                 cleanup();
-                resolve({
-                    success: true,
-                    message: 'Datos enviados (método form)',
-                    method: 'form_submission_fallback'
-                });
+                reject(new Error('Error de comunicación con el servidor: ' + error.message));
             }
         };
         
         iframe.onerror = function(error) {
-            console.log('Error en iframe, pero posiblemente datos enviados:', error);
+            console.error('❌ Error en iframe:', error);
             cleanup();
-            resolve({
-                success: true,
-                message: 'Datos enviados (error de iframe ignorado)',
-                method: 'form_submission_with_error'
-            });
+            reject(new Error('Error de red al conectar con el servidor. Verifique su conexión a Internet.'));
         };
         
-        const timeoutId = setTimeout(() => {
-            console.log('Timeout en envío, asumiendo éxito');
-            cleanup();
-            resolve({
-                success: true,
-                message: 'Datos enviados (timeout)',
-                method: 'form_submission_timeout'
-            });
+        timeoutId = setTimeout(() => {
+            if (!responseReceived) {
+                console.error('⏱️ Timeout: El servidor no respondió en 15 segundos');
+                cleanup();
+                reject(new Error('El servidor tardó demasiado en responder (>15s). Intente nuevamente.'));
+            }
         }, 15000);
         
         function cleanup() {
@@ -1179,7 +1191,7 @@ async function sendDataWithFallback(data) {
         document.body.appendChild(iframe);
         document.body.appendChild(form);
         
-        console.log('Enviando formulario...');
+        console.log('🚀 Enviando formulario...');
         form.submit();
     });
 }
@@ -1285,18 +1297,18 @@ async function handleSubmit(e) {
     e.preventDefault();
     
     if (!isAuthenticated || !currentUser) {
-        showStatus('Debe autenticarse con Google.', 'error');
+        showStatus('❌ Debe autenticarse con Google primero.', 'error');
         return;
     }
     
     if (!locationValid || !currentLocation) {
-        showStatus('Ubicación GPS requerida.', 'error');
+        showStatus('❌ Ubicación GPS requerida. Complete la autenticación.', 'error');
         return;
     }
     
     if (currentLocation.accuracy > REQUIRED_ACCURACY) {
         const deviceTypeText = isDesktop ? 'Desktop/Laptop' : 'Móvil';
-        showStatus(`Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m > ${REQUIRED_ACCURACY}m (${deviceTypeText})`, 'error');
+        showStatus(`❌ Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m > ${REQUIRED_ACCURACY}m (${deviceTypeText})`, 'error');
         return;
     }
     
@@ -1306,10 +1318,10 @@ async function handleSubmit(e) {
         return;
     }
     
-    showStatus('Guardando asistencia...', 'success');
+    showStatus('💾 Guardando asistencia...', 'success');
     const submitBtn = document.querySelector('.submit-btn');
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Guardando...';
+    submitBtn.textContent = '⏳ Guardando...';
     
     try {
         console.log('\n🚀 INICIANDO ENVÍO DE FORMULARIO');
@@ -1318,37 +1330,44 @@ async function handleSubmit(e) {
         console.log(`📍 Precisión GPS: ${Math.round(currentLocation.accuracy)}m`);
         console.log(`📁 Archivos seleccionados: ${selectedFiles.length}`);
         
+        // FASE 1: SUBIR EVIDENCIAS
         let evidenciasUrls = [];
         if (selectedFiles.length > 0) {
             console.log('\n📤 FASE 1: SUBIENDO EVIDENCIAS...');
-            showStatus('Subiendo evidencias...', 'success');
-            evidenciasUrls = await uploadEvidencias();
+            showStatus('📤 Subiendo evidencias...', 'success');
             
-            const successUploads = evidenciasUrls.filter(e => e.uploadStatus === 'SUCCESS');
-            const failedUploads = evidenciasUrls.filter(e => e.uploadStatus === 'FAILED');
-            
-            console.log(`📊 Resultado: ${successUploads.length} éxito, ${failedUploads.length} fallos`);
-            
-            if (selectedFiles.length > 0 && successUploads.length === 0) {
-                const errorDetails = failedUploads.map(e => `• ${e.originalName}: ${e.error}`).join('\n');
+            try {
+                evidenciasUrls = await uploadEvidencias();
                 
-                console.error('\n❌ TODAS LAS EVIDENCIAS FALLARON:');
-                console.error(errorDetails);
+                const successUploads = evidenciasUrls.filter(e => e.uploadStatus === 'SUCCESS');
+                const failedUploads = evidenciasUrls.filter(e => e.uploadStatus === 'FAILED');
                 
-                const userDecision = confirm(
-                    `⚠️ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n` +
-                    `¿Desea continuar registrando la asistencia SIN evidencias?\n\n` +
-                    `• Clic en "Aceptar" = Continuar sin evidencias\n` +
-                    `• Clic en "Cancelar" = Reintentar o corregir archivos`
-                );
+                console.log(`📊 Resultado: ${successUploads.length} éxito, ${failedUploads.length} fallos`);
                 
-                if (!userDecision) {
-                    throw new Error('Registro cancelado. Por favor revise los archivos e intente nuevamente.');
+                if (selectedFiles.length > 0 && successUploads.length === 0) {
+                    const errorDetails = failedUploads.map(e => `• ${e.originalName}: ${e.error}`).join('\n');
+                    
+                    console.error('\n❌ TODAS LAS EVIDENCIAS FALLARON:');
+                    console.error(errorDetails);
+                    
+                    const userDecision = confirm(
+                        `⚠️ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n` +
+                        `¿Desea continuar registrando la asistencia SIN evidencias?\n\n` +
+                        `• Clic en "Aceptar" = Continuar sin evidencias\n` +
+                        `• Clic en "Cancelar" = Reintentar o corregir archivos`
+                    );
+                    
+                    if (!userDecision) {
+                        throw new Error('Registro cancelado por el usuario. Revise los archivos e intente nuevamente.');
+                    }
+                    
+                    console.log('⚠️ Usuario decidió continuar sin evidencias');
+                } else if (failedUploads.length > 0) {
+                    console.warn(`⚠️ ${failedUploads.length} evidencia(s) no se subieron`);
                 }
-                
-                console.log('⚠️ Usuario decidió continuar sin evidencias');
-            } else if (failedUploads.length > 0) {
-                console.warn(`⚠️ ${failedUploads.length} evidencia(s) no se subieron, pero se continuará con ${successUploads.length}`);
+            } catch (uploadError) {
+                console.error('❌ Error crítico subiendo evidencias:', uploadError);
+                throw new Error('Error al subir evidencias: ' + uploadError.message);
             }
         }
         
@@ -1401,7 +1420,7 @@ async function handleSubmit(e) {
         data.authenticated_user_name = currentUser.name;
         data.authentication_timestamp = new Date().toISOString();
         
-        // ===== NUEVO: Información del dispositivo =====
+        // ✅ DATOS DE DISPOSITIVO
         data.device_type = deviceType;
         data.is_desktop = isDesktop;
         data.is_mobile = !isDesktop;
@@ -1420,50 +1439,106 @@ async function handleSubmit(e) {
         console.log(`   Método GPS: ${data.gps_method}`);
         console.log(`   Precisión: ${data.precision_gps_metros}m`);
         console.log(`   Evidencias exitosas: ${data.total_evidencias}`);
-        console.log(`   Evidencias fallidas: ${data.evidencias_failed}`);
         
-        const responseData = await sendDataWithFallback(data);
+        showStatus('⏳ Enviando al servidor...', 'success');
         
-        console.log('✅ FORMULARIO ENVIADO EXITOSAMENTE');
-        
-        if (responseData) {
-            const evidenciasInfo = data.total_evidencias > 0 
-                ? `\n✅ Evidencias: ${data.total_evidencias} imagen(es)${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} no se pudieron subir)` : ''}`
-                : selectedFiles.length > 0 
-                    ? `\n⚠️ Evidencias: No se pudo subir ninguna (registrado sin evidencias)`
-                    : '';
-            
-            showStatus(`✅ ¡Asistencia registrada exitosamente!
-            Usuario: ${currentUser.name}
-            Dispositivo: ${deviceType}
-            Modalidad: ${data.modalidad}
-            Ubicación: ${data.ubicacion_detectada}
-            Precisión: ${data.precision_gps_metros}m${evidenciasInfo}`, 'success');
-            
-            setTimeout(() => {
-                if (confirm('¿Desea registrar otra asistencia?')) {
-                    resetFormOnly();
-                    getCurrentLocation();
-                } else {
-                    signOut();
-                }
-                hideStatus();
-            }, 5000);
-        } else {
-            throw new Error('Error en el envío del formulario');
+        // ✅ ENVÍO CON MANEJO DE ERRORES ROBUSTO
+        let responseData;
+        try {
+            responseData = await sendDataWithFallback(data);
+            console.log('✅ RESPUESTA DEL SERVIDOR:', responseData);
+        } catch (sendError) {
+            console.error('❌ ERROR EN ENVÍO:', sendError);
+            throw new Error('Error de conexión: ' + sendError.message);
         }
+        
+        // ✅ VALIDAR RESPUESTA
+        if (!responseData || !responseData.success) {
+            const errorMsg = responseData?.message || 'Sin respuesta del servidor';
+            console.error('❌ REGISTRO FALLIDO:', errorMsg);
+            throw new Error(errorMsg);
+        }
+        
+        if (!responseData.row_number) {
+            console.error('⚠️ Respuesta sin número de fila');
+            throw new Error('El servidor no confirmó el número de fila. Verifique manualmente en Google Sheets.');
+        }
+        
+        // ✅ ÉXITO CONFIRMADO
+        console.log('✅ FORMULARIO REGISTRADO EXITOSAMENTE');
+        console.log('   Fila en Google Sheets:', responseData.row_number);
+        
+        const evidenciasInfo = data.total_evidencias > 0 
+            ? `\n✅ Evidencias: ${data.total_evidencias} imagen(es)${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} no se pudieron subir)` : ''}`
+            : selectedFiles.length > 0 
+                ? `\n⚠️ Evidencias: No se pudo subir ninguna (registrado sin evidencias)`
+                : '';
+        
+        showStatus(`✅ ¡Asistencia registrada exitosamente!
+        Usuario: ${currentUser.name}
+        Dispositivo: ${deviceType}
+        Modalidad: ${data.modalidad}
+        Ubicación: ${data.ubicacion_detectada}
+        Precisión: ${data.precision_gps_metros}m
+        📋 Fila en Google Sheets: ${responseData.row_number}${evidenciasInfo}`, 'success');
+        
+        setTimeout(() => {
+            if (confirm('¿Desea registrar otra asistencia?')) {
+                resetFormOnly();
+                getCurrentLocation();
+            } else {
+                signOut();
+            }
+            hideStatus();
+        }, 8000);
         
     } catch (error) {
         console.error('\n❌ ERROR EN ENVÍO DE FORMULARIO:', error);
-        showStatus('❌ Error al guardar: ' + error.message, 'error');
+        console.error('Stack trace:', error.stack);
+        
+        // ❌ MOSTRAR ERROR DETALLADO AL USUARIO
+        let userMessage = '❌ Error al guardar la asistencia:\n\n';
+        
+        if (error.message.includes('conexión') || error.message.includes('red') || error.message.includes('Internet')) {
+            userMessage += '🌐 Problema de conexión a Internet.\n';
+            userMessage += 'Verifique su conexión y vuelva a intentar.';
+        } else if (error.message.includes('servidor') || error.message.includes('timeout') || error.message.includes('respondió')) {
+            userMessage += '⏱️ El servidor no respondió correctamente.\n';
+            userMessage += 'Esto puede deberse a:\n';
+            userMessage += '• Conexión lenta\n';
+            userMessage += '• Servidor sobrecargado\n';
+            userMessage += '• Problemas temporales de Google\n\n';
+            userMessage += 'Espere unos segundos y vuelva a intentar.';
+        } else if (error.message.includes('Sheet') || error.message.includes('fila')) {
+            userMessage += '📊 Error con Google Sheets.\n';
+            userMessage += 'Contacte al administrador del sistema.';
+        } else if (error.message.includes('evidencias')) {
+            userMessage += '📷 ' + error.message;
+        } else if (error.message.includes('cancelado')) {
+            userMessage += '🚫 ' + error.message;
+        } else {
+            userMessage += error.message || 'Error desconocido';
+            userMessage += '\n\nContacte al administrador si el problema persiste.';
+        }
+        
+        showStatus(userMessage, 'error');
         
         submitBtn.disabled = false;
         submitBtn.textContent = '📋 Registrar Asistencia';
         submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
         
+        // No ocultar el error automáticamente para que el usuario lo lea
         setTimeout(() => {
-            hideStatus();
-        }, 8000);
+            const shouldHide = confirm(
+                'El registro NO se completó.\n\n' +
+                '¿Desea intentar nuevamente?\n\n' +
+                'Clic en "Aceptar" = Cerrar mensaje (puede reintentar)\n' +
+                'Clic en "Cancelar" = Mantener mensaje visible'
+            );
+            if (shouldHide) {
+                hideStatus();
+            }
+        }, 3000);
     }
 }
 
