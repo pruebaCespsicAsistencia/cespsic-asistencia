@@ -1621,7 +1621,7 @@ async function handleSubmit(e) {
         data.authenticated_user_name = currentUser.name;
         data.authentication_timestamp = new Date().toISOString();
         
-        // ✅ DATOS DE DISPOSITIVO
+        // DATOS DE DISPOSITIVO
         data.device_type = deviceType;
         data.is_desktop = isDesktop;
         data.is_mobile = !isDesktop;
@@ -1643,61 +1643,84 @@ async function handleSubmit(e) {
         
         showStatus('⏳ Enviando al servidor...', 'success');
         
-        // ✅ ENVÍO CON MANEJO DE ERRORES ROBUSTO
+        // ENVÍO CON MANEJO DE ERRORES ROBUSTO
         let responseData;
         try {
+            console.log('🔄 Llamando a sendDataWithFallback...');
             responseData = await sendDataWithFallback(data);
             console.log('✅ RESPUESTA DEL SERVIDOR:', responseData);
+            console.log('   - success:', responseData?.success);
+            console.log('   - row_number:', responseData?.row_number);
+            console.log('   - message:', responseData?.message);
         } catch (sendError) {
             console.error('❌ ERROR EN ENVÍO:', sendError);
+            console.error('   - Nombre:', sendError.name);
+            console.error('   - Mensaje:', sendError.message);
+            console.error('   - Stack:', sendError.stack);
             throw new Error('Error de conexión: ' + sendError.message);
         }
         
-        // ✅ VALIDAR RESPUESTA
-        if (!responseData || !responseData.success) {
-            const errorMsg = responseData?.message || 'Sin respuesta del servidor';
+        // VALIDAR RESPUESTA
+        if (!responseData) {
+            console.error('❌ responseData es null o undefined');
+            throw new Error('No se recibió respuesta del servidor. Verifique su conexión.');
+        }
+        
+        console.log('\n🔍 VALIDANDO RESPUESTA...');
+        console.log('   - Tipo de responseData:', typeof responseData);
+        console.log('   - success:', responseData.success);
+        console.log('   - row_number:', responseData.row_number);
+        console.log('   - sheet_verified:', responseData.sheet_verified);
+        
+        // Aceptar success: true O row_number presente O warning presente (envío exitoso pero sin confirmación)
+        if (responseData.success === true || responseData.row_number || responseData.warning) {
+            console.log('✅ REGISTRO ACEPTADO COMO EXITOSO');
+            
+            const rowNumber = responseData.row_number || 'Verificar manualmente en Google Sheets';
+            const sheetVerified = responseData.sheet_verified === true;
+            
+            const evidenciasInfo = data.total_evidencias > 0 
+                ? `\n✅ Evidencias: ${data.total_evidencias} imagen(es)${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} no se pudieron subir)` : ''}`
+                : selectedFiles.length > 0 
+                    ? `\n⚠️ Evidencias: No se pudo subir ninguna (registrado sin evidencias)`
+                    : '';
+            
+            const verificationWarning = !sheetVerified || responseData.warning
+                ? '\n⚠️ El servidor no confirmó el número de fila. Por favor, verifique manualmente en Google Sheets.' 
+                : '';
+            
+            showStatus(`✅ ¡Asistencia registrada exitosamente!
+            Usuario: ${currentUser.name}
+            Dispositivo: ${deviceType}
+            Modalidad: ${data.modalidad}
+            Ubicación: ${data.ubicacion_detectada}
+            Precisión: ${data.precision_gps_metros}m
+            📋 Fila en Google Sheets: ${rowNumber}${evidenciasInfo}${verificationWarning}`, 'success');
+            
+            setTimeout(() => {
+                if (confirm('¿Desea registrar otra asistencia?')) {
+                    resetFormOnly();
+                    getCurrentLocation();
+                } else {
+                    signOut();
+                }
+                hideStatus();
+            }, 8000);
+            
+        } else {
+            // Respuesta indica fallo explícito
+            const errorMsg = responseData.message || 'Error desconocido del servidor';
             console.error('❌ REGISTRO FALLIDO:', errorMsg);
             throw new Error(errorMsg);
         }
         
-        if (!responseData.row_number) {
-            console.error('⚠️ Respuesta sin número de fila');
-            throw new Error('El servidor no confirmó el número de fila. Verifique manualmente en Google Sheets.');
-        }
-        
-        // ✅ ÉXITO CONFIRMADO
-        console.log('✅ FORMULARIO REGISTRADO EXITOSAMENTE');
-        console.log('   Fila en Google Sheets:', responseData.row_number);
-        
-        const evidenciasInfo = data.total_evidencias > 0 
-            ? `\n✅ Evidencias: ${data.total_evidencias} imagen(es)${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} no se pudieron subir)` : ''}`
-            : selectedFiles.length > 0 
-                ? `\n⚠️ Evidencias: No se pudo subir ninguna (registrado sin evidencias)`
-                : '';
-        
-        showStatus(`✅ ¡Asistencia registrada exitosamente!
-        Usuario: ${currentUser.name}
-        Dispositivo: ${deviceType}
-        Modalidad: ${data.modalidad}
-        Ubicación: ${data.ubicacion_detectada}
-        Precisión: ${data.precision_gps_metros}m
-        📋 Fila en Google Sheets: ${responseData.row_number}${evidenciasInfo}`, 'success');
-        
-        setTimeout(() => {
-            if (confirm('¿Desea registrar otra asistencia?')) {
-                resetFormOnly();
-                getCurrentLocation();
-            } else {
-                signOut();
-            }
-            hideStatus();
-        }, 8000);
-        
     } catch (error) {
         console.error('\n❌ ERROR EN ENVÍO DE FORMULARIO:', error);
-        console.error('Stack trace:', error.stack);
+        console.error('   - Tipo:', error.name);
+        console.error('   - Mensaje:', error.message);
+        console.error('   - Stack:', error.stack);
         
-        // ❌ MOSTRAR ERROR DETALLADO AL USUARIO
+        // MOSTRAR ERROR DETALLADO AL USUARIO
         let userMessage = '❌ Error al guardar la asistencia:\n\n';
         
         if (error.message.includes('conexión') || error.message.includes('red') || error.message.includes('Internet')) {
@@ -1709,7 +1732,7 @@ async function handleSubmit(e) {
             userMessage += '• Conexión lenta\n';
             userMessage += '• Servidor sobrecargado\n';
             userMessage += '• Problemas temporales de Google\n\n';
-            userMessage += 'Espere unos segundos y vuelva a intentar.';
+            userMessage += 'IMPORTANTE: Verifique en Google Sheets si el registro se guardó antes de intentar nuevamente.';
         } else if (error.message.includes('Sheet') || error.message.includes('fila')) {
             userMessage += '📊 Error con Google Sheets.\n';
             userMessage += 'Contacte al administrador del sistema.';
@@ -1728,12 +1751,13 @@ async function handleSubmit(e) {
         submitBtn.textContent = '📋 Registrar Asistencia';
         submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
         
-        // No ocultar el error automáticamente para que el usuario lo lea
+        // No ocultar el error automáticamente
         setTimeout(() => {
             const shouldHide = confirm(
-                'El registro NO se completó.\n\n' +
-                '¿Desea intentar nuevamente?\n\n' +
-                'Clic en "Aceptar" = Cerrar mensaje (puede reintentar)\n' +
+                'El registro NO se completó (o no se pudo confirmar).\n\n' +
+                'IMPORTANTE: Antes de reintentar, verifique en Google Sheets si el registro ya existe.\n\n' +
+                '¿Desea cerrar este mensaje?\n\n' +
+                'Clic en "Aceptar" = Cerrar mensaje\n' +
                 'Clic en "Cancelar" = Mantener mensaje visible'
             );
             if (shouldHide) {
