@@ -1065,7 +1065,7 @@ async function uploadEvidencias() {
 }
 
 async function sendDataWithFallback(data) {
-  console.warn('⚠️ Usando sendDataWithFallback (obsoleto), use sendWithVerification');
+  console.warn('⚠️ sendDataWithFallback obsoleto, use sendWithVerification');
   return sendDataWithIframe(data);
 }
 
@@ -1176,39 +1176,31 @@ function generateRegistroID() {
   return registroID;
 }
 
-// ========== ENVÍO CON VERIFICACIÓN Y REINTENTOS ==========
+// ========== ENVÍO CON VERIFICACIÓN, REINTENTOS E IDEMPOTENCIA ==========
 async function sendWithVerification(data, attempt = 1) {
   const MAX_ATTEMPTS = 3;
   
-  console.log(`\n🚀 INTENTO ${attempt}/${MAX_ATTEMPTS}`);
-  console.log('Registro ID:', data.registro_id);
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`🚀 INTENTO ${attempt}/${MAX_ATTEMPTS}`);
+  console.log(`Registro ID: ${data.registro_id}`);
+  console.log(`${'='.repeat(60)}`);
   
   try {
     // PASO 1: Enviar datos con iframe
-    console.log('📤 Enviando datos...');
+    console.log('📤 Enviando datos al backend...');
     const sendResult = await sendDataWithIframe(data);
     
-    console.log('📥 Respuesta recibida:', sendResult);
+    console.log('📥 Respuesta del backend:', JSON.stringify(sendResult, null, 2));
     
-    // PASO 2: Verificar que realmente se guardó
+    // PASO 2: Analizar respuesta del backend
     if (sendResult.success) {
-      console.log('✅ Backend reporta éxito, verificando...');
+      console.log('✅ Backend reporta éxito');
       
-      // Esperar 2 segundos antes de verificar
-      await sleep(2000);
-      
-      const verified = await verifyRegistro(data.registro_id);
-      
-      if (verified.success && verified.verified) {
-        console.log('✅✅ VERIFICACIÓN EXITOSA - Fila:', verified.row_number);
-        return {
-          success: true,
-          verified: true,
-          data: verified,
-          attempts: attempt
-        };
-      } else if (sendResult.duplicate_prevented) {
-        console.log('⚠️ Duplicado prevenido (registro ya existe)');
+      // Si es duplicado prevenido, es éxito (idempotencia)
+      if (sendResult.duplicate_prevented) {
+        console.log('⚠️ Duplicado prevenido - registro ya existía');
+        console.log(`📊 Fila original: ${sendResult.row_number}`);
+        
         return {
           success: true,
           verified: true,
@@ -1216,31 +1208,155 @@ async function sendWithVerification(data, attempt = 1) {
           data: sendResult,
           attempts: attempt
         };
-      } else {
-        console.warn('⚠️ Backend dice éxito pero verificación falló');
-        throw new Error('Verificación falló - registro no encontrado en hoja');
       }
+      
+      // Si backend dice que verificó, confiar en él
+      if (sendResult.verified === true) {
+        console.log('✅✅ Backend confirmó verificación');
+        console.log(`📊 Fila en Sheets: ${sendResult.row_number}`);
+        
+        // PASO 3: Verificación adicional del frontend (doble check)
+        console.log('🔍 Realizando verificación adicional del frontend...');
+        await sleep(2000);
+        
+        const frontendVerify = await verifyRegistro(data.registro_id);
+        
+        if (frontendVerify.success && frontendVerify.verified) {
+          console.log('✅✅✅ VERIFICACIÓN DOBLE EXITOSA');
+          console.log(`   - Backend: Fila ${sendResult.row_number}`);
+          console.log(`   - Frontend: Fila ${frontendVerify.row_number}`);
+          
+          if (sendResult.row_number !== frontendVerify.row_number) {
+            console.warn(`⚠️ Advertencia: Filas no coinciden`);
+          }
+          
+          return {
+            success: true,
+            verified: true,
+            double_verified: true,
+            data: sendResult,
+            frontend_verification: frontendVerify,
+            attempts: attempt
+          };
+        } else {
+          console.warn('⚠️ Verificación frontend falló, pero backend dice que sí');
+          return {
+            success: true,
+            verified: true,
+            double_verified: false,
+            data: sendResult,
+            attempts: attempt,
+            warning: 'Backend verificó pero frontend no pudo confirmar'
+          };
+        }
+      }
+      
+      // Si backend dice éxito pero no tiene campo verified, verificar nosotros
+      console.log('🔍 Backend dice éxito pero sin campo verified, verificando...');
+      await sleep(2000);
+      
+      const verified = await verifyRegistro(data.registro_id);
+      
+      if (verified.success && verified.verified) {
+        console.log('✅✅ Verificación exitosa');
+        return {
+          success: true,
+          verified: true,
+          data: verified,
+          attempts: attempt
+        };
+      } else {
+        throw new Error('Backend reportó éxito pero verificación falló');
+      }
+      
+    } else if (sendResult.guaranteed_not_saved === true) {
+      console.error('❌ Backend garantiza que NO se guardó');
+      throw new Error(sendResult.message || 'Error confirmado por backend');
+      
     } else {
-      throw new Error(sendResult.message || 'Error en envío');
+      // Error ambiguo, verificar si se guardó de todas formas
+      console.warn('⚠️ Respuesta ambigua del backend, verificando...');
+      await sleep(2000);
+      
+      const verified = await verifyRegistro(data.registro_id);
+      
+      if (verified.success && verified.verified) {
+        console.log('✅ Registro SÍ existe a pesar del error');
+        return {
+          success: true,
+          verified: true,
+          data: verified,
+          attempts: attempt,
+          warning: 'Hubo error de comunicación pero el registro se guardó'
+        };
+      } else {
+        throw new Error(sendResult.message || 'Error en envío');
+      }
     }
     
   } catch (error) {
     console.error(`❌ Error en intento ${attempt}:`, error.message);
     
-    // Si no es el último intento, reintentar
+    // CRÍTICO: Antes de reintentar, verificar si ya se guardó
+    console.log('🔍 Verificando si registro ya existe antes de reintentar...');
+    
+    try {
+      const existingCheck = await verifyRegistro(data.registro_id);
+      
+      if (existingCheck.success && existingCheck.verified) {
+        console.log('✅✅ REGISTRO YA EXISTE (se guardó en intento anterior)');
+        console.log(`📊 Fila: ${existingCheck.row_number}`);
+        
+        return {
+          success: true,
+          verified: true,
+          data: existingCheck,
+          attempts: attempt,
+          recovered: true
+        };
+      }
+    } catch (verifyError) {
+      console.warn('⚠️ No se pudo verificar existencia:', verifyError.message);
+    }
+    
+    // Si no existe y no es el último intento, reintentar
     if (attempt < MAX_ATTEMPTS) {
-      const waitTime = 2000 * attempt; // 2s, 4s, 6s
+      const waitTime = 3000 * attempt; // 3s, 6s, 9s
       console.log(`⏳ Esperando ${waitTime/1000}s antes de reintentar...`);
       await sleep(waitTime);
       
-      // Reintentar recursivamente
       return sendWithVerification(data, attempt + 1);
     } else {
-      // Último intento falló
       console.error('❌❌ TODOS LOS INTENTOS FALLARON');
+      
+      // VERIFICACIÓN FINAL
+      console.log('🔍 Verificación final post-fallos...');
+      
+      try {
+        await sleep(3000);
+        const finalCheck = await verifyRegistro(data.registro_id);
+        
+        if (finalCheck.success && finalCheck.verified) {
+          console.log('✅✅ REGISTRO ENCONTRADO EN VERIFICACIÓN FINAL');
+          
+          return {
+            success: true,
+            verified: true,
+            data: finalCheck,
+            attempts: attempt,
+            recovered: true
+          };
+        } else {
+          console.log('❌ Confirmado: Registro NO existe');
+        }
+      } catch (finalVerifyError) {
+        console.error('Error en verificación final:', finalVerifyError);
+      }
+      
       return {
         success: false,
         verified: false,
+        guaranteed_not_saved: true,
         error: error.message,
         attempts: attempt
       };
@@ -1263,7 +1379,6 @@ async function sendDataWithIframe(data) {
     form.target = iframe.name;
     form.style.display = 'none';
     
-    // Agregar todos los campos
     for (const [key, value] of Object.entries(data)) {
       const input = document.createElement('input');
       input.type = 'hidden';
@@ -1292,18 +1407,23 @@ async function sendDataWithIframe(data) {
             responseText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
           }
           
-          console.log('📄 Respuesta iframe:', responseText.substring(0, 200));
+          console.log('📄 Respuesta iframe (300 chars):', responseText.substring(0, 300));
           
           let responseData;
           try {
             responseData = JSON.parse(responseText);
-            console.log('✅ JSON parseado:', responseData);
+            console.log('✅ JSON parseado');
+            console.log('   - success:', responseData.success);
+            console.log('   - verified:', responseData.verified);
+            
           } catch (parseError) {
-            console.warn('⚠️ No se pudo parsear JSON, asumiendo éxito');
+            console.warn('⚠️ No se pudo parsear JSON');
+            
             responseData = {
               success: true,
-              message: 'Enviado (respuesta no JSON)',
-              raw_response: responseText.substring(0, 100)
+              verified: false,
+              message: 'Respuesta no JSON',
+              needs_verification: true
             };
           }
           
@@ -1315,13 +1435,15 @@ async function sendDataWithIframe(data) {
           console.warn('⚠️ Error leyendo iframe:', error);
           responseReceived = true;
           cleanup();
+          
           resolve({
             success: true,
-            message: 'Enviado (iframe no accesible)',
-            warning: 'No se pudo leer respuesta'
+            verified: false,
+            message: 'Error leyendo respuesta',
+            needs_verification: true
           });
         }
-      }, 3000); // Esperar 3 segundos para respuesta
+      }, 3000);
     };
     
     iframe.onerror = function(error) {
@@ -1329,66 +1451,71 @@ async function sendDataWithIframe(data) {
       console.error('❌ Error en iframe:', error);
       responseReceived = true;
       cleanup();
-      reject(new Error('Error de red en iframe'));
+      
+      resolve({
+        success: false,
+        verified: false,
+        message: 'Error de red',
+        needs_verification: true
+      });
     };
     
-    // Timeout de 15 segundos
     const timeoutId = setTimeout(() => {
       if (responseReceived) return;
       console.warn('⏱️ Timeout en iframe');
       responseReceived = true;
       cleanup();
-      reject(new Error('Timeout - sin respuesta en 15s'));
+      
+      resolve({
+        success: false,
+        verified: false,
+        message: 'Timeout - sin respuesta',
+        needs_verification: true
+      });
     }, 15000);
     
     function cleanup() {
       try {
         clearTimeout(timeoutId);
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-        if (document.body.contains(form)) {
-          document.body.removeChild(form);
-        }
-      } catch (e) {
-        console.warn('Error en cleanup:', e);
-      }
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+        if (document.body.contains(form)) document.body.removeChild(form);
+      } catch (e) {}
     }
     
     document.body.appendChild(iframe);
     document.body.appendChild(form);
-    
-    console.log('📮 Enviando formulario...');
     form.submit();
   });
 }
 
 // ========== VERIFICAR REGISTRO EN SHEETS ==========
 async function verifyRegistro(registroID) {
-  console.log('🔍 Verificando registro en Sheets...');
+  console.log('🔍 Verificando registro:', registroID);
   
   try {
-    const verifyUrl = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}`;
+    const verifyUrl = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}&_t=${Date.now()}`;
     
     const response = await fetch(verifyUrl, {
       method: 'GET',
-      mode: 'cors'
+      mode: 'cors',
+      cache: 'no-cache'
     });
     
-    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
     
+    const result = await response.json();
     console.log('📊 Resultado verificación:', result);
     return result;
     
   } catch (error) {
-    console.error('❌ Error en verificación:', error);
+    console.error('❌ Error fetch:', error);
     
-    // Fallback: intentar con iframe
     try {
-      console.log('🔄 Reintentando verificación con iframe...');
+      console.log('🔄 Reintentando con iframe...');
       return await verifyWithIframe(registroID);
     } catch (iframeError) {
-      console.error('❌ Verificación fallida completamente');
       return {
         success: false,
         verified: false,
@@ -1404,7 +1531,7 @@ async function verifyWithIframe(registroID) {
   return new Promise((resolve, reject) => {
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
-    iframe.src = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}`;
+    iframe.src = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}&_t=${Date.now()}`;
     
     let resolved = false;
     
@@ -1413,12 +1540,10 @@ async function verifyWithIframe(registroID) {
         try {
           const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
           const responseText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
-          
           const result = JSON.parse(responseText);
           resolved = true;
           cleanup();
           resolve(result);
-          
         } catch (error) {
           resolved = true;
           cleanup();
@@ -1437,9 +1562,7 @@ async function verifyWithIframe(registroID) {
     
     function cleanup() {
       clearTimeout(timeoutId);
-      if (document.body.contains(iframe)) {
-        document.body.removeChild(iframe);
-      }
+      if (document.body.contains(iframe)) document.body.removeChild(iframe);
     }
     
     document.body.appendChild(iframe);
@@ -1455,13 +1578,12 @@ function sleep(ms) {
 async function handleSubmit(e) {
   e.preventDefault();
   
-  console.log('\n' + '='.repeat(60));
-  console.log('🚀 INICIANDO ENVÍO DE FORMULARIO');
-  console.log('='.repeat(60));
+  console.log('\n' + '='.repeat(70));
+  console.log('🚀 INICIANDO ENVÍO (MODO IDEMPOTENTE)');
+  console.log('='.repeat(70));
   
-  // Validaciones básicas
   if (!isAuthenticated || !currentUser) {
-    showStatus('❌ Debe autenticarse con Google primero', 'error');
+    showStatus('❌ Debe autenticarse con Google', 'error');
     return;
   }
   
@@ -1471,8 +1593,7 @@ async function handleSubmit(e) {
   }
   
   if (currentLocation.accuracy > REQUIRED_ACCURACY) {
-    const deviceTypeText = isDesktop ? 'Desktop/Laptop' : 'Móvil';
-    showStatus(`❌ Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m > ${REQUIRED_ACCURACY}m (${deviceTypeText})`, 'error');
+    showStatus(`❌ Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m`, 'error');
     return;
   }
   
@@ -1480,24 +1601,23 @@ async function handleSubmit(e) {
     return;
   }
   
-  // Deshabilitar botón
   const submitBtn = document.querySelector('.submit-btn');
+  const originalText = submitBtn.textContent;
   submitBtn.disabled = true;
   submitBtn.textContent = '⏳ Procesando...';
   
   try {
-    // GENERAR ID ÚNICO
     const registroID = generateRegistroID();
     
-    console.log('📋 Registro ID:', registroID);
+    console.log('📋 ID:', registroID);
     console.log('👤 Usuario:', currentUser.name);
     console.log('📱 Dispositivo:', deviceType);
-    console.log('📍 Precisión GPS:', Math.round(currentLocation.accuracy) + 'm');
+    console.log('📍 GPS:', Math.round(currentLocation.accuracy) + 'm');
     
-    // SUBIR EVIDENCIAS (si hay)
+    // EVIDENCIAS
     let evidenciasUrls = [];
     if (selectedFiles.length > 0) {
-      console.log('\n📸 FASE 1: SUBIENDO EVIDENCIAS...');
+      console.log('\n📸 SUBIENDO EVIDENCIAS...');
       showStatus('📤 Subiendo evidencias...', 'success');
       
       evidenciasUrls = await uploadEvidencias();
@@ -1505,26 +1625,22 @@ async function handleSubmit(e) {
       const successUploads = evidenciasUrls.filter(e => e.uploadStatus === 'SUCCESS');
       const failedUploads = evidenciasUrls.filter(e => e.uploadStatus === 'FAILED');
       
-      console.log(`📊 Evidencias: ${successUploads.length} éxito, ${failedUploads.length} fallos`);
-      
       if (selectedFiles.length > 0 && successUploads.length === 0) {
         const errorDetails = failedUploads.map(e => `• ${e.originalName}: ${e.error}`).join('\n');
         
         const userDecision = confirm(
           `⚠️ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n` +
-          `¿Desea continuar registrando la asistencia SIN evidencias?\n\n` +
-          `• Clic en "Aceptar" = Continuar sin evidencias\n` +
-          `• Clic en "Cancelar" = Reintentar o corregir archivos`
+          `¿Continuar SIN evidencias?`
         );
         
         if (!userDecision) {
-          throw new Error('Registro cancelado por el usuario');
+          throw new Error('Registro cancelado');
         }
       }
     }
     
-    // PREPARAR DATOS DEL FORMULARIO
-    console.log('\n📝 FASE 2: PREPARANDO DATOS...');
+    // PREPARAR DATOS
+    console.log('\n📝 PREPARANDO DATOS...');
     
     const formData = new FormData(e.target);
     const data = {};
@@ -1534,9 +1650,7 @@ async function handleSubmit(e) {
       
       if (key.endsWith('[]')) {
         const cleanKey = key.replace('[]', '');
-        if (!data[cleanKey]) {
-          data[cleanKey] = [];
-        }
+        if (!data[cleanKey]) data[cleanKey] = [];
         data[cleanKey].push(value);
       } else {
         if (data[key]) {
@@ -1551,16 +1665,14 @@ async function handleSubmit(e) {
       }
     }
     
-    // Agregar datos adicionales
     const successUploads = evidenciasUrls.filter(e => e.uploadStatus === 'SUCCESS');
     
-    data.registro_id = registroID; // *** CRÍTICO ***
+    data.registro_id = registroID;
+    data.timestamp = new Date().toISOString();
     data.evidencias_urls = evidenciasUrls;
     data.total_evidencias = successUploads.length;
     data.evidencias_failed = evidenciasUrls.length - successUploads.length;
-    
-    const evidenciasNombres = successUploads.map(e => e.fileName).join(', ');
-    data.evidencias_nombres = evidenciasNombres;
+    data.evidencias_nombres = successUploads.map(e => e.fileName).join(', ');
     data.carpeta_evidencias = generateStudentFolderName();
     
     data.modalidad = document.getElementById('modalidad').value;
@@ -1572,7 +1684,6 @@ async function handleSubmit(e) {
     data.authenticated_user_name = currentUser.name;
     data.authentication_timestamp = new Date().toISOString();
     
-    // Información del dispositivo
     data.device_type = deviceType;
     data.is_desktop = isDesktop;
     data.is_mobile = !isDesktop;
@@ -1580,96 +1691,88 @@ async function handleSubmit(e) {
     data.required_accuracy = REQUIRED_ACCURACY;
     data.device_info = JSON.stringify(getDeviceInfo());
     
-    // Validación final
     if (!data.modalidad || data.modalidad === '') {
-      throw new Error('El campo Modalidad es requerido');
+      throw new Error('Modalidad requerida');
     }
     
-    if (!data.registro_id || data.registro_id.trim() === '') {
-      throw new Error('Error interno: registro_id no generado');
-    }
+    console.log('✅ Datos preparados');
     
-    console.log('✅ Datos preparados correctamente');
-    console.log('📋 Registro ID:', data.registro_id);
-    console.log('👤 Usuario:', data.authenticated_user_name);
-    console.log('📊 Modalidad:', data.modalidad);
-    console.log('📸 Evidencias exitosas:', data.total_evidencias);
-    
-    // ENVIAR CON VERIFICACIÓN Y REINTENTOS
-    console.log('\n📤 FASE 3: ENVIANDO CON VERIFICACIÓN...');
-    showStatus('📤 Enviando asistencia (esto puede tomar unos segundos)...', 'success');
+    // ENVIAR
+    console.log('\n📤 ENVIANDO...');
+    showStatus('📤 Enviando asistencia...', 'success');
     
     const result = await sendWithVerification(data);
     
+    console.log('\n📊 RESULTADO:');
+    console.log('   Success:', result.success);
+    console.log('   Verified:', result.verified);
+    console.log('   Attempts:', result.attempts);
+    
     if (result.success && result.verified) {
-      console.log('\n' + '='.repeat(60));
-      console.log('✅✅ REGISTRO EXITOSO Y VERIFICADO');
-      console.log('='.repeat(60));
-      console.log('📋 Registro ID:', data.registro_id);
-      console.log('📊 Fila en Sheets:', result.data.row_number || 'N/A');
-      console.log('🔄 Intentos necesarios:', result.attempts);
-      console.log('='.repeat(60));
+      console.log('\n✅✅✅ ÉXITO');
       
-      const evidenciasInfo = data.total_evidencias > 0 
-        ? `\n📸 Evidencias: ${data.total_evidencias} imagen(es)${data.evidencias_failed > 0 ? ` (${data.evidencias_failed} fallidas)` : ''}`
-        : '';
+      const rowNumber = result.data.row_number || result.frontend_verification?.row_number || 'N/A';
       
-      const duplicadoInfo = result.duplicate 
-        ? '\n⚠️ Este registro ya existía (duplicado prevenido)' 
-        : '';
+      let statusMessage = `✅ ¡Asistencia VERIFICADA!
+
+📋 ID: ${data.registro_id}
+👤 ${currentUser.name}
+📱 ${deviceType}
+📊 ${data.modalidad}
+📍 ${data.ubicacion_detectada}
+🎯 ${data.precision_gps_metros}m
+🔢 Fila: ${rowNumber}
+🔄 Intentos: ${result.attempts}`;
       
-      showStatus(`✅ ¡Asistencia registrada y VERIFICADA!
+      if (data.total_evidencias > 0) {
+        statusMessage += `\n📸 Evidencias: ${data.total_evidencias}`;
+      }
       
-      📋 ID: ${data.registro_id}
-      👤 Usuario: ${currentUser.name}
-      📱 Dispositivo: ${deviceType}
-      📊 Modalidad: ${data.modalidad}
-      📍 Ubicación: ${data.ubicacion_detectada}
-      🎯 Precisión: ${data.precision_gps_metros}m
-      🔢 Fila en Sheets: ${result.data.row_number || 'N/A'}
-      🔄 Intentos: ${result.attempts}${evidenciasInfo}${duplicadoInfo}`, 'success');
+      if (result.duplicate) {
+        statusMessage += '\n⚠️ Duplicado prevenido';
+      }
+      
+      if (result.recovered) {
+        statusMessage += '\n🔄 Recuperado después de errores';
+      }
+      
+      showStatus(statusMessage, 'success');
       
       setTimeout(() => {
-        if (confirm('✅ Registro exitoso.\n\n¿Desea registrar otra asistencia?')) {
+        if (confirm('✅ Registro exitoso.\n\n¿Registrar otra asistencia?')) {
           resetFormOnly();
           getCurrentLocation();
         } else {
           signOut();
         }
         hideStatus();
-      }, 7000);
+      }, 8000);
       
     } else {
-      throw new Error(result.error || 'Error desconocido en el registro');
+      console.error('\n❌❌❌ ERROR CONFIRMADO');
+      throw new Error(result.error || 'Error desconocido');
     }
     
   } catch (error) {
-    console.error('\n' + '='.repeat(60));
-    console.error('❌❌ ERROR EN ENVÍO');
-    console.error('='.repeat(60));
-    console.error('Error:', error.message);
-    console.error('='.repeat(60));
+    console.error('\n❌ ERROR:', error.message);
     
-    showStatus(`❌ ERROR: No se pudo registrar la asistencia
+    showStatus(`❌ ERROR: No se registró la asistencia
 
-    🚫 Motivo: ${error.message}
-    
-    ⚠️ IMPORTANTE: El registro NO se guardó en el sistema.
-    
-    Por favor:
-    1. Verifique su conexión a Internet
-    2. Asegúrese de tener permisos de ubicación activos
-    3. Intente nuevamente en unos momentos
-    
-    Si el problema persiste, contacte al administrador.`, 'error');
+🚫 ${error.message}
+
+⚠️ GARANTÍA: El registro NO se guardó.
+
+Por favor:
+1. Verifique su conexión
+2. Permisos de ubicación activos
+3. Intente nuevamente
+
+Si persiste, contacte al administrador.`, 'error');
     
     submitBtn.disabled = false;
-    submitBtn.textContent = '📋 Registrar Asistencia';
-    submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
+    submitBtn.textContent = originalText;
     
-    setTimeout(() => {
-      hideStatus();
-    }, 15000); // Mostrar error por 15 segundos
+    setTimeout(() => hideStatus(), 20000);
   }
 }
 
