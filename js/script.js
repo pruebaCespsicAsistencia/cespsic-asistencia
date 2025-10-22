@@ -1366,9 +1366,9 @@ async function sendWithVerification(data, attempt = 1) {
 
 // ========== ENVIAR DATOS CON IFRAME (MEJORADO) ==========
 async function sendDataWithIframe(data) {
-  console.log('📨 Enviando con iframe...');
+  console.log('📨 Enviando con iframe (sin leer respuesta)...');
   
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
     iframe.name = 'response_frame_' + Date.now();
@@ -1393,98 +1393,31 @@ async function sendDataWithIframe(data) {
       form.appendChild(input);
     }
     
-    let responseReceived = false;
+    document.body.appendChild(iframe);
+    document.body.appendChild(form);
     
-    iframe.onload = function() {
-      if (responseReceived) return;
+    console.log('📮 Enviando formulario...');
+    form.submit();
+    
+    // Esperar 5 segundos y asumir que se envió
+    // NO intentamos leer el iframe por CORS
+    setTimeout(() => {
+      console.log('⏱️ 5 segundos transcurridos, asumiendo envío completado');
       
-      setTimeout(() => {
-        try {
-          const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-          let responseText = '';
-          
-          if (iframeDoc && iframeDoc.body) {
-            responseText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
-          }
-          
-          console.log('📄 Respuesta iframe (300 chars):', responseText.substring(0, 300));
-          
-          let responseData;
-          try {
-            responseData = JSON.parse(responseText);
-            console.log('✅ JSON parseado');
-            console.log('   - success:', responseData.success);
-            console.log('   - verified:', responseData.verified);
-            
-          } catch (parseError) {
-            console.warn('⚠️ No se pudo parsear JSON');
-            
-            responseData = {
-              success: true,
-              verified: false,
-              message: 'Respuesta no JSON',
-              needs_verification: true
-            };
-          }
-          
-          responseReceived = true;
-          cleanup();
-          resolve(responseData);
-          
-        } catch (error) {
-          console.warn('⚠️ Error leyendo iframe:', error);
-          responseReceived = true;
-          cleanup();
-          
-          resolve({
-            success: true,
-            verified: false,
-            message: 'Error leyendo respuesta',
-            needs_verification: true
-          });
-        }
-      }, 3000);
-    };
-    
-    iframe.onerror = function(error) {
-      if (responseReceived) return;
-      console.error('❌ Error en iframe:', error);
-      responseReceived = true;
-      cleanup();
-      
-      resolve({
-        success: false,
-        verified: false,
-        message: 'Error de red',
-        needs_verification: true
-      });
-    };
-    
-    const timeoutId = setTimeout(() => {
-      if (responseReceived) return;
-      console.warn('⏱️ Timeout en iframe');
-      responseReceived = true;
-      cleanup();
-      
-      resolve({
-        success: false,
-        verified: false,
-        message: 'Timeout - sin respuesta',
-        needs_verification: true
-      });
-    }, 15000);
-    
-    function cleanup() {
+      // Limpiar
       try {
-        clearTimeout(timeoutId);
         if (document.body.contains(iframe)) document.body.removeChild(iframe);
         if (document.body.contains(form)) document.body.removeChild(form);
       } catch (e) {}
-    }
-    
-    document.body.appendChild(iframe);
-    document.body.appendChild(form);
-    form.submit();
+      
+      // Retornar respuesta que requiere verificación
+      resolve({
+        success: true,
+        verified: false,
+        message: 'Datos enviados (verificación requerida)',
+        needs_verification: true
+      });
+    }, 5000);
   });
 }
 
@@ -1510,109 +1443,59 @@ async function verifyRegistro(registroID) {
 
 // ========== VERIFICAR CON IFRAME (FALLBACK) ==========
 async function verifyWithIframe(registroID) {
-  console.log('🔍 Verificando con iframe...');
+  console.log('🔍 Verificando con iframe GET...');
   
-  return new Promise((resolve, reject) => {
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.name = 'verify_frame_' + Date.now();
-    iframe.src = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}&_t=${Date.now()}`;
+  return new Promise((resolve) => {
+    // Crear un script tag en lugar de iframe para evitar CORS
+    const scriptId = 'verify_script_' + Date.now();
+    const callbackName = 'verifyCallback_' + Date.now().toString().substring(5);
     
-    let resolved = false;
-    
-    iframe.onload = function() {
-      setTimeout(() => {
-        if (resolved) return;
-        
-        try {
-          const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-          
-          if (!iframeDoc || !iframeDoc.body) {
-            throw new Error('No se pudo acceder al contenido del iframe');
-          }
-          
-          const responseText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
-          
-          console.log('📄 Respuesta verificación (100 chars):', responseText.substring(0, 100));
-          
-          if (!responseText || responseText.trim() === '') {
-            throw new Error('Respuesta vacía del servidor');
-          }
-          
-          let result;
-          try {
-            result = JSON.parse(responseText);
-          } catch (parseError) {
-            console.error('❌ Error parseando JSON:', parseError);
-            console.error('Respuesta completa:', responseText);
-            throw new Error('Respuesta no es JSON válido');
-          }
-          
-          console.log('✅ Verificación parseada:', result);
-          
-          resolved = true;
-          cleanup();
-          resolve(result);
-          
-        } catch (error) {
-          console.error('❌ Error en iframe:', error);
-          resolved = true;
-          cleanup();
-          
-          // Si falla, asumir que NO existe (por seguridad)
-          resolve({
-            success: false,
-            verified: false,
-            exists: false,
-            error: error.message,
-            iframe_error: true
-          });
-        }
-      }, 3000); // Esperar 3 segundos para que cargue
+    // Definir callback global temporal
+    window[callbackName] = function(result) {
+      console.log('✅ Callback recibido:', result);
+      cleanup();
+      resolve(result);
     };
     
-    iframe.onerror = function(error) {
-      if (resolved) return;
-      console.error('❌ Error cargando iframe:', error);
-      resolved = true;
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}&callback=${callbackName}&_t=${Date.now()}`;
+    
+    script.onerror = function(error) {
+      console.error('❌ Error cargando script de verificación');
       cleanup();
-      
       resolve({
         success: false,
         verified: false,
         exists: false,
-        error: 'Error cargando iframe de verificación',
-        network_error: true
+        error: 'Error de red en verificación'
       });
     };
     
     const timeoutId = setTimeout(() => {
-      if (resolved) return;
-      console.warn('⏱️ Timeout en verificación (15s)');
-      resolved = true;
+      console.warn('⏱️ Timeout en verificación (10s)');
       cleanup();
-      
       resolve({
         success: false,
         verified: false,
         exists: false,
-        error: 'Timeout en verificación',
-        timeout: true
+        error: 'Timeout en verificación'
       });
-    }, 15000); // 15 segundos
+    }, 10000);
     
     function cleanup() {
       try {
         clearTimeout(timeoutId);
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
+        const scriptElement = document.getElementById(scriptId);
+        if (scriptElement) document.body.removeChild(scriptElement);
+        delete window[callbackName];
       } catch (e) {
         console.warn('Error en cleanup:', e);
       }
     }
     
-    document.body.appendChild(iframe);
+    console.log('📡 Cargando script de verificación...');
+    document.body.appendChild(script);
   });
 }
 
