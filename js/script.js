@@ -1186,172 +1186,67 @@ async function sendWithVerification(data, attempt = 1) {
   console.log(`${'='.repeat(60)}`);
   
   try {
-    // PASO 1: Enviar datos con iframe
+    // PASO 1: Enviar datos
     console.log('📤 Enviando datos al backend...');
-    const sendResult = await sendDataWithIframe(data);
+    await sendDataWithIframe(data);
     
-    console.log('📥 Respuesta del backend:', JSON.stringify(sendResult, null, 2));
+    console.log('✅ Datos enviados, esperando 7 segundos antes de verificar...');
     
-    // PASO 2: Analizar respuesta del backend
-    if (sendResult.success) {
-      console.log('✅ Backend reporta éxito');
+    // PASO 2: Esperar más tiempo para que el backend procese
+    await sleep(7000);
+    
+    // PASO 3: Verificar múltiples veces
+    console.log('🔍 Iniciando verificación múltiple...');
+    
+    let verified = false;
+    let verifyAttempts = 0;
+    let lastResult = null;
+    
+    while (!verified && verifyAttempts < 5) {
+      verifyAttempts++;
+      console.log(`   Verificación ${verifyAttempts}/5...`);
       
-      // Si es duplicado prevenido, es éxito (idempotencia)
-      if (sendResult.duplicate_prevented) {
-        console.log('⚠️ Duplicado prevenido - registro ya existía');
-        console.log(`📊 Fila original: ${sendResult.row_number}`);
+      try {
+        const result = await verifyWithSimpleGet(data.registro_id);
+        lastResult = result;
         
-        return {
-          success: true,
-          verified: true,
-          duplicate: true,
-          data: sendResult,
-          attempts: attempt
-        };
-      }
-      
-      // Si backend dice que verificó, confiar en él
-      if (sendResult.verified === true) {
-        console.log('✅✅ Backend confirmó verificación');
-        console.log(`📊 Fila en Sheets: ${sendResult.row_number}`);
-        
-        // PASO 3: Verificación adicional del frontend (doble check)
-        console.log('🔍 Realizando verificación adicional del frontend...');
-        await sleep(2000);
-        
-        const frontendVerify = await verifyRegistro(data.registro_id);
-        
-        if (frontendVerify.success && frontendVerify.verified) {
-          console.log('✅✅✅ VERIFICACIÓN DOBLE EXITOSA');
-          console.log(`   - Backend: Fila ${sendResult.row_number}`);
-          console.log(`   - Frontend: Fila ${frontendVerify.row_number}`);
-          
-          if (sendResult.row_number !== frontendVerify.row_number) {
-            console.warn(`⚠️ Advertencia: Filas no coinciden`);
-          }
+        if (result.success && result.verified) {
+          console.log(`   ✅ Registro encontrado en fila ${result.row_number}`);
+          verified = true;
           
           return {
             success: true,
             verified: true,
-            double_verified: true,
-            data: sendResult,
-            frontend_verification: frontendVerify,
-            attempts: attempt
+            data: result,
+            attempts: attempt,
+            verify_attempts: verifyAttempts
           };
         } else {
-          console.warn('⚠️ Verificación frontend falló, pero backend dice que sí');
-          return {
-            success: true,
-            verified: true,
-            double_verified: false,
-            data: sendResult,
-            attempts: attempt,
-            warning: 'Backend verificó pero frontend no pudo confirmar'
-          };
+          console.log(`   ❌ No encontrado aún, esperando 2s...`);
+          await sleep(2000);
         }
-      }
-      
-      // Si backend dice éxito pero no tiene campo verified, verificar nosotros
-      console.log('🔍 Backend dice éxito pero sin campo verified, verificando...');
-      await sleep(2000);
-      
-      const verified = await verifyRegistro(data.registro_id);
-      
-      if (verified.success && verified.verified) {
-        console.log('✅✅ Verificación exitosa');
-        return {
-          success: true,
-          verified: true,
-          data: verified,
-          attempts: attempt
-        };
-      } else {
-        throw new Error('Backend reportó éxito pero verificación falló');
-      }
-      
-    } else if (sendResult.guaranteed_not_saved === true) {
-      console.error('❌ Backend garantiza que NO se guardó');
-      throw new Error(sendResult.message || 'Error confirmado por backend');
-      
-    } else {
-      // Error ambiguo, verificar si se guardó de todas formas
-      console.warn('⚠️ Respuesta ambigua del backend, verificando...');
-      await sleep(2000);
-      
-      const verified = await verifyRegistro(data.registro_id);
-      
-      if (verified.success && verified.verified) {
-        console.log('✅ Registro SÍ existe a pesar del error');
-        return {
-          success: true,
-          verified: true,
-          data: verified,
-          attempts: attempt,
-          warning: 'Hubo error de comunicación pero el registro se guardó'
-        };
-      } else {
-        throw new Error(sendResult.message || 'Error en envío');
+      } catch (verifyError) {
+        console.warn(`   ⚠️ Error en verificación ${verifyAttempts}:`, verifyError.message);
+        await sleep(2000);
       }
     }
+    
+    // Si después de 5 verificaciones no se encontró, considerar fallo
+    console.error('❌ Registro no verificado después de 5 intentos');
+    throw new Error('Registro no verificado en Sheets');
     
   } catch (error) {
     console.error(`❌ Error en intento ${attempt}:`, error.message);
     
-    // CRÍTICO: Antes de reintentar, verificar si ya se guardó
-    console.log('🔍 Verificando si registro ya existe antes de reintentar...');
-    
-    try {
-      const existingCheck = await verifyRegistro(data.registro_id);
-      
-      if (existingCheck.success && existingCheck.verified) {
-        console.log('✅✅ REGISTRO YA EXISTE (se guardó en intento anterior)');
-        console.log(`📊 Fila: ${existingCheck.row_number}`);
-        
-        return {
-          success: true,
-          verified: true,
-          data: existingCheck,
-          attempts: attempt,
-          recovered: true
-        };
-      }
-    } catch (verifyError) {
-      console.warn('⚠️ No se pudo verificar existencia:', verifyError.message);
-    }
-    
-    // Si no existe y no es el último intento, reintentar
+    // Si no es el último intento, reintentar
     if (attempt < MAX_ATTEMPTS) {
-      const waitTime = 3000 * attempt; // 3s, 6s, 9s
+      const waitTime = 3000 * attempt;
       console.log(`⏳ Esperando ${waitTime/1000}s antes de reintentar...`);
       await sleep(waitTime);
       
       return sendWithVerification(data, attempt + 1);
     } else {
       console.error('❌❌ TODOS LOS INTENTOS FALLARON');
-      
-      // VERIFICACIÓN FINAL
-      console.log('🔍 Verificación final post-fallos...');
-      
-      try {
-        await sleep(3000);
-        const finalCheck = await verifyRegistro(data.registro_id);
-        
-        if (finalCheck.success && finalCheck.verified) {
-          console.log('✅✅ REGISTRO ENCONTRADO EN VERIFICACIÓN FINAL');
-          
-          return {
-            success: true,
-            verified: true,
-            data: finalCheck,
-            attempts: attempt,
-            recovered: true
-          };
-        } else {
-          console.log('❌ Confirmado: Registro NO existe');
-        }
-      } catch (finalVerifyError) {
-        console.error('Error en verificación final:', finalVerifyError);
-      }
       
       return {
         success: false,
@@ -1362,6 +1257,106 @@ async function sendWithVerification(data, attempt = 1) {
       };
     }
   }
+}
+
+// ========== VERIFICACIÓN SIMPLE CON GET ==========
+async function verifyWithSimpleGet(registroID) {
+  return new Promise((resolve, reject) => {
+    const img = document.createElement('img');
+    img.style.display = 'none';
+    
+    const verifyUrl = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}&format=text&_t=${Date.now()}`;
+    
+    // Usar fetch con timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
+    fetch(verifyUrl, {
+      method: 'GET',
+      signal: controller.signal,
+      mode: 'no-cors', // Modo no-cors para evitar bloqueos
+      cache: 'no-cache'
+    })
+    .then(() => {
+      clearTimeout(timeoutId);
+      // En modo no-cors no podemos leer la respuesta
+      // Así que asumimos que se envió y verificamos de otra forma
+      
+      // Intentar verificación alternativa con script tag
+      return verifyWithScriptTag(registroID);
+    })
+    .then(result => {
+      resolve(result);
+    })
+    .catch(error => {
+      clearTimeout(timeoutId);
+      console.warn('Fetch falló, intentando con script tag:', error.message);
+      
+      // Fallback a script tag
+      verifyWithScriptTag(registroID)
+        .then(resolve)
+        .catch(reject);
+    });
+  });
+}
+
+async function verifyWithScriptTag(registroID) {
+  console.log('🔍 Verificando con script tag JSONP...');
+  
+  return new Promise((resolve) => {
+    const callbackName = 'verify_' + Date.now().toString().substring(5);
+    const scriptId = 'script_' + callbackName;
+    
+    // Timeout
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      console.warn('⏱️ Timeout en verificación JSONP');
+      resolve({
+        success: false,
+        verified: false,
+        exists: false,
+        error: 'Timeout en verificación',
+        timeout: true
+      });
+    }, 8000);
+    
+    // Callback global
+    window[callbackName] = function(result) {
+      clearTimeout(timeoutId);
+      console.log('✅ JSONP callback recibido:', result);
+      cleanup();
+      resolve(result);
+    };
+    
+    // Crear script
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.onerror = function() {
+      clearTimeout(timeoutId);
+      console.error('❌ Error cargando script JSONP');
+      cleanup();
+      resolve({
+        success: false,
+        verified: false,
+        exists: false,
+        error: 'Error de red en verificación'
+      });
+    };
+    
+    script.src = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}&callback=${callbackName}&_t=${Date.now()}`;
+    
+    function cleanup() {
+      try {
+        const scriptEl = document.getElementById(scriptId);
+        if (scriptEl && document.body.contains(scriptEl)) {
+          document.body.removeChild(scriptEl);
+        }
+        delete window[callbackName];
+      } catch (e) {}
+    }
+    
+    document.body.appendChild(script);
+  });
 }
 
 // ========== ENVIAR DATOS CON IFRAME (MEJORADO) ==========
@@ -1423,12 +1418,11 @@ async function sendDataWithIframe(data) {
 
 // ========== VERIFICAR REGISTRO EN SHEETS ==========
 async function verifyRegistro(registroID) {
-  console.log('🔍 Verificando registro con iframe:', registroID);
+  console.log('🔍 Verificando registro:', registroID);
   
-  // USAR SOLO IFRAME (sin fetch) para evitar problemas de CORS
+  // Intentar con script tag directamente
   try {
-    const result = await verifyWithIframe(registroID);
-    console.log('📊 Resultado verificación:', result);
+    const result = await verifyWithScriptTag(registroID);
     return result;
   } catch (error) {
     console.error('❌ Error en verificación:', error);
