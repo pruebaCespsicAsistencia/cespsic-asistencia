@@ -1490,79 +1490,126 @@ async function sendDataWithIframe(data) {
 
 // ========== VERIFICAR REGISTRO EN SHEETS ==========
 async function verifyRegistro(registroID) {
-  console.log('🔍 Verificando registro:', registroID);
+  console.log('🔍 Verificando registro con iframe:', registroID);
   
+  // USAR SOLO IFRAME (sin fetch) para evitar problemas de CORS
   try {
-    const verifyUrl = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}&_t=${Date.now()}`;
-    
-    const response = await fetch(verifyUrl, {
-      method: 'GET',
-      mode: 'cors',
-      cache: 'no-cache'
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    
-    const result = await response.json();
+    const result = await verifyWithIframe(registroID);
     console.log('📊 Resultado verificación:', result);
     return result;
-    
   } catch (error) {
-    console.error('❌ Error fetch:', error);
-    
-    try {
-      console.log('🔄 Reintentando con iframe...');
-      return await verifyWithIframe(registroID);
-    } catch (iframeError) {
-      return {
-        success: false,
-        verified: false,
-        exists: false,
-        error: error.message
-      };
-    }
+    console.error('❌ Error en verificación:', error);
+    return {
+      success: false,
+      verified: false,
+      exists: false,
+      error: error.message
+    };
   }
 }
 
 // ========== VERIFICAR CON IFRAME (FALLBACK) ==========
 async function verifyWithIframe(registroID) {
+  console.log('🔍 Verificando con iframe...');
+  
   return new Promise((resolve, reject) => {
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
+    iframe.name = 'verify_frame_' + Date.now();
     iframe.src = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}&_t=${Date.now()}`;
     
     let resolved = false;
     
     iframe.onload = function() {
       setTimeout(() => {
+        if (resolved) return;
+        
         try {
           const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+          
+          if (!iframeDoc || !iframeDoc.body) {
+            throw new Error('No se pudo acceder al contenido del iframe');
+          }
+          
           const responseText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
-          const result = JSON.parse(responseText);
+          
+          console.log('📄 Respuesta verificación (100 chars):', responseText.substring(0, 100));
+          
+          if (!responseText || responseText.trim() === '') {
+            throw new Error('Respuesta vacía del servidor');
+          }
+          
+          let result;
+          try {
+            result = JSON.parse(responseText);
+          } catch (parseError) {
+            console.error('❌ Error parseando JSON:', parseError);
+            console.error('Respuesta completa:', responseText);
+            throw new Error('Respuesta no es JSON válido');
+          }
+          
+          console.log('✅ Verificación parseada:', result);
+          
           resolved = true;
           cleanup();
           resolve(result);
+          
         } catch (error) {
+          console.error('❌ Error en iframe:', error);
           resolved = true;
           cleanup();
-          reject(new Error('Error parseando verificación'));
+          
+          // Si falla, asumir que NO existe (por seguridad)
+          resolve({
+            success: false,
+            verified: false,
+            exists: false,
+            error: error.message,
+            iframe_error: true
+          });
         }
-      }, 2000);
+      }, 3000); // Esperar 3 segundos para que cargue
+    };
+    
+    iframe.onerror = function(error) {
+      if (resolved) return;
+      console.error('❌ Error cargando iframe:', error);
+      resolved = true;
+      cleanup();
+      
+      resolve({
+        success: false,
+        verified: false,
+        exists: false,
+        error: 'Error cargando iframe de verificación',
+        network_error: true
+      });
     };
     
     const timeoutId = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        cleanup();
-        reject(new Error('Timeout en verificación'));
-      }
-    }, 10000);
+      if (resolved) return;
+      console.warn('⏱️ Timeout en verificación (15s)');
+      resolved = true;
+      cleanup();
+      
+      resolve({
+        success: false,
+        verified: false,
+        exists: false,
+        error: 'Timeout en verificación',
+        timeout: true
+      });
+    }, 15000); // 15 segundos
     
     function cleanup() {
-      clearTimeout(timeoutId);
-      if (document.body.contains(iframe)) document.body.removeChild(iframe);
+      try {
+        clearTimeout(timeoutId);
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      } catch (e) {
+        console.warn('Error en cleanup:', e);
+      }
     }
     
     document.body.appendChild(iframe);
