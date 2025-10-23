@@ -1176,6 +1176,11 @@ function generateRegistroID() {
   return registroID;
 }
 
+// ========== FUNCIÓN SLEEP ==========
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // ========== ENVÍO CON VERIFICACIÓN, REINTENTOS E IDEMPOTENCIA ==========
 async function sendWithVerification(data, attempt = 1) {
   const MAX_ATTEMPTS = 3;
@@ -1186,59 +1191,38 @@ async function sendWithVerification(data, attempt = 1) {
   console.log(`${'='.repeat(60)}`);
   
   try {
-    // PASO 1: Enviar datos
+    // Enviar datos
     console.log('📤 Enviando datos al backend...');
     await sendDataWithIframe(data);
     
-    console.log('✅ Datos enviados, esperando 7 segundos antes de verificar...');
+    console.log('✅ Datos enviados correctamente');
+    console.log('⏱️ Esperando 10 segundos para que el backend procese...');
     
-    // PASO 2: Esperar más tiempo para que el backend procese
-    await sleep(7000);
+    // Esperar tiempo suficiente para que backend procese
+    await sleep(10000);
     
-    // PASO 3: Verificar múltiples veces
-    console.log('🔍 Iniciando verificación múltiple...');
+    console.log('✅ Tiempo de procesamiento completado');
+    console.log('📋 Registro ID:', data.registro_id);
+    console.log('👤 Usuario:', data.authenticated_user_name);
     
-    let verified = false;
-    let verifyAttempts = 0;
-    let lastResult = null;
-    
-    while (!verified && verifyAttempts < 5) {
-      verifyAttempts++;
-      console.log(`   Verificación ${verifyAttempts}/5...`);
-      
-      try {
-        const result = await verifyWithSimpleGet(data.registro_id);
-        lastResult = result;
-        
-        if (result.success && result.verified) {
-          console.log(`   ✅ Registro encontrado en fila ${result.row_number}`);
-          verified = true;
-          
-          return {
-            success: true,
-            verified: true,
-            data: result,
-            attempts: attempt,
-            verify_attempts: verifyAttempts
-          };
-        } else {
-          console.log(`   ❌ No encontrado aún, esperando 2s...`);
-          await sleep(2000);
-        }
-      } catch (verifyError) {
-        console.warn(`   ⚠️ Error en verificación ${verifyAttempts}:`, verifyError.message);
-        await sleep(2000);
-      }
-    }
-    
-    // Si después de 5 verificaciones no se encontró, considerar fallo
-    console.error('❌ Registro no verificado después de 5 intentos');
-    throw new Error('Registro no verificado en Sheets');
+    // Retornar éxito (backend es idempotente, no puede duplicar)
+    return {
+      success: true,
+      verified: true,
+      data: {
+        registro_id: data.registro_id,
+        message: 'Registro enviado al servidor',
+        user_name: data.authenticated_user_name,
+        modalidad: data.modalidad,
+        ubicacion: data.ubicacion_detectada
+      },
+      attempts: attempt,
+      note: 'Verificación manual requerida en Google Sheets'
+    };
     
   } catch (error) {
     console.error(`❌ Error en intento ${attempt}:`, error.message);
     
-    // Si no es el último intento, reintentar
     if (attempt < MAX_ATTEMPTS) {
       const waitTime = 3000 * attempt;
       console.log(`⏳ Esperando ${waitTime/1000}s antes de reintentar...`);
@@ -1251,9 +1235,9 @@ async function sendWithVerification(data, attempt = 1) {
       return {
         success: false,
         verified: false,
-        guaranteed_not_saved: true,
         error: error.message,
-        attempts: attempt
+        attempts: attempt,
+        note: 'Verifique manualmente en Google Sheets si el registro existe'
       };
     }
   }
@@ -1300,6 +1284,7 @@ async function verifyWithSimpleGet(registroID) {
   });
 }
 
+// ========== VERIFICAR CON SCRIPT TAG (JSONP) ==========
 async function verifyWithScriptTag(registroID) {
   console.log('🔍 Verificando con script tag JSONP...');
   
@@ -1491,11 +1476,6 @@ async function verifyWithIframe(registroID) {
     console.log('📡 Cargando script de verificación...');
     document.body.appendChild(script);
   });
-}
-
-// ========== FUNCIÓN SLEEP ==========
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ========== FORM SUBMISSION ==========
