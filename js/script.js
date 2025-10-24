@@ -31,6 +31,10 @@ const MAX_FILES = 5;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PRIVACY_VERSION = '1.0';
+// *** FIX: Aumentar tiempos de espera para verificación ***
+const TIEMPO_ESPERA_INICIAL = 12000; // Aumentado de 8s a 12s
+const TIEMPO_ENTRE_VERIFICACIONES = [3000, 4000, 5000, 6000, 7000]; // Tiempos progresivos
+const VERIFICATION_ATTEMPTS = 5; // Mantener 5 intentos
 
 //PRODUCCION
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyllBO0vTORygvLlbTeRWfNXz1_Dt1khrM2z_BUxbNM6jWqEGYDqaLnd7LJs9Fl9Q9X/exec';
@@ -79,19 +83,19 @@ function getDeviceType() {
 }
 
 function getDeviceInfo() {
-    return {
-        type: deviceType,
-        isDesktop: isDesktop,
-        isMobile: !isDesktop,
-        isIOS: isIOS,
-        isSafari: isSafari,
-        userAgent: navigator.userAgent,
-        screenWidth: window.screen.width,
-        screenHeight: window.screen.height,
-        touchPoints: navigator.maxTouchPoints || 0,
-        requiredAccuracy: REQUIRED_ACCURACY,
-        optimalAccuracy: REQUIRED_ACCURACY_OPTIMAL
-    };
+  return {
+    type: deviceType,
+    isDesktop: isDesktop,
+    isMobile: !isDesktop,
+    isIOS: isIOS,
+    isSafari: isSafari,
+    userAgent: navigator.userAgent,
+    screenWidth: window.screen.width,
+    screenHeight: window.screen.height,
+    touchPoints: navigator.maxTouchPoints || 0,
+    requiredAccuracy: REQUIRED_ACCURACY,
+    optimalAccuracy: REQUIRED_ACCURACY_OPTIMAL
+  };
 }
 
 // Inicializar aplicación
@@ -1091,11 +1095,11 @@ function generateEvidenciaFileName(tipoRegistro, index) {
 }
 
 function generateStudentFolderName() {
-    const apellidoPaterno = document.getElementById('apellido_paterno').value || 'Sin_Apellido';
-    const apellidoMaterno = document.getElementById('apellido_materno').value || 'Sin_Apellido';
-    const nombre = document.getElementById('nombre').value || 'Sin_Nombre';
-    
-    return `${apellidoPaterno}_${apellidoMaterno}_${nombre}`.replace(/[^a-zA-Z0-9_]/g, '');
+  const apellidoPaterno = document.getElementById('apellido_paterno').value || 'Sin_Apellido';
+  const apellidoMaterno = document.getElementById('apellido_materno').value || 'Sin_Apellido';
+  const nombre = document.getElementById('nombre').value || 'Sin_Nombre';
+  
+  return `${apellidoPaterno}_${apellidoMaterno}_${nombre}`.replace(/[^a-zA-Z0-9_]/g, '');
 }
 
 function fileToBase64(file) {
@@ -1184,7 +1188,6 @@ function sleep(ms) {
 // ========== ENVÍO CON VERIFICACIÓN, REINTENTOS E IDEMPOTENCIA ==========
 async function sendWithVerification(data, attempt = 1) {
   const MAX_ATTEMPTS = 3;
-  const VERIFICATION_ATTEMPTS = 5; // Intentos de verificación
   
   console.log(`\n${'='.repeat(60)}`);
   console.log(`🚀 INTENTO ${attempt}/${MAX_ATTEMPTS}`);
@@ -1218,8 +1221,10 @@ async function sendWithVerification(data, attempt = 1) {
     await sendDataWithIframe(data);
     
     console.log('✅ Formulario enviado al servidor');
-    console.log('⏱️ Esperando 8 segundos para procesamiento inicial...');
-    await sleep(8000);
+    
+    // ⭐⭐⭐ FIX: Aumentar tiempo de espera inicial de 8s a 12s ⭐⭐⭐
+    console.log(`⏱️ Esperando ${TIEMPO_ESPERA_INICIAL/1000}s para procesamiento inicial...`);
+    await sleep(TIEMPO_ESPERA_INICIAL);
     
     // ========== PASO 3: VERIFICACIÓN REAL CON REINTENTOS ==========
     console.log(`\n🔍 INICIANDO VERIFICACIÓN (${VERIFICATION_ATTEMPTS} intentos)...`);
@@ -1247,7 +1252,8 @@ async function sendWithVerification(data, attempt = 1) {
           console.log(`⏳ Registro aún no encontrado (intento ${v}/${VERIFICATION_ATTEMPTS})`);
           
           if (v < VERIFICATION_ATTEMPTS) {
-            const waitTime = 3000 + (v * 1000); // 3s, 4s, 5s, 6s, 7s
+            // ⭐⭐⭐ FIX: Usar tiempos progresivos en lugar de fijos ⭐⭐⭐
+            const waitTime = TIEMPO_ENTRE_VERIFICACIONES[v - 1] || 5000;
             console.log(`⏱️ Esperando ${waitTime/1000}s antes de verificar nuevamente...`);
             await sleep(waitTime);
           }
@@ -1275,22 +1281,53 @@ async function sendWithVerification(data, attempt = 1) {
           message: 'Registro guardado y verificado exitosamente',
           user_name: data.authenticated_user_name,
           modalidad: data.modalidad,
-          ubicacion: data.ubicacion_detectada
+          ubicacion: data.ubicacion_detectada,
+          search_method: verificationResult.search_method || 'unknown'
         },
         attempts: attempt,
         verification_attempts: VERIFICATION_ATTEMPTS
       };
     } else {
-      // NO SE PUDO VERIFICAR - Puede estar guardado pero no confirmado
+      // NO SE PUDO VERIFICAR
       console.warn('\n⚠️⚠️ NO SE PUDO VERIFICAR EL REGISTRO');
       console.warn('Posibles causas:');
       console.warn('1. Registro guardado pero verificación falló por tiempo');
       console.warn('2. Error en backend que impidió guardar');
       console.warn('3. Problema de red durante verificación');
       
+      // ⭐⭐⭐ FIX: Verificación exhaustiva final antes de reintentar ⭐⭐⭐
+      if (attempt === MAX_ATTEMPTS) {
+        console.log('\n🔍 VERIFICACIÓN EXHAUSTIVA FINAL (último intento)...');
+        await sleep(5000); // Esperar 5s adicionales
+        
+        const verificacionFinal = await verifyWithScriptTag(data.registro_id);
+        
+        if (verificacionFinal.success && verificacionFinal.verified && verificacionFinal.exists) {
+          console.log('✅✅ ENCONTRADO EN VERIFICACIÓN FINAL');
+          return {
+            success: true,
+            verified: true,
+            exists: true,
+            data: {
+              registro_id: data.registro_id,
+              row_number: verificacionFinal.row_number,
+              timestamp: verificacionFinal.timestamp,
+              message: 'Registro verificado en intento final',
+              user_name: data.authenticated_user_name,
+              modalidad: data.modalidad,
+              ubicacion: data.ubicacion_detectada,
+              search_method: verificacionFinal.search_method || 'final_check'
+            },
+            attempts: attempt,
+            verification_attempts: VERIFICATION_ATTEMPTS,
+            found_in_final_check: true
+          };
+        }
+      }
+      
       // Reintentar envío completo si aún tenemos intentos
       if (attempt < MAX_ATTEMPTS) {
-        const waitTime = 5000 * attempt;
+        const waitTime = 8000 * attempt; // 8s, 16s
         console.log(`\n🔄 Reintentando envío completo (${attempt + 1}/${MAX_ATTEMPTS})...`);
         console.log(`⏳ Esperando ${waitTime/1000}s...`);
         await sleep(waitTime);
@@ -1351,7 +1388,7 @@ async function verifyWithSimpleGet(registroID) {
       // Así que asumimos que se envió y verificamos de otra forma
       
       // Intentar verificación alternativa con script tag
-      return verifyWithScriptTag(registroID);
+      return (registroID);
     })
     .then(result => {
       resolve(result);
@@ -1361,7 +1398,7 @@ async function verifyWithSimpleGet(registroID) {
       console.warn('Fetch falló, intentando con script tag:', error.message);
       
       // Fallback a script tag
-      verifyWithScriptTag(registroID)
+      (registroID)
         .then(resolve)
         .catch(reject);
     });
@@ -1376,10 +1413,10 @@ async function verifyWithScriptTag(registroID) {
     const callbackName = 'verify_' + Date.now().toString().substring(5);
     const scriptId = 'script_' + callbackName;
     
-    // Timeout
+    // ⭐⭐⭐ FIX: Aumentar timeout de 8s a 15s ⭐⭐⭐
     const timeoutId = setTimeout(() => {
       cleanup();
-      console.warn('⏱️ Timeout en verificación JSONP');
+      console.warn('⏱️ Timeout en verificación JSONP (15s)');
       resolve({
         success: false,
         verified: false,
@@ -1387,7 +1424,7 @@ async function verifyWithScriptTag(registroID) {
         error: 'Timeout en verificación',
         timeout: true
       });
-    }, 8000);
+    }, 15000); // Aumentado de 8000 a 15000
     
     // Callback global
     window[callbackName] = function(result) {
@@ -1567,7 +1604,7 @@ async function handleSubmit(e) {
   e.preventDefault();
   
   console.log('\n' + '='.repeat(70));
-  console.log('🚀 INICIANDO ENVÍO (MODO IDEMPOTENTE)');
+  console.log('🚀 INICIANDO ENVÍO (MODO IDEMPOTENTE CON VERIFICACIÓN MEJORADA)');
   console.log('='.repeat(70));
   
   // ========== VALIDACIONES INICIALES ==========
@@ -1603,7 +1640,7 @@ async function handleSubmit(e) {
     console.log('📋 ID:', registroID);
     console.log('👤 Usuario:', currentUser.name);
     console.log('📱 Dispositivo:', deviceType);
-    console.log('📍 GPS:', Math.round(currentLocation.accuracy) + 'm');
+    console.log('🎯 GPS:', Math.round(currentLocation.accuracy) + 'm');
     
     // ========== SUBIR EVIDENCIAS (SI EXISTEN) ==========
     let evidenciasUrls = [];
@@ -1703,8 +1740,8 @@ async function handleSubmit(e) {
     console.log('🎯 Precisión:', data.precision_gps_metros + 'm');
     
     // ========== ENVIAR CON VERIFICACIÓN ==========
-    console.log('\n📤 ENVIANDO CON VERIFICACIÓN...');
-    showStatus('📤 Enviando asistencia...', 'success');
+    console.log('\n📤 ENVIANDO CON VERIFICACIÓN MEJORADA...');
+    showStatus('📤 Enviando asistencia (esto puede tomar hasta 60 segundos)...', 'success');
     
     const result = await sendWithVerification(data);
     
@@ -1716,13 +1753,15 @@ async function handleSubmit(e) {
     
     // ========== MANEJO DE RESULTADOS (MEJORADO) ==========
     
-    // CASO 1: ✅ ÉXITO VERIFICADO - Registro confirmado en Google Sheets
+    // ⭐ CASO 1: ✅ ÉXITO VERIFICADO - Registro confirmado en Google Sheets
     if (result.success && result.verified && result.exists) {
       console.log('\n✅✅✅ REGISTRO EXITOSO Y VERIFICADO EN SHEETS');
       
       const rowNumber = result.data?.row_number || 'N/A';
+      const searchMethod = result.data?.search_method || 'unknown';
+      const foundInFinal = result.found_in_final_check ? '(encontrado en verificación final)' : '';
       
-      let statusMessage = `✅ ¡Asistencia VERIFICADA en Google Sheets!
+      let statusMessage = `✅ ¡Asistencia VERIFICADA en Google Sheets! ${foundInFinal}
 
 📋 Registro ID: ${data.registro_id}
 👤 Usuario: ${currentUser.name}
@@ -1731,7 +1770,8 @@ async function handleSubmit(e) {
 📍 Ubicación: ${data.ubicacion_detectada}
 🎯 Precisión GPS: ${data.precision_gps_metros}m
 📢 Fila en Sheets: ${rowNumber}
-🔄 Intentos usados: ${result.attempts}/${result.verification_attempts || 5}`;
+🔄 Intentos usados: ${result.attempts}/${result.verification_attempts || 5}
+🔍 Método búsqueda: ${searchMethod}`;
       
       if (data.total_evidencias > 0) {
         statusMessage += `\n📸 Evidencias subidas: ${data.total_evidencias}`;
@@ -1759,7 +1799,7 @@ async function handleSubmit(e) {
       }, 8000);
       
     } 
-    // CASO 2: ⚠️ INCONSISTENCIA - Dice verificado pero no existe (no debería pasar)
+    // ⭐ CASO 2: ⚠️ INCONSISTENCIA - Dice verificado pero no existe (no debería pasar)
     else if (result.success && result.verified && !result.exists) {
       console.error('\n⚠️⚠️ INCONSISTENCIA DETECTADA');
       console.error('El sistema reportó éxito pero la verificación indica que NO existe');
@@ -1773,7 +1813,7 @@ El sistema procesó su solicitud pero no puede confirmar que el registro existe 
 👤 Usuario: ${currentUser.name}
 🔄 Intentos realizados: ${result.attempts}
 
-❗ ACCIÓN REQUERIDA:
+⚠️ ACCIÓN REQUERIDA:
 1. Capture una captura de pantalla de esta página
 2. Abra Google Sheets manualmente
 3. Busque el Registro ID: ${data.registro_id}
@@ -1789,29 +1829,37 @@ El sistema procesó su solicitud pero no puede confirmar que el registro existe 
       setTimeout(() => hideStatus(), 30000); // Mostrar por 30 segundos
       
     }
-    // CASO 3: ❌ ERROR CONFIRMADO - No se pudo guardar
+    // ⭐ CASO 3: ❌ ERROR CONFIRMADO - No se pudo guardar O no se pudo verificar
     else {
-      console.error('\n❌❌❌ ERROR CONFIRMADO - REGISTRO NO GUARDADO');
+      console.error('\n❌❌❌ ERROR - REGISTRO NO VERIFICADO');
       console.error('Registro ID intentado:', data.registro_id);
       console.error('Error:', result.error || 'Error desconocido');
       console.error('Attempts:', result.attempts);
       
       const errorDetail = result.error || 'Error desconocido durante el envío';
       
-      showStatus(`❌ ERROR: No se pudo guardar la asistencia
+      showStatus(`❌ ERROR: No se pudo verificar la asistencia
 
 🚫 Motivo: ${errorDetail}
 
-⚠️ GARANTÍA: El registro NO se guardó en Google Sheets.
+⚠️ IMPORTANTE: 
+Por favor, VERIFIQUE MANUALMENTE en Google Sheets si el registro existe.
 
-📋 ID intentado: ${data.registro_id}
+📋 Registro ID: ${data.registro_id}
 🔄 Intentos realizados: ${result.attempts || 1}
+⏱️ Tiempo total: ~${(result.attempts || 1) * 30}s
+
+🔍 VERIFICACIÓN MANUAL:
+1. Abra Google Sheets
+2. Busque (Ctrl+F) el ID: ${data.registro_id}
+3. Si EXISTE: Ignore este mensaje, el registro SÍ se guardó
+4. Si NO EXISTE: Intente registrar nuevamente
 
 Por favor, verifique:
-1. Su conexión a Internet está activa
-2. Los permisos de ubicación están habilitados
-3. Tiene espacio disponible en su cuenta Google
-4. No hay problemas con su red (firewall, proxy)
+• Su conexión a Internet está activa
+• Los permisos de ubicación están habilitados
+• Tiene espacio disponible en su cuenta Google
+• No hay problemas con su red (firewall, proxy)
 
 📝 QUÉ HACER:
 • Intente registrar nuevamente
@@ -1825,7 +1873,7 @@ Por favor, verifique:
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
       
-      setTimeout(() => hideStatus(), 30000); // Mostrar por 30 segundos
+      setTimeout(() => hideStatus(), 45000); // Mostrar por 45 segundos
     }
     
   } catch (error) {
@@ -1902,99 +1950,99 @@ Si el problema persiste:
 }
 
 function resetFormOnly() {
-    document.getElementById('attendanceForm').reset();
-    initializeForm();
-    
-    document.querySelectorAll('.conditional-field').forEach(field => {
-        field.classList.remove('show');
-    });
-    
-    document.getElementById('evidencias_section').style.display = 'none';
-    resetEvidenciasSection();
-    
-    document.getElementById('ubicacion_detectada').value = 'Obteniendo ubicación...';
-    document.getElementById('direccion_completa').value = 'Consultando dirección...';
-    document.getElementById('precision_gps').value = 'Calculando...';
-    
-    ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
-        document.getElementById(id).className = 'location-field';
-    });
-    
-    document.getElementById('retry_location_btn').style.display = 'none';
-    
-    document.getElementById('email').value = currentUser.email;
-    document.getElementById('google_user_id').value = currentUser.id;
-    
-    locationValid = false;
-    locationAttempts = 0;
-    updateLocationStatus('loading', 'Obteniendo nueva ubicación GPS...', '');
-    updateSubmitButton();
+  document.getElementById('attendanceForm').reset();
+  initializeForm();
+  
+  document.querySelectorAll('.conditional-field').forEach(field => {
+    field.classList.remove('show');
+  });
+  
+  document.getElementById('evidencias_section').style.display = 'none';
+  resetEvidenciasSection();
+  
+  document.getElementById('ubicacion_detectada').value = 'Obteniendo ubicación...';
+  document.getElementById('direccion_completa').value = 'Consultando dirección...';
+  document.getElementById('precision_gps').value = 'Calculando...';
+  
+  ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
+    document.getElementById(id).className = 'location-field';
+  });
+  
+  document.getElementById('retry_location_btn').style.display = 'none';
+  
+  document.getElementById('email').value = currentUser.email;
+  document.getElementById('google_user_id').value = currentUser.id;
+  
+  locationValid = false;
+  locationAttempts = 0;
+  updateLocationStatus('loading', 'Obteniendo nueva ubicación GPS...', '');
+  updateSubmitButton();
 }
 
 function validateConditionalFields() {
-    const tipoRegistro = document.getElementById('tipo_registro');
-    const permisoDetalle = document.getElementById('permiso_detalle');
-    const otroDetalle = document.getElementById('otro_detalle');
+  const tipoRegistro = document.getElementById('tipo_registro');
+  const permisoDetalle = document.getElementById('permiso_detalle');
+  const otroDetalle = document.getElementById('otro_detalle');
+  
+  if (tipoRegistro.value === 'permiso' && !permisoDetalle.value.trim()) {
+    showStatus('Especifique el motivo del permiso.', 'error');
+    permisoDetalle.focus();
+    return false;
+  }
+  
+  if (tipoRegistro.value === 'otro' && !otroDetalle.value.trim()) {
+    showStatus('Especifique el tipo de registro.', 'error');
+    otroDetalle.focus();
+    return false;
+  }
+  
+  const actividadesVarias = document.getElementById('actividades_varias');
+  const actividadesVariasTexto = document.getElementById('actividades_varias_texto');
+  
+  if (actividadesVarias.checked && !actividadesVariasTexto.value.trim()) {
+    showStatus('Describa las actividades varias realizadas.', 'error');
+    actividadesVariasTexto.focus();
+    return false;
+  }
+  
+  const pruebasPsicologicas = document.getElementById('pruebas_psicologicas');
+  const pruebasPsicologicasTexto = document.getElementById('pruebas_psicologicas_texto');
+  
+  if (pruebasPsicologicas.checked && !pruebasPsicologicasTexto.value.trim()) {
+    showStatus('Especifique qué pruebas psicológicas aplicó.', 'error');
+    pruebasPsicologicasTexto.focus();
+    return false;
+  }
+  
+  const intervenciones = parseInt(document.getElementById('intervenciones_psicologicas').value) || 0;
+  
+  if (intervenciones > 0) {
+    const ninos = parseInt(document.getElementById('ninos_ninas').value) || 0;
+    const adolescentes = parseInt(document.getElementById('adolescentes').value) || 0;
+    const adultos = parseInt(document.getElementById('adultos').value) || 0;
+    const mayores = parseInt(document.getElementById('mayores_60').value) || 0;
+    const familia = parseInt(document.getElementById('familia').value) || 0;
     
-    if (tipoRegistro.value === 'permiso' && !permisoDetalle.value.trim()) {
-        showStatus('Especifique el motivo del permiso.', 'error');
-        permisoDetalle.focus();
-        return false;
+    const sumaGrupos = ninos + adolescentes + adultos + mayores + familia;
+    
+    if (sumaGrupos !== intervenciones) {
+      showStatus(`Error: Total intervenciones (${intervenciones}) ≠ suma grupos (${sumaGrupos})`, 'error');
+      return false;
     }
-    
-    if (tipoRegistro.value === 'otro' && !otroDetalle.value.trim()) {
-        showStatus('Especifique el tipo de registro.', 'error');
-        otroDetalle.focus();
-        return false;
-    }
-    
-    const actividadesVarias = document.getElementById('actividades_varias');
-    const actividadesVariasTexto = document.getElementById('actividades_varias_texto');
-    
-    if (actividadesVarias.checked && !actividadesVariasTexto.value.trim()) {
-        showStatus('Describa las actividades varias realizadas.', 'error');
-        actividadesVariasTexto.focus();
-        return false;
-    }
-    
-    const pruebasPsicologicas = document.getElementById('pruebas_psicologicas');
-    const pruebasPsicologicasTexto = document.getElementById('pruebas_psicologicas_texto');
-    
-    if (pruebasPsicologicas.checked && !pruebasPsicologicasTexto.value.trim()) {
-        showStatus('Especifique qué pruebas psicológicas aplicó.', 'error');
-        pruebasPsicologicasTexto.focus();
-        return false;
-    }
-    
-    const intervenciones = parseInt(document.getElementById('intervenciones_psicologicas').value) || 0;
-    
-    if (intervenciones > 0) {
-        const ninos = parseInt(document.getElementById('ninos_ninas').value) || 0;
-        const adolescentes = parseInt(document.getElementById('adolescentes').value) || 0;
-        const adultos = parseInt(document.getElementById('adultos').value) || 0;
-        const mayores = parseInt(document.getElementById('mayores_60').value) || 0;
-        const familia = parseInt(document.getElementById('familia').value) || 0;
-        
-        const sumaGrupos = ninos + adolescentes + adultos + mayores + familia;
-        
-        if (sumaGrupos !== intervenciones) {
-            showStatus(`Error: Total intervenciones (${intervenciones}) ≠ suma grupos (${sumaGrupos})`, 'error');
-            return false;
-        }
-    }
-    
-    return true;
+  }
+  
+  return true;
 }
 
 function showStatus(message, type) {
-    const status = document.getElementById('status');
-    status.innerHTML = message;
-    status.className = `status ${type}`;
-    status.style.display = 'block';
+  const status = document.getElementById('status');
+  status.innerHTML = message;
+  status.className = `status ${type}`;
+  status.style.display = 'block';
 }
 
 function hideStatus() {
-    document.getElementById('status').style.display = 'none';
+  document.getElementById('status').style.display = 'none';
 }
 
 // ========== LOCATION ==========
