@@ -377,22 +377,22 @@ async function recordPrivacyAction(action) {
 
 // ========== GOOGLE SIGN-IN ==========
 function initializeForm() {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const fechaLocal = `${year}-${month}-${day}`;
-    
-    document.getElementById('fecha').value = fechaLocal;
-    updateCurrentTime();
-    document.getElementById('timestamp').value = new Date().toISOString();
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  const fechaLocal = `${year}-${month}-${day}`;
+  
+  document.getElementById('fecha').value = fechaLocal;
+  updateCurrentTime();
+  document.getElementById('timestamp').value = new Date().toISOString();
 }
 
 function updateCurrentTime() {
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    document.getElementById('hora').value = `${hours}:${minutes}`;	
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  document.getElementById('hora').value = `${hours}:${minutes}`;	
 }
 
 function loadGoogleSignInScript() {
@@ -418,20 +418,20 @@ function blockGooglePrompts() {
 }
 
 function initializeGoogleSignIn() {
-    try {
-        google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: handleCredentialResponse,
-            auto_select: false,
-            cancel_on_tap_outside: true,
-            ux_mode: 'popup'
-        });
-        google.accounts.id.disableAutoSelect();
-        google.accounts.id.cancel();
-    } catch (error) {
-        console.error('Error inicializando Google Sign-In:', error);
-        showStatus('Error cargando sistema de autenticación.', 'error');
-    }
+  try {
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleCredentialResponse,
+      auto_select: false,
+      cancel_on_tap_outside: true,
+      ux_mode: 'popup'
+    });
+    google.accounts.id.disableAutoSelect();
+    google.accounts.id.cancel();
+  } catch (error) {
+    console.error('Error inicializando Google Sign-In:', error);
+    showStatus('Error cargando sistema de autenticación.', 'error');
+  }
 }
 
 function proceedWithGoogleSignIn() {
@@ -656,28 +656,28 @@ function parseJwt(token) {
 }
 
 function updateAuthenticationUI() {
-    const authSection = document.getElementById('auth-section');
-    const authTitle = document.getElementById('auth-title');
-    const userInfo = document.getElementById('user-info');
-    const signinContainer = document.getElementById('signin-button-container');
+  const authSection = document.getElementById('auth-section');
+  const authTitle = document.getElementById('auth-title');
+  const userInfo = document.getElementById('user-info');
+  const signinContainer = document.getElementById('signin-button-container');
 
-    if (isAuthenticated && currentUser) {
-        authSection.classList.add('authenticated');
-        authTitle.textContent = '✅ Autenticación Exitosa';
-        authTitle.classList.add('authenticated');
+  if (isAuthenticated && currentUser) {
+    authSection.classList.add('authenticated');
+    authTitle.textContent = '✅ Autenticación Exitosa';
+    authTitle.classList.add('authenticated');
 
-        document.getElementById('user-avatar').src = currentUser.picture;
-        document.getElementById('user-email').textContent = currentUser.email;
-        document.getElementById('user-name').textContent = currentUser.name;
-        userInfo.classList.add('show');
-        signinContainer.style.display = 'none';
-    } else {
-        authSection.classList.remove('authenticated');
-        authTitle.textContent = '🔒 Autenticación Requerida';
-        authTitle.classList.remove('authenticated');
-        userInfo.classList.remove('show');
-        signinContainer.style.display = 'block';
-    }
+    document.getElementById('user-avatar').src = currentUser.picture;
+    document.getElementById('user-email').textContent = currentUser.email;
+    document.getElementById('user-name').textContent = currentUser.name;
+    userInfo.classList.add('show');
+    signinContainer.style.display = 'none';
+  } else {
+    authSection.classList.remove('authenticated');
+    authTitle.textContent = '🔒 Autenticación Requerida';
+    authTitle.classList.remove('authenticated');
+    userInfo.classList.remove('show');
+    signinContainer.style.display = 'block';
+  }
 }
 
 function enableForm() {
@@ -685,39 +685,39 @@ function enableForm() {
 }
 
 function disableForm() {
-    document.getElementById('form-container').classList.remove('authenticated');
-    locationValid = false;
-    updateSubmitButton();
+  document.getElementById('form-container').classList.remove('authenticated');
+  locationValid = false;
+  updateSubmitButton();
 }
 
 function signOut() {
-    try {
-        google.accounts.id.disableAutoSelect();
-        
-        isAuthenticated = false;
-        currentUser = null;
-        userEmail = null;
-        locationValid = false;
-        currentLocation = null;
-        locationAttempts = 0;
-        selectedFiles = [];
+  try {
+    google.accounts.id.disableAutoSelect();
+    
+    isAuthenticated = false;
+    currentUser = null;
+    userEmail = null;
+    locationValid = false;
+    currentLocation = null;
+    locationAttempts = 0;
+    selectedFiles = [];
 
-        ['email', 'google_user_id', 'latitude', 'longitude', 'location_status'].forEach(id => {
-            document.getElementById(id).value = '';
-        });
+    ['email', 'google_user_id', 'latitude', 'longitude', 'location_status'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
 
-        updateAuthenticationUI();
-        disableForm();
-        resetLocationFields();
-        resetEvidenciasSection();
+    updateAuthenticationUI();
+    disableForm();
+    resetLocationFields();
+    resetEvidenciasSection();
 
-        showStatus('Sesión cerrada correctamente.', 'success');
-        setTimeout(() => hideStatus(), 3000);
-        setTimeout(() => initializeGoogleSignIn(), 1000);
-    } catch (error) {
-        console.error('Error cerrando sesión:', error);
-        showStatus('Error al cerrar sesión.', 'error');
-    }
+    showStatus('Sesión cerrada correctamente.', 'success');
+    setTimeout(() => hideStatus(), 3000);
+    setTimeout(() => initializeGoogleSignIn(), 1000);
+  } catch (error) {
+    console.error('Error cerrando sesión:', error);
+    showStatus('Error al cerrar sesión.', 'error');
+  }
 }
 
 // ========== EVIDENCIAS (iOS COMPATIBLE) ==========
@@ -939,11 +939,11 @@ function showEvidenciasStatus(message, type) {
 }
 
 function resetEvidenciasSection() {
-    selectedFiles = [];
-    const input = document.getElementById('evidencias');
-    input.value = '';
-    document.getElementById('evidencias-preview').innerHTML = '';
-    document.getElementById('evidencias-status').style.display = 'none';
+  selectedFiles = [];
+  const input = document.getElementById('evidencias');
+  input.value = '';
+  document.getElementById('evidencias-preview').innerHTML = '';
+  document.getElementById('evidencias-status').style.display = 'none';
 }
 
 // ========== UPLOAD ==========
@@ -2184,6 +2184,7 @@ function showStatus(message, type) {
   status.style.display = 'block';
 }
 
+// ========== 7. OCULTAR ESTADO ==========
 function hideStatus() {
   document.getElementById('status').style.display = 'none';
 }
@@ -2273,287 +2274,293 @@ function setupEventListeners() {
 }
 
 function getCurrentLocation() {
-    if (!isAuthenticated) {
-        updateLocationStatus('error', 'Autenticación requerida', '');
-        ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
-            document.getElementById(id).value = 'Esperando autenticación...';
-        });
-        document.getElementById('location_status').value = 'Autenticación requerida';
-        return;
-    }
+  if (!isAuthenticated) {
+    updateLocationStatus('error', 'Autenticación requerida', '');
+    ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
+      document.getElementById(id).value = 'Esperando autenticación...';
+    });
+    document.getElementById('location_status').value = 'Autenticación requerida';
+    return;
+  }
 
-    if (!navigator.geolocation) {
-        updateLocationStatus('error', 'Geolocalización no soportada', '');
-        return;
-    }
+  if (!navigator.geolocation) {
+    updateLocationStatus('error', 'Geolocalización no soportada', '');
+    return;
+  }
 
-    locationAttempts++;
-    
-    const statusMsg = isDesktop 
-        ? `Obteniendo ubicación por IP/WiFi... (${locationAttempts}/${MAX_LOCATION_ATTEMPTS})` 
-        : `Obteniendo ubicación GPS... (${locationAttempts}/${MAX_LOCATION_ATTEMPTS})`;
-    
-    updateLocationStatus('loading', statusMsg, '');
+  locationAttempts++;
+  
+  const statusMsg = isDesktop 
+    ? `Obteniendo ubicación por IP/WiFi... (${locationAttempts}/${MAX_LOCATION_ATTEMPTS})` 
+    : `Obteniendo ubicación GPS... (${locationAttempts}/${MAX_LOCATION_ATTEMPTS})`;
+  
+  updateLocationStatus('loading', statusMsg, '');
 
-    const options = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
-    
-    navigator.geolocation.getCurrentPosition(
-        function(position) {
-            currentLocation = {
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                accuracy: position.coords.accuracy
-            };
-            
-            document.getElementById('latitude').value = currentLocation.latitude;
-            document.getElementById('longitude').value = currentLocation.longitude;
-            
-            console.log(`📍 Ubicación obtenida - Precisión: ${Math.round(currentLocation.accuracy)}m (límite: ${REQUIRED_ACCURACY}m)`);
-            
-            if (currentLocation.accuracy <= REQUIRED_ACCURACY) {
-                locationValid = true;
-                document.getElementById('location_status').value = 'success';
-                
-                let successMsg = 'Ubicación obtenida correctamente';
-                let successDesc = `Precisión: ${Math.round(currentLocation.accuracy)} metros`;
-                
-                if (isDesktop && currentLocation.accuracy > REQUIRED_ACCURACY_OPTIMAL) {
-                    successDesc += ` (normal para ordenadores)`;
-                }
-                
-                updateLocationStatus('success', successMsg, successDesc);
-                updateSubmitButton();
-                updateLocationFields(currentLocation);
-            } else {
-                locationValid = false;
-                
-                const precisedMsg = isDesktop 
-                    ? `Precisión insuficiente (${Math.round(currentLocation.accuracy)}m > ${REQUIRED_ACCURACY}m)`
-                    : `Precisión GPS insuficiente`;
-                
-                const preciseDesc = isDesktop
-                    ? `Se requiere ${REQUIRED_ACCURACY}m o menos. En desktop, intente conectarse a una red WiFi conocida para mejorar la precisión.`
-                    : `Se requiere ${REQUIRED_ACCURACY}m o menos. Actual: ${Math.round(currentLocation.accuracy)}m`;
-                
-                updateLocationStatus('warning', precisedMsg, preciseDesc);
-                
-                if (locationAttempts < MAX_LOCATION_ATTEMPTS) {
-                    setTimeout(() => getCurrentLocation(), 2000);
-                } else {
-                    updateLocationStatus('error', 'No se pudo obtener la precisión requerida', 
-                        isDesktop ? 'Intente conectarse a WiFi o usar un dispositivo móvil' : '');
-                    document.getElementById('retry_location_btn').style.display = 'block';
-                }
-            }
-        },
-        function(error) {
-            locationValid = false;
-            let errorMessage, errorDescription;
-            
-            switch(error.code) {
-                case error.PERMISSION_DENIED:
-                    errorMessage = 'Permisos denegados';
-                    errorDescription = 'Permita el acceso a la ubicación';
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    errorMessage = 'Ubicación no disponible';
-                    errorDescription = isDesktop 
-                        ? 'Verifique su conexión a Internet o WiFi' 
-                        : 'Verifique su conexión GPS';
-                    break;
-                case error.TIMEOUT:
-                    errorMessage = 'Tiempo agotado';
-                    errorDescription = 'Intente nuevamente';
-                    break;
-                default:
-                    errorMessage = 'Error desconocido';
-                    errorDescription = 'Error inesperado';
-            }
-            
-            document.getElementById('location_status').value = 'error: ' + errorMessage;
-            updateLocationStatus('error', errorMessage, errorDescription);
-            
-            ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
-                document.getElementById(id).value = 'Error: ' + errorMessage;
-                document.getElementById(id).className = 'location-field error';
-            });
-            
-            if (locationAttempts < MAX_LOCATION_ATTEMPTS && error.code !== error.PERMISSION_DENIED) {
-                setTimeout(() => getCurrentLocation(), 3000);
-            } else {
-                document.getElementById('retry_location_btn').style.display = 'block';
-            }
-        },
-        options
-    );
+  const options = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
+  
+  navigator.geolocation.getCurrentPosition(
+    function(position) {
+      currentLocation = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy
+      };
+      
+      document.getElementById('latitude').value = currentLocation.latitude;
+      document.getElementById('longitude').value = currentLocation.longitude;
+      
+      console.log(`📍 Ubicación obtenida - Precisión: ${Math.round(currentLocation.accuracy)}m (límite: ${REQUIRED_ACCURACY}m)`);
+      
+      if (currentLocation.accuracy <= REQUIRED_ACCURACY) {
+        locationValid = true;
+        document.getElementById('location_status').value = 'success';
+        
+        let successMsg = 'Ubicación obtenida correctamente';
+        let successDesc = `Precisión: ${Math.round(currentLocation.accuracy)} metros`;
+        
+        if (isDesktop && currentLocation.accuracy > REQUIRED_ACCURACY_OPTIMAL) {
+          successDesc += ` (normal para ordenadores)`;
+        }
+        
+        updateLocationStatus('success', successMsg, successDesc);
+        updateSubmitButton();
+        updateLocationFields(currentLocation);
+      } else {
+        locationValid = false;
+        
+        const precisedMsg = isDesktop 
+          ? `Precisión insuficiente (${Math.round(currentLocation.accuracy)}m > ${REQUIRED_ACCURACY}m)`
+          : `Precisión GPS insuficiente`;
+        
+        const preciseDesc = isDesktop
+          ? `Se requiere ${REQUIRED_ACCURACY}m o menos. En desktop, intente conectarse a una red WiFi conocida para mejorar la precisión.`
+          : `Se requiere ${REQUIRED_ACCURACY}m o menos. Actual: ${Math.round(currentLocation.accuracy)}m`;
+        
+        updateLocationStatus('warning', precisedMsg, preciseDesc);
+        
+        if (locationAttempts < MAX_LOCATION_ATTEMPTS) {
+          setTimeout(() => getCurrentLocation(), 2000);
+        } else {
+          updateLocationStatus('error', 'No se pudo obtener la precisión requerida', 
+            isDesktop ? 'Intente conectarse a WiFi o usar un dispositivo móvil' : '');
+          document.getElementById('retry_location_btn').style.display = 'block';
+        }
+      }
+    },
+    function(error) {
+      locationValid = false;
+      let errorMessage, errorDescription;
+      
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          errorMessage = 'Permisos denegados';
+          errorDescription = 'Permita el acceso a la ubicación';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMessage = 'Ubicación no disponible';
+          errorDescription = isDesktop 
+            ? 'Verifique su conexión a Internet o WiFi' 
+            : 'Verifique su conexión GPS';
+          break;
+        case error.TIMEOUT:
+          errorMessage = 'Tiempo agotado';
+          errorDescription = 'Intente nuevamente';
+          break;
+        default:
+          errorMessage = 'Error desconocido';
+          errorDescription = 'Error inesperado';
+      }
+      
+      document.getElementById('location_status').value = 'error: ' + errorMessage;
+      updateLocationStatus('error', errorMessage, errorDescription);
+      
+      ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
+        document.getElementById(id).value = 'Error: ' + errorMessage;
+        document.getElementById(id).className = 'location-field error';
+      });
+      
+      if (locationAttempts < MAX_LOCATION_ATTEMPTS && error.code !== error.PERMISSION_DENIED) {
+        setTimeout(() => getCurrentLocation(), 3000);
+      } else {
+        document.getElementById('retry_location_btn').style.display = 'block';
+      }
+    },
+    options
+  );
 }
 
 function updateLocationStatus(type, message, description) {
-    const statusDiv = document.getElementById('location_status_display');
-    const icons = { loading: '🌍', success: '✅', warning: '⚠️', error: '❌' };
-    
-    statusDiv.className = `location-status ${type}`;
-    statusDiv.innerHTML = `${icons[type]} <strong>${message}</strong>${description ? '<br>' + description : ''}`;
+  const statusDiv = document.getElementById('location_status_display');
+  const icons = { loading: '🌐', success: '✅', warning: '⚠️', error: '❌' };
+  
+  statusDiv.className = `location-status ${type}`;
+  statusDiv.innerHTML = `${icons[type]} <strong>${message}</strong>${description ? '<br>' + description : ''}`;
 }
 
 function updateSubmitButton() {
-    const submitBtn = document.getElementById('submit_btn');
-    
-    if (!isAuthenticated) {
-        submitBtn.disabled = true;
-        submitBtn.textContent = '🔒 Autentíquese primero';
-        submitBtn.style.background = '#6c757d';
-    } else if (locationValid) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = '📋 Registrar Asistencia';
-        submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
-    } else {
-        submitBtn.disabled = true;
-        submitBtn.textContent = '⚠️ Ubicación GPS requerida';
-        submitBtn.style.background = '#6c757d';
-    }
+  const submitBtn = document.getElementById('submit_btn');
+  
+  if (!isAuthenticated) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '🔒 Autentíquese primero';
+    submitBtn.style.background = '#6c757d';
+  } else if (locationValid) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '📋 Registrar Asistencia';
+    submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
+  } else {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⚠️ Ubicación GPS requerida';
+    submitBtn.style.background = '#6c757d';
+  }
 }
 
 function updateLocationFields(location) {
-    const accuracy = Math.round(location.accuracy);
-    let precisionText = `${accuracy} metros`;
-    let precisionClass = '';
-    
-    // Clasificación de precisión adaptada al tipo de dispositivo
-    if (isDesktop) {
-        // Para desktop: estándares más relajados
-        if (accuracy <= 200) {
-            precisionText += ' (Excelente para Desktop)';
-            precisionClass = 'uas-location';
-        } else if (accuracy <= 500) {
-            precisionText += ' (Muy Buena para Desktop)';
-            precisionClass = 'uas-location';
-        } else if (accuracy <= 1000) {
-            precisionText += ' (Aceptable para Desktop)';
-            precisionClass = '';
-        } else {
-            precisionText += ' (Baja - típica de Desktop)';
-            precisionClass = 'warning';
-        }
+  const accuracy = Math.round(location.accuracy);
+  let precisionText = `${accuracy} metros`;
+  let precisionClass = '';
+  
+  // Clasificación de precisión adaptada al tipo de dispositivo
+  if (isDesktop) {
+    // Para desktop: estándares más relajados
+    if (accuracy <= 200) {
+      precisionText += ' (Excelente para Desktop)';
+      precisionClass = 'uas-location';
+    } else if (accuracy <= 500) {
+      precisionText += ' (Muy Buena para Desktop)';
+      precisionClass = 'uas-location';
+    } else if (accuracy <= 1000) {
+      precisionText += ' (Aceptable para Desktop)';
+      precisionClass = '';
     } else {
-        // Para móviles: estándares estrictos
-        if (accuracy <= 10) {
-            precisionText += ' (Excelente)';
-            precisionClass = 'uas-location';
-        } else if (accuracy <= 30) {
-            precisionText += ' (Muy Buena)';
-            precisionClass = 'uas-location';
-        } else if (accuracy <= 50) {
-            precisionText += ' (Buena)';
-            precisionClass = '';
-        } else {
-            precisionText += ' (Regular)';
-            precisionClass = 'warning';
-        }
+      precisionText += ' (Baja - típica de Desktop)';
+      precisionClass = 'warning';
     }
-    
-    document.getElementById('precision_gps').value = precisionText;
-    document.getElementById('precision_gps').className = `location-field ${precisionClass}`;
-    
-    const ubicacionDetectada = detectarUbicacionEspecifica(location.latitude, location.longitude);
-    const campoUbicacion = document.getElementById('ubicacion_detectada');
-    
-    if (ubicacionDetectada.encontrada && ubicacionDetectada.esUAS) {
-        campoUbicacion.value = ubicacionDetectada.nombre;
-        campoUbicacion.className = 'location-field uas-location';
+  } else {
+    // Para móviles: estándares estrictos
+    if (accuracy <= 10) {
+      precisionText += ' (Excelente)';
+      precisionClass = 'uas-location';
+    } else if (accuracy <= 30) {
+      precisionText += ' (Muy Buena)';
+      precisionClass = 'uas-location';
+    } else if (accuracy <= 50) {
+      precisionText += ' (Buena)';
+      precisionClass = '';
     } else {
-        campoUbicacion.value = "Consultando ubicación...";
-        campoUbicacion.className = 'location-field';
+      precisionText += ' (Regular)';
+      precisionClass = 'warning';
     }
-    
-    obtenerDireccionCompleta(location.latitude, location.longitude, ubicacionDetectada);
+  }
+  
+  document.getElementById('precision_gps').value = precisionText;
+  document.getElementById('precision_gps').className = `location-field ${precisionClass}`;
+  
+  const ubicacionDetectada = detectarUbicacionEspecifica(location.latitude, location.longitude);
+  const campoUbicacion = document.getElementById('ubicacion_detectada');
+  
+  if (ubicacionDetectada.encontrada && ubicacionDetectada.esUAS) {
+    campoUbicacion.value = ubicacionDetectada.nombre;
+    campoUbicacion.className = 'location-field uas-location';
+  } else {
+    campoUbicacion.value = "Consultando ubicación...";
+    campoUbicacion.className = 'location-field';
+  }
+  
+  obtenerDireccionCompleta(location.latitude, location.longitude, ubicacionDetectada);
 }
 
 function detectarUbicacionEspecifica(lat, lng) {
-    for (let ubicacion of ubicacionesUAS.sort((a, b) => a.radius - b.radius)) {
-        const distancia = calcularDistancia(lat, lng, ubicacion.lat, ubicacion.lng);
-        
-        if (distancia <= ubicacion.radius) {
-            return {
-                encontrada: true,
-                esUAS: true,
-                nombre: ubicacion.name,
-                distancia: Math.round(distancia)
-            };
-        }
-    }
+  const ubicacionesUAS = [
+    { name: "CESPSIC - Centro de Servicios Psicológicos", lat: 24.8278, lng: -107.3812, radius: 50 },
+    { name: "Facultad de Psicología UAS", lat: 24.7993, lng: -107.3950, radius: 100 },
+    { name: "Universidad Autónoma de Sinaloa - Campus Central", lat: 24.7990, lng: -107.3950, radius: 200 }
+  ];
+  
+  for (let ubicacion of ubicacionesUAS.sort((a, b) => a.radius - b.radius)) {
+    const distancia = calcularDistancia(lat, lng, ubicacion.lat, ubicacion.lng);
     
-    return { encontrada: false, esUAS: false, nombre: "Ubicación externa" };
+    if (distancia <= ubicacion.radius) {
+      return {
+        encontrada: true,
+        esUAS: true,
+        nombre: ubicacion.name,
+        distancia: Math.round(distancia)
+      };
+    }
+  }
+  
+  return { encontrada: false, esUAS: false, nombre: "Ubicación externa" };
 }
 
 async function obtenerDireccionCompleta(lat, lng, ubicacionDetectada) {
-    try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=es&zoom=18`);
-        const data = await response.json();
-        
-        const direccionField = document.getElementById('direccion_completa');
-        
-        if (data && data.display_name) {
-            direccionField.value = data.display_name;
-            direccionField.className = 'location-field';
-            
-            if (!ubicacionDetectada.esUAS) {
-                actualizarUbicacionEspecifica(data);
-            }
-        } else {
-            direccionField.value = 'Dirección no disponible';
-            direccionField.className = 'location-field warning';
-        }
-    } catch (error) {
-        const direccionField = document.getElementById('direccion_completa');
-        direccionField.value = 'Error al obtener dirección';
-        direccionField.className = 'location-field warning';
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=es&zoom=18`);
+    const data = await response.json();
+    
+    const direccionField = document.getElementById('direccion_completa');
+    
+    if (data && data.display_name) {
+      direccionField.value = data.display_name;
+      direccionField.className = 'location-field';
+      
+      if (!ubicacionDetectada.esUAS) {
+        actualizarUbicacionEspecifica(data);
+      }
+    } else {
+      direccionField.value = 'Dirección no disponible';
+      direccionField.className = 'location-field warning';
     }
+  } catch (error) {
+    const direccionField = document.getElementById('direccion_completa');
+    direccionField.value = 'Error al obtener dirección';
+    direccionField.className = 'location-field warning';
+  }
 }
 
 function actualizarUbicacionEspecifica(direccionData) {
-    const campoUbicacion = document.getElementById('ubicacion_detectada');
-    const address = direccionData.address || {};
-    
-    let ubicacionEspecifica = '';
-    
-    if (address.house_number && address.road) {
-        ubicacionEspecifica = `${address.road} ${address.house_number}`;
-    } else if (address.road) {
-        ubicacionEspecifica = address.road;
-    } else if (address.neighbourhood || address.suburb) {
-        ubicacionEspecifica = address.neighbourhood || address.suburb;
-    } else if (address.city || address.town) {
-        ubicacionEspecifica = address.city || address.town;
-    } else {
-        ubicacionEspecifica = "Ubicación no especificada";
-    }
-    
-    campoUbicacion.value = ubicacionEspecifica;
+  const campoUbicacion = document.getElementById('ubicacion_detectada');
+  const address = direccionData.address || {};
+  
+  let ubicacionEspecifica = '';
+  
+  if (address.house_number && address.road) {
+    ubicacionEspecifica = `${address.road} ${address.house_number}`;
+  } else if (address.road) {
+    ubicacionEspecifica = address.road;
+  } else if (address.neighbourhood || address.suburb) {
+    ubicacionEspecifica = address.neighbourhood || address.suburb;
+  } else if (address.city || address.town) {
+    ubicacionEspecifica = address.city || address.town;
+  } else {
+    ubicacionEspecifica = "Ubicación no especificada";
+  }
+  
+  campoUbicacion.value = ubicacionEspecifica;
 }
 
 function calcularDistancia(lat1, lng1, lat2, lng2) {
-    const R = 6371e3;
-    const φ1 = lat1 * Math.PI/180;
-    const φ2 = lat2 * Math.PI/180;
-    const Δφ = (lat2-lat1) * Math.PI/180;
-    const Δλ = (lng2-lng1) * Math.PI/180;
+  const R = 6371e3;
+  const φ1 = lat1 * Math.PI/180;
+  const φ2 = lat2 * Math.PI/180;
+  const Δφ = (lat2-lat1) * Math.PI/180;
+  const Δλ = (lng2-lng1) * Math.PI/180;
 
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+          Math.cos(φ1) * Math.cos(φ2) *
+          Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
-    return R * c;
+  return R * c;
 }
 
 function resetLocationFields() {
-    ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
-        document.getElementById(id).value = 'Esperando autenticación...';
-        document.getElementById(id).className = 'location-field';
-    });
-    document.getElementById('retry_location_btn').style.display = 'none';
-    updateLocationStatus('loading', 'Complete la autenticación para obtener ubicación GPS', '');
+  ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
+    document.getElementById(id).value = 'Esperando autenticación...';
+    document.getElementById(id).className = 'location-field';
+  });
+  document.getElementById('retry_location_btn').style.display = 'none';
+  updateLocationStatus('loading', 'Complete la autenticación para obtener ubicación GPS', '');
 }
 
 // ========== DIAGNÓSTICO ==========
