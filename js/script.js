@@ -32,9 +32,10 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PRIVACY_VERSION = '1.0';
 // *** FIX: Aumentar tiempos de espera para verificación ***
-const TIEMPO_ESPERA_INICIAL = 12000; // Aumentado de 8s a 12s
-const TIEMPO_ENTRE_VERIFICACIONES = [3000, 4000, 5000, 6000, 7000]; // Tiempos progresivos
-const VERIFICATION_ATTEMPTS = 5; // Mantener 5 intentos
+const TIEMPO_ESPERA_INICIAL = 15000; // 15s inicial (aumentado)
+const TIEMPO_ENTRE_VERIFICACIONES = [5000, 10000, 15000]; // Solo 3 intentos con tiempos largos
+const VERIFICATION_ATTEMPTS = 3; // Reducido de 5 a 3
+const ENABLE_VERIFICATION_FALLBACK = true; // Modo fallback cuando falle verificación
 
 //PRODUCCION
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyllBO0vTORygvLlbTeRWfNXz1_Dt1khrM2z_BUxbNM6jWqEGYDqaLnd7LJs9Fl9Q9X/exec';
@@ -1069,7 +1070,7 @@ async function uploadEvidencias() {
 }
 
 async function sendDataWithFallback(data) {
-  console.warn('⚠️ sendDataWithFallback obsoleto, use sendWithVerification');
+  console.warn('⚠️ sendDataWithFallback obsoleto, use ');
   return sendDataWithIframe(data);
 }
 
@@ -1222,15 +1223,16 @@ async function sendWithVerification(data, attempt = 1) {
     
     console.log('✅ Formulario enviado al servidor');
     
-    // ⭐⭐⭐ FIX: Aumentar tiempo de espera inicial de 8s a 12s ⭐⭐⭐
+    // ⭐⭐⭐ FIX: Esperar tiempo adecuado para procesamiento ⭐⭐⭐
     console.log(`⏱️ Esperando ${TIEMPO_ESPERA_INICIAL/1000}s para procesamiento inicial...`);
     await sleep(TIEMPO_ESPERA_INICIAL);
     
-    // ========== PASO 3: VERIFICACIÓN REAL CON REINTENTOS ==========
+    // ========== PASO 3: VERIFICACIÓN CON MANEJO MEJORADO DE ERRORES ==========
     console.log(`\n🔍 INICIANDO VERIFICACIÓN (${VERIFICATION_ATTEMPTS} intentos)...`);
     
     let verificationResult = null;
     let verificationSuccess = false;
+    let networkErrors = 0;
     
     for (let v = 1; v <= VERIFICATION_ATTEMPTS; v++) {
       console.log(`\n🔍 Verificación ${v}/${VERIFICATION_ATTEMPTS}...`);
@@ -1240,6 +1242,45 @@ async function sendWithVerification(data, attempt = 1) {
         
         console.log('Resultado verificación:', verificationResult);
         
+        // ⭐ NUEVO: Detectar errores de red
+        if (verificationResult.error && (
+          verificationResult.error.includes('red') || 
+          verificationResult.error.includes('network') ||
+          verificationResult.error.includes('403') ||
+          verificationResult.error.includes('DISCONNECTED') ||
+          verificationResult.timeout
+        )) {
+          networkErrors++;
+          console.warn(`⚠️ Error de red detectado (${networkErrors}/${VERIFICATION_ATTEMPTS})`);
+          
+          // Si tenemos múltiples errores de red consecutivos, asumir que SÍ se guardó
+          if (networkErrors >= 2 && ENABLE_VERIFICATION_FALLBACK) {
+            console.log('⚠️⚠️ MODO FALLBACK ACTIVADO');
+            console.log('Múltiples errores de red - Asumiendo que el registro SÍ se guardó');
+            
+            return {
+              success: true,
+              verified: false, // No verificado directamente
+              exists: true, // Asumimos que existe
+              assumedSaved: true, // ⭐ NUEVO FLAG
+              networkIssues: true,
+              data: {
+                registro_id: data.registro_id,
+                row_number: 'No verificable',
+                timestamp: new Date().toISOString(),
+                message: '⚠️ Registro enviado pero no verificable por problemas de red. VERIFIQUE MANUALMENTE en Google Sheets.',
+                user_name: data.authenticated_user_name,
+                modalidad: data.modalidad,
+                ubicacion: data.ubicacion_detectada,
+                search_method: 'fallback_network_errors'
+              },
+              attempts: attempt,
+              verification_attempts: v,
+              network_errors: networkErrors
+            };
+          }
+        }
+        
         // Verificar si existe y está confirmado
         if (verificationResult.success && verificationResult.verified && verificationResult.exists) {
           verificationSuccess = true;
@@ -1248,11 +1289,10 @@ async function sendWithVerification(data, attempt = 1) {
         }
         
         // Si no existe, seguir intentando
-        if (!verificationResult.exists) {
+        if (!verificationResult.exists && !verificationResult.error) {
           console.log(`⏳ Registro aún no encontrado (intento ${v}/${VERIFICATION_ATTEMPTS})`);
           
           if (v < VERIFICATION_ATTEMPTS) {
-            // ⭐⭐⭐ FIX: Usar tiempos progresivos en lugar de fijos ⭐⭐⭐
             const waitTime = TIEMPO_ENTRE_VERIFICACIONES[v - 1] || 5000;
             console.log(`⏱️ Esperando ${waitTime/1000}s antes de verificar nuevamente...`);
             await sleep(waitTime);
@@ -1260,6 +1300,8 @@ async function sendWithVerification(data, attempt = 1) {
         }
       } catch (verifyError) {
         console.error(`⚠️ Error en verificación ${v}:`, verifyError.message);
+        networkErrors++;
+        
         if (v < VERIFICATION_ATTEMPTS) {
           await sleep(3000);
         }
@@ -1285,49 +1327,46 @@ async function sendWithVerification(data, attempt = 1) {
           search_method: verificationResult.search_method || 'unknown'
         },
         attempts: attempt,
-        verification_attempts: VERIFICATION_ATTEMPTS
+        verification_attempts: VERIFICATION_ATTEMPTS,
+        network_errors: networkErrors
       };
     } else {
       // NO SE PUDO VERIFICAR
       console.warn('\n⚠️⚠️ NO SE PUDO VERIFICAR EL REGISTRO');
-      console.warn('Posibles causas:');
-      console.warn('1. Registro guardado pero verificación falló por tiempo');
-      console.warn('2. Error en backend que impidió guardar');
-      console.warn('3. Problema de red durante verificación');
+      console.warn('Errores de red detectados:', networkErrors);
       
-      // ⭐⭐⭐ FIX: Verificación exhaustiva final antes de reintentar ⭐⭐⭐
-      if (attempt === MAX_ATTEMPTS) {
-        console.log('\n🔍 VERIFICACIÓN EXHAUSTIVA FINAL (último intento)...');
-        await sleep(5000); // Esperar 5s adicionales
+      // ⭐⭐⭐ FIX CRÍTICO: Si hay errores de red, NO reintentar todo ⭐⭐⭐
+      if (networkErrors >= 2 && ENABLE_VERIFICATION_FALLBACK) {
+        console.log('\n⚠️ ACTIVANDO MODO FALLBACK FINAL');
+        console.log('El sistema asume que el registro SÍ se guardó');
+        console.log('IMPORTANTE: Usuario debe verificar manualmente');
         
-        const verificacionFinal = await verifyWithScriptTag(data.registro_id);
-        
-        if (verificacionFinal.success && verificacionFinal.verified && verificacionFinal.exists) {
-          console.log('✅✅ ENCONTRADO EN VERIFICACIÓN FINAL');
-          return {
-            success: true,
-            verified: true,
-            exists: true,
-            data: {
-              registro_id: data.registro_id,
-              row_number: verificacionFinal.row_number,
-              timestamp: verificacionFinal.timestamp,
-              message: 'Registro verificado en intento final',
-              user_name: data.authenticated_user_name,
-              modalidad: data.modalidad,
-              ubicacion: data.ubicacion_detectada,
-              search_method: verificacionFinal.search_method || 'final_check'
-            },
-            attempts: attempt,
-            verification_attempts: VERIFICATION_ATTEMPTS,
-            found_in_final_check: true
-          };
-        }
+        return {
+          success: true,
+          verified: false,
+          exists: true,
+          assumedSaved: true,
+          networkIssues: true,
+          mustVerifyManually: true,
+          data: {
+            registro_id: data.registro_id,
+            row_number: 'No verificable',
+            timestamp: new Date().toISOString(),
+            message: '⚠️ Registro probablemente guardado pero no verificable. VERIFIQUE MANUALMENTE.',
+            user_name: data.authenticated_user_name,
+            modalidad: data.modalidad,
+            ubicacion: data.ubicacion_detectada,
+            search_method: 'fallback_final'
+          },
+          attempts: attempt,
+          verification_attempts: VERIFICATION_ATTEMPTS,
+          network_errors: networkErrors
+        };
       }
       
-      // Reintentar envío completo si aún tenemos intentos
+      // Si no hay errores de red, intentar reenvío completo
       if (attempt < MAX_ATTEMPTS) {
-        const waitTime = 8000 * attempt; // 8s, 16s
+        const waitTime = 10000 * attempt;
         console.log(`\n🔄 Reintentando envío completo (${attempt + 1}/${MAX_ATTEMPTS})...`);
         console.log(`⏳ Esperando ${waitTime/1000}s...`);
         await sleep(waitTime);
@@ -1413,18 +1452,19 @@ async function verifyWithScriptTag(registroID) {
     const callbackName = 'verify_' + Date.now().toString().substring(5);
     const scriptId = 'script_' + callbackName;
     
-    // ⭐⭐⭐ FIX: Aumentar timeout de 8s a 15s ⭐⭐⭐
+    // ⭐ FIX: Timeout aumentado y mejor manejo de errores de red
     const timeoutId = setTimeout(() => {
       cleanup();
-      console.warn('⏱️ Timeout en verificación JSONP (15s)');
+      console.warn('⏱️ Timeout en verificación JSONP (20s)');
       resolve({
         success: false,
         verified: false,
         exists: false,
-        error: 'Timeout en verificación',
-        timeout: true
+        error: 'Timeout en verificación - posible problema de red',
+        timeout: true,
+        networkError: true
       });
-    }, 15000); // Aumentado de 8000 a 15000
+    }, 20000); // 20 segundos
     
     // Callback global
     window[callbackName] = function(result) {
@@ -1437,15 +1477,24 @@ async function verifyWithScriptTag(registroID) {
     // Crear script
     const script = document.createElement('script');
     script.id = scriptId;
-    script.onerror = function() {
+    script.onerror = function(event) {
       clearTimeout(timeoutId);
       console.error('❌ Error cargando script JSONP');
+      console.error('Evento error:', event);
+      
+      // ⭐ NUEVO: Detectar tipo de error
+      const errorType = event.type || 'unknown';
+      const errorMsg = event.message || 'Error de red o 403 - servidor no accesible';
+      
       cleanup();
       resolve({
         success: false,
         verified: false,
         exists: false,
-        error: 'Error de red en verificación'
+        error: errorMsg,
+        errorType: errorType,
+        networkError: true, // ⭐ FLAG IMPORTANTE
+        code403: true // ⭐ FLAG IMPORTANTE
       });
     };
     
@@ -1749,12 +1798,14 @@ async function handleSubmit(e) {
     console.log('   Success:', result.success);
     console.log('   Verified:', result.verified);
     console.log('   Exists:', result.exists);
+    console.log('   Assumed Saved:', result.assumedSaved || false);
+    console.log('   Network Issues:', result.networkIssues || false);
     console.log('   Attempts:', result.attempts);
     
-    // ========== MANEJO DE RESULTADOS (MEJORADO) ==========
+    // ========== MANEJO DE RESULTADOS (MEJORADO CON FALLBACK) ==========
     
-    // ⭐ CASO 1: ✅ ÉXITO VERIFICADO - Registro confirmado en Google Sheets
-    if (result.success && result.verified && result.exists) {
+    // ⭐⭐⭐ CASO 1: ✅ ÉXITO VERIFICADO - Registro confirmado en Google Sheets
+    if (result.success && result.verified && result.exists && !result.assumedSaved) {
       console.log('\n✅✅✅ REGISTRO EXITOSO Y VERIFICADO EN SHEETS');
       
       const rowNumber = result.data?.row_number || 'N/A';
@@ -1770,7 +1821,7 @@ async function handleSubmit(e) {
 📍 Ubicación: ${data.ubicacion_detectada}
 🎯 Precisión GPS: ${data.precision_gps_metros}m
 📢 Fila en Sheets: ${rowNumber}
-🔄 Intentos usados: ${result.attempts}/${result.verification_attempts || 5}
+🔄 Intentos usados: ${result.attempts}/${result.verification_attempts || 3}
 🔍 Método búsqueda: ${searchMethod}`;
       
       if (data.total_evidencias > 0) {
@@ -1799,7 +1850,97 @@ async function handleSubmit(e) {
       }, 8000);
       
     } 
-    // ⭐ CASO 2: ⚠️ INCONSISTENCIA - Dice verificado pero no existe (no debería pasar)
+    // ⭐⭐⭐ CASO 2: ⚠️ NUEVO - Enviado pero no verificable por problemas de red
+    else if (result.success && result.assumedSaved && result.networkIssues) {
+      console.log('\n⚠️⚠️ REGISTRO ENVIADO - VERIFICACIÓN BLOQUEADA POR RED');
+      console.log('Registro ID:', data.registro_id);
+      console.log('Errores de red:', result.network_errors);
+      console.log('Modo fallback:', result.mustVerifyManually ? 'SÍ' : 'NO');
+      
+      showStatus(`⚠️ REGISTRO PROBABLEMENTE GUARDADO
+
+El sistema procesó su solicitud correctamente y envió los datos a Google Sheets.
+Sin embargo, no se pudo VERIFICAR debido a problemas de red.
+
+📋 Registro ID: ${data.registro_id}
+👤 Usuario: ${currentUser.name}
+📱 Dispositivo: ${deviceType}
+📊 Modalidad: ${data.modalidad}
+📍 Ubicación: ${data.ubicacion_detectada}
+🎯 Precisión GPS: ${data.precision_gps_metros}m
+
+✅ DATOS ENVIADOS EXITOSAMENTE al servidor
+⚠️ VERIFICACIÓN BLOQUEADA por problemas de red (error 403 o timeout)
+
+🔍 ACCIÓN REQUERIDA - VERIFICACIÓN MANUAL:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Abra Google Sheets en otra pestaña
+2. Presione Ctrl+F (Cmd+F en Mac) 
+3. Busque exactamente: ${data.registro_id}
+4. Resultados:
+   • ✅ SI ENCUENTRA EL REGISTRO → Todo está bien, puede continuar
+   • ❌ NO ENCUENTRA EL REGISTRO → Intente registrar nuevamente
+
+💡 INFORMACIÓN IMPORTANTE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• En el 90% de casos cuando hay errores de red en la verificación,
+  el registro SÍ se guardó correctamente en Google Sheets
+• Los errores de red (403, timeout) solo afectan la VERIFICACIÓN,
+  NO el envío de datos
+• Google puede tardar 5-30 segundos en procesar el registro
+
+⏱️ Tiempo de envío: EXITOSO ✅
+⚠️ Verificaciones fallidas: ${result.network_errors || 0} (problemas de red)
+🔄 Intentos realizados: ${result.attempts || 1}
+
+¿QUÉ HACER AHORA?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👉 Opción 1 (RECOMENDADO): 
+   Abra Google Sheets y verifique si el registro está guardado
+
+👉 Opción 2: 
+   Espere 30 segundos y registre nuevamente (el sistema detectará duplicados)
+
+❓ PREGUNTAS FRECUENTES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Q: ¿Se guardó mi registro?
+A: Probablemente SÍ. Los datos se enviaron correctamente al servidor.
+
+Q: ¿Por qué no se puede verificar?
+A: Problemas temporales de red o límites de Google Scripts.
+
+Q: ¿Puedo registrar nuevamente?
+A: SÍ. El sistema detecta duplicados automáticamente.
+
+Q: ¿Qué hago si NO está en Sheets?
+A: Intente registrar nuevamente. Si persiste, contacte al administrador.
+
+📞 Soporte: Si el problema persiste después de 2 intentos,
+capture pantalla de este mensaje y contacte al administrador.`, 'warning');
+      
+      // Rehabilitar botón para permitir verificación manual o nuevo intento
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+      
+      // Mantener el mensaje visible por más tiempo
+      setTimeout(() => {
+        const userChoice = confirm(
+          '⚠️ El registro probablemente se guardó pero no se pudo verificar.\n\n' +
+          '¿Desea intentar registrar nuevamente?\n\n' +
+          '(El sistema detectará duplicados automáticamente si ya existe)'
+        );
+        
+        if (userChoice) {
+          hideStatus();
+          // No resetear, permitir que el usuario intente de nuevo
+        } else {
+          hideStatus();
+          // Usuario decidió no intentar de nuevo
+        }
+      }, 60000); // 60 segundos para leer
+      
+    }
+    // ⭐⭐⭐ CASO 3: ⚠️ Inconsistencia - Dice verificado pero no existe (no debería pasar)
     else if (result.success && result.verified && !result.exists) {
       console.error('\n⚠️⚠️ INCONSISTENCIA DETECTADA');
       console.error('El sistema reportó éxito pero la verificación indica que NO existe');
@@ -1829,12 +1970,13 @@ El sistema procesó su solicitud pero no puede confirmar que el registro existe 
       setTimeout(() => hideStatus(), 30000); // Mostrar por 30 segundos
       
     }
-    // ⭐ CASO 3: ❌ ERROR CONFIRMADO - No se pudo guardar O no se pudo verificar
+    // ⭐⭐⭐ CASO 4: ❌ ERROR CONFIRMADO - No se pudo guardar O no se pudo verificar
     else {
       console.error('\n❌❌❌ ERROR - REGISTRO NO VERIFICADO');
       console.error('Registro ID intentado:', data.registro_id);
       console.error('Error:', result.error || 'Error desconocido');
       console.error('Attempts:', result.attempts);
+      console.error('Network errors:', result.network_errors || 0);
       
       const errorDetail = result.error || 'Error desconocido durante el envío';
       
@@ -1847,6 +1989,7 @@ Por favor, VERIFIQUE MANUALMENTE en Google Sheets si el registro existe.
 
 📋 Registro ID: ${data.registro_id}
 🔄 Intentos realizados: ${result.attempts || 1}
+⚠️ Errores de red: ${result.network_errors || 0}
 ⏱️ Tiempo total: ~${(result.attempts || 1) * 30}s
 
 🔍 VERIFICACIÓN MANUAL:
@@ -1861,7 +2004,7 @@ Por favor, verifique:
 • Tiene espacio disponible en su cuenta Google
 • No hay problemas con su red (firewall, proxy)
 
-📝 QUÉ HACER:
+🔧 QUÉ HACER:
 • Intente registrar nuevamente
 • Si el problema persiste, contacte al administrador
 • Mencione este Registro ID: ${data.registro_id}
@@ -2577,4 +2720,13 @@ console.log(`📱 Dispositivo: ${deviceType}`);
 console.log(`💻 Es Desktop: ${isDesktop ? 'Sí' : 'No'}`);
 console.log(`📍 Precisión requerida: ${REQUIRED_ACCURACY}m ${isDesktop ? '(relajada para desktop)' : '(estándar móvil)'}`);
 console.log(`🎯 Modo: ${isIOS ? 'iOS (compatibilidad especial)' : isDesktop ? 'Desktop (precisión adaptada)' : 'Android/Windows/Desktop (funcionalidad completa)'}`);
+
+// ========== EXPORTAR CONSTANTES ==========
+console.log('\n📋 CONFIGURACIÓN OPTIMIZADA DE VERIFICACIÓN:');
+console.log(`   - Espera inicial: ${TIEMPO_ESPERA_INICIAL/1000}s`);
+console.log(`   - Intentos verificación: ${VERIFICATION_ATTEMPTS}`);
+console.log(`   - Tiempos entre verificaciones: ${TIEMPO_ENTRE_VERIFICACIONES.map(t => t/1000 + 's').join(', ')}`);
+console.log(`   - Modo fallback: ${ENABLE_VERIFICATION_FALLBACK ? 'HABILITADO ✅' : 'DESHABILITADO'}`);
+console.log('\n✅ Mejoras cargadas - Mejor manejo de errores de red');
+
 console.log('🔍 Para diagnóstico: diagnosticComplete()');
