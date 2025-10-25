@@ -7,10 +7,10 @@ const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 const isDesktop = detectDesktop();
 const deviceType = getDeviceType();
 
-console.log(`ðŸ“± Tipo dispositivo: ${deviceType}`);
-console.log(`ðŸ’» Es Desktop: ${isDesktop ? 'SÃ­' : 'No'}`);
-console.log(`ðŸ“± Es iOS: ${isIOS ? 'SÃ­' : 'No'}`);
-console.log(`ðŸŒ Navegador: ${isSafari ? 'Safari' : 'Otro'}`);
+console.log(`📱 Tipo dispositivo: ${deviceType}`);
+console.log(`💻 Es Desktop: ${isDesktop ? 'SÃ­' : 'No'}`);
+console.log(`📱 Es iOS: ${isIOS ? 'SÃ­' : 'No'}`);
+console.log(`🌍 Navegador: ${isSafari ? 'Safari' : 'Otro'}`);
 
 // Variables globales
 let currentLocation = null;
@@ -24,18 +24,18 @@ let authenticationPurpose = 'login';
 let privacyConsent = false;
 
 const MAX_LOCATION_ATTEMPTS = 3;
-// PrecisiÃ³n ajustada segÃºn tipo de dispositivo
-const REQUIRED_ACCURACY = isDesktop ? 1000 : 50; // 1000m para desktop, 50m para mÃ³viles
-const REQUIRED_ACCURACY_OPTIMAL = isDesktop ? 300 : 30; // PrecisiÃ³n Ã³ptima
+// Precisión ajustada según tipo de dispositivo
+const REQUIRED_ACCURACY = isDesktop ? 1000 : 50; // 1000m para desktop, 50m para móviles
+const REQUIRED_ACCURACY_OPTIMAL = isDesktop ? 300 : 30; // Precisión óptima
 const MAX_FILES = 5;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PRIVACY_VERSION = '1.0';
-// *** FIX: Aumentar tiempos de espera para verificaciÃ³n ***
+// *** FIX: Aumentar tiempos de espera para verificación ***
 const TIEMPO_ESPERA_INICIAL = 15000; // 15s inicial (aumentado)
 const TIEMPO_ENTRE_VERIFICACIONES = [5000, 10000, 15000]; // Solo 3 intentos con tiempos largos
 const VERIFICATION_ATTEMPTS = 3; // Reducido de 5 a 3
-const ENABLE_VERIFICATION_FALLBACK = true; // Modo fallback cuando falle verificaciÃ³n
+const ENABLE_VERIFICATION_FALLBACK = true; // Modo fallback cuando falle verificación
 
 //PRODUCCION
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyllBO0vTORygvLlbTeRWfNXz1_Dt1khrM2z_BUxbNM6jWqEGYDqaLnd7LJs9Fl9Q9X/exec';
@@ -46,7 +46,7 @@ const GOOGLE_CLIENT_ID = '154864030871-ck4l5krb7qm68kmp6a7rcq7h072ldm6g.apps.goo
 
 const ubicacionesUAS = [
     { name: "CESPSIC - Centro de Servicios PsicolÃ³gicos", lat: 24.8278, lng: -107.3812, radius: 50 },
-    { name: "Facultad de PsicologÃ­a UAS", lat: 24.7993, lng: -107.3950, radius: 100 },
+    { name: "Facultad de Psicología UAS", lat: 24.7993, lng: -107.3950, radius: 100 },
     { name: "Universidad AutÃ³noma de Sinaloa - Campus Central", lat: 24.7990, lng: -107.3950, radius: 200 }
 ];
 
@@ -59,10 +59,10 @@ function detectDesktop() {
     const isMacOS = /macintosh|mac os x/.test(ua) && navigator.maxTouchPoints <= 1;
     const isLinux = /linux/.test(ua) && !/android/.test(ua);
     
-    // Detectar si NO es mÃ³vil
+    // Detectar si NO es móvil
     const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
     
-    // Es desktop si tiene OS de escritorio Y no es mÃ³vil
+    // Es desktop si tiene OS de escritorio Y no es móvil
     return (isWindows || isMacOS || isLinux) && !isMobile;
 }
 
@@ -99,24 +99,24 @@ function getDeviceInfo() {
   };
 }
 
-// Inicializar aplicaciÃ³n
+// Inicializar aplicación
 document.addEventListener('DOMContentLoaded', function() {
     console.log('=== INFORMACIÃ“N DEL DISPOSITIVO ===');
     console.log('Tipo:', deviceType);
     console.log('Es Desktop:', isDesktop);
-    console.log('PrecisiÃ³n requerida:', REQUIRED_ACCURACY + 'm');
-    console.log('PrecisiÃ³n Ã³ptima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
+    console.log('Precisión requerida:', REQUIRED_ACCURACY + 'm');
+    console.log('Precisión óptima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
     
     if (isDesktop) {
-        console.log('âš ï¸ MODO DESKTOP ACTIVADO');
+        console.log('⚠ï¸ MODO DESKTOP ACTIVADO');
         console.log('   Los ordenadores no tienen GPS integrado.');
-        console.log('   La ubicaciÃ³n se obtiene por IP/WiFi (menor precisiÃ³n).');
-        console.log('   PrecisiÃ³n aceptada: hasta ' + REQUIRED_ACCURACY + 'm');
+        console.log('   La ubicación se obtiene por IP/WiFi (menor precisión).');
+        console.log('   Precisión aceptada: hasta ' + REQUIRED_ACCURACY + 'm');
         showDesktopWarning();
     }
     
     if (isIOS) {
-        console.log('ðŸŽ¯ Modo iOS activado - Aplicando compatibilidad especial');
+        console.log('🎯 Modo iOS activado - Aplicando compatibilidad especial');
         checkHTTPS();
     }
     
@@ -131,8 +131,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // ========== VALIDACIÃ“N HTTPS PARA iOS ==========
 function checkHTTPS() {
     if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-        console.warn('âš ï¸ iOS requiere HTTPS para geolocalizaciÃ³n');
-        showStatus('âš ï¸ Se recomienda usar HTTPS para mejor funcionalidad en iOS', 'warning');
+        console.warn('⚠ï¸ iOS requiere HTTPS para geolocalización');
+        showStatus('⚠ï¸ Se recomienda usar HTTPS para mejor funcionalidad en iOS', 'warning');
         setTimeout(() => hideStatus(), 5000);
     }
 }
@@ -157,10 +157,10 @@ function showDesktopWarning() {
             line-height: 1.6;
         `;
         desktopWarning.innerHTML = `
-            <strong>ðŸ’» Dispositivo Desktop Detectado (${deviceType})</strong><br>
-            Los ordenadores no tienen GPS integrado y usan ubicaciÃ³n por IP/WiFi.<br>
-            <strong>PrecisiÃ³n esperada:</strong> 100-1000 metros (vs 5-50m en mÃ³viles)<br>
-            â„¹ï¸ El sistema aceptarÃ¡ precisiones de hasta ${REQUIRED_ACCURACY} metros.
+            <strong>💻 Dispositivo Desktop Detectado (${deviceType})</strong><br>
+            Los ordenadores no tienen GPS integrado y usan ubicación por IP/WiFi.<br>
+            <strong>Precisión esperada:</strong> 100-1000 metros (vs 5-50m en móviles)<br>
+            ℹ️ El sistema aceptarÃ¡ precisiones de hasta ${REQUIRED_ACCURACY} metros.
         `;
         authSection.appendChild(desktopWarning);
     }
@@ -174,7 +174,7 @@ function safeLocalStorage() {
         localStorage.removeItem(test);
         return true;
     } catch (e) {
-        console.warn('âš ï¸ localStorage no disponible (modo privado)', e);
+        console.warn('⚠ï¸ localStorage no disponible (modo privado)', e);
         return false;
     }
 }
@@ -189,7 +189,7 @@ function safeSetItem(key, value) {
             return false;
         }
     }
-    console.warn('âš ï¸ localStorage bloqueado - datos no persistirÃ¡n');
+    console.warn('⚠ï¸ localStorage bloqueado - datos no persistirÃ¡n');
     return false;
 }
 
@@ -255,7 +255,7 @@ function updatePrivacyUI() {
         signinBtn.disabled = false;
         signinBtn.classList.add('privacy-required');
     }
-    signinBtnText.textContent = 'Iniciar SesiÃ³n con Google';
+    signinBtnText.textContent = 'Iniciar Sesión con Google';
     signinBtn.style.background = '#4285f4';
     signinBtn.style.cursor = 'pointer';
 }
@@ -297,7 +297,7 @@ function acceptPrivacy() {
 
 function rejectPrivacy() {
     hidePrivacyModal();
-    showStatus('Debe aceptar el aviso de privacidad para usar la aplicaciÃ³n.', 'error');
+    showStatus('Debe aceptar el aviso de privacidad para usar la aplicación.', 'error');
     setTimeout(() => hideStatus(), 5000);
 }
 
@@ -430,7 +430,7 @@ function initializeGoogleSignIn() {
     google.accounts.id.cancel();
   } catch (error) {
     console.error('Error inicializando Google Sign-In:', error);
-    showStatus('Error cargando sistema de autenticaciÃ³n.', 'error');
+    showStatus('Error cargando sistema de autenticación.', 'error');
   }
 }
 
@@ -449,10 +449,10 @@ function showIOSGoogleButton() {
     const modalBody = modal.querySelector('.modal-body');
     const modalFooter = modal.querySelector('.modal-footer');
     
-    modalHeader.innerHTML = '<h2>ðŸ” AutenticaciÃ³n con Google</h2>';
+    modalHeader.innerHTML = '<h2>🔒 Autenticación con Google</h2>';
     modalBody.innerHTML = `
         <p style="text-align: center; margin-bottom: 20px; color: #666;">
-            Haga clic en el botÃ³n azul para continuar:
+            Haga clic en el botón azul para continuar:
         </p>
         <div id="ios-google-button-container" style="display: flex; justify-content: center; margin: 20px 0;"></div>
     `;
@@ -483,7 +483,7 @@ function closeIOSAuthModal() {
     if (privacyConsent && !isAuthenticated) {
         privacyConsent = false;
         updatePrivacyUI();
-        showStatus('Debe completar la autenticaciÃ³n.', 'error');
+        showStatus('Debe completar la autenticación.', 'error');
         setTimeout(() => hideStatus(), 5000);
     }
 }
@@ -510,8 +510,8 @@ function showVisibleGoogleButton() {
     `;
     
     container.innerHTML = `
-        <h3 style="margin-bottom: 20px; color: #333;">AutenticaciÃ³n con Google</h3>
-        <p style="margin-bottom: 20px; color: #666;">Haga clic en el botÃ³n azul para continuar:</p>
+        <h3 style="margin-bottom: 20px; color: #333;">Autenticación con Google</h3>
+        <p style="margin-bottom: 20px; color: #666;">Haga clic en el botón azul para continuar:</p>
         <div id="google-button-container" style="margin-bottom: 20px;"></div>
     `;
     
@@ -559,7 +559,7 @@ async function handleCredentialResponse(response) {
         };
 
         if (!currentUser.email_verified) {
-            showStatus('Su cuenta de Gmail no estÃ¡ verificada.', 'error');
+            showStatus('Su cuenta de Gmail no está verificada.', 'error');
             return;
         }
 
@@ -570,7 +570,7 @@ async function handleCredentialResponse(response) {
         }
     } catch (error) {
         console.error('Error procesando credenciales:', error);
-        showStatus('Error en la autenticaciÃ³n.', 'error');
+        showStatus('Error en la autenticación.', 'error');
         if (isIOS) {
             closeIOSAuthModal();
         } else {
@@ -583,7 +583,7 @@ function closeAuthModal() {
     if (privacyConsent && !isAuthenticated) {
         privacyConsent = false;
         updatePrivacyUI();
-        showStatus('Debe completar la autenticaciÃ³n.', 'error');
+        showStatus('Debe completar la autenticación.', 'error');
         setTimeout(() => hideStatus(), 5000);
     }
     
@@ -622,14 +622,13 @@ async function handleLoginFlow() {
         getCurrentLocation();
         updateSubmitButton();
         
-        showStatus(`Â¡Bienvenido ${currentUser.name}! AutenticaciÃ³n exitosa.`, 'success');
-        setTimeout(() => { showTodayRecords(); updateRegistrosSection(); }, 1000);
+        showStatus(`¡Bienvenido ${currentUser.name}! Autenticación exitosa.`, 'success');
         setTimeout(() => hideStatus(), 3000);
     } catch (error) {
         console.error('Error en flujo de login:', error);
         privacyConsent = false;
         updatePrivacyUI();
-        showStatus('Error registrando la autenticaciÃ³n.', 'error');
+        showStatus('Error registrando la autenticación.', 'error');
     }
 }
 
@@ -637,8 +636,8 @@ async function handleRevocationFlow() {
     try {
         await revokePrivacyConsent();
     } catch (error) {
-        console.error('Error en flujo de revocaciÃ³n:', error);
-        showStatus('Error durante la revocaciÃ³n.', 'error');
+        console.error('Error en flujo de revocación:', error);
+        showStatus('Error durante la revocación.', 'error');
     }
 }
 
@@ -664,7 +663,7 @@ function updateAuthenticationUI() {
 
   if (isAuthenticated && currentUser) {
     authSection.classList.add('authenticated');
-    authTitle.textContent = 'âœ… AutenticaciÃ³n Exitosa';
+    authTitle.textContent = 'âœ… Autenticación Exitosa';
     authTitle.classList.add('authenticated');
 
     document.getElementById('user-avatar').src = currentUser.picture;
@@ -674,7 +673,7 @@ function updateAuthenticationUI() {
     signinContainer.style.display = 'none';
   } else {
     authSection.classList.remove('authenticated');
-    authTitle.textContent = 'ðŸ”’ AutenticaciÃ³n Requerida';
+    authTitle.textContent = '🔒’ Autenticación Requerida';
     authTitle.classList.remove('authenticated');
     userInfo.classList.remove('show');
     signinContainer.style.display = 'block';
@@ -712,12 +711,12 @@ function signOut() {
     resetLocationFields();
     resetEvidenciasSection();
 
-    showStatus('SesiÃ³n cerrada correctamente.', 'success');
+    showStatus('Sesión cerrada correctamente.', 'success');
     setTimeout(() => hideStatus(), 3000);
     setTimeout(() => initializeGoogleSignIn(), 1000);
   } catch (error) {
-    console.error('Error cerrando sesiÃ³n:', error);
-    showStatus('Error al cerrar sesiÃ³n.', 'error');
+    console.error('Error cerrando sesión:', error);
+    showStatus('Error al cerrar sesión.', 'error');
   }
 }
 
@@ -727,7 +726,7 @@ function setupEvidenciasHandlers() {
     
     if (isIOS) {
         // iOS: Evento simple, sin drag & drop
-        console.log('ðŸŽ¯ iOS: Configurando manejo simple de archivos');
+        console.log('🎯 iOS: Configurando manejo simple de archivos');
         evidenciasInput.addEventListener('change', function(e) {
             handleIOSFileSelection(e.target.files);
         });
@@ -761,14 +760,14 @@ function setupEvidenciasHandlers() {
 
 // iOS: Manejo simple de archivos (SIN DataTransfer)
 function handleIOSFileSelection(files) {
-    console.log(`ðŸ“± iOS: Procesando ${files.length} archivo(s)...`);
+    console.log(`📱 iOS: Procesando ${files.length} archivo(s)...`);
     
     const fileArray = Array.from(files);
     const validFiles = [];
     const errors = [];
     
     fileArray.forEach(file => {
-        console.log(`Archivo: ${file.name}, Tipo: ${file.type}, TamaÃ±o: ${(file.size/1024/1024).toFixed(2)}MB`);
+        console.log(`Archivo: ${file.name}, Tipo: ${file.type}, Tamaño: ${(file.size/1024/1024).toFixed(2)}MB`);
         
         if (!file.type) {
             errors.push(`${file.name}: Sin tipo MIME`);
@@ -794,7 +793,7 @@ function handleIOSFileSelection(files) {
     });
     
     if (selectedFiles.length + validFiles.length > MAX_FILES) {
-        errors.push(`MÃ¡ximo ${MAX_FILES} imÃ¡genes (ya tiene ${selectedFiles.length})`);
+        errors.push(`MÃ¡ximo ${MAX_FILES} imágenes (ya tiene ${selectedFiles.length})`);
         showEvidenciasStatus(errors.join('<br>'), 'error');
         console.warn(`âŒ LÃ­mite excedido`);
         return;
@@ -802,7 +801,7 @@ function handleIOSFileSelection(files) {
     
     if (errors.length > 0) {
         showEvidenciasStatus(errors.join('<br>'), 'error');
-        console.warn(`âš ï¸ ${errors.length} archivo(s) rechazado(s)`);
+        console.warn(`⚠ï¸ ${errors.length} archivo(s) rechazado(s)`);
     }
     
     // iOS: Guardar archivos directamente (NO tocar input.files)
@@ -823,10 +822,10 @@ function handleFileSelection(files) {
     const validFiles = [];
     const errors = [];
     
-    console.log(`ðŸ” Procesando ${fileArray.length} archivo(s)...`);
+    console.log(`🔒 Procesando ${fileArray.length} archivo(s)...`);
     
     fileArray.forEach(file => {
-        console.log(`Archivo: ${file.name}, Tipo: ${file.type}, TamaÃ±o: ${(file.size/1024/1024).toFixed(2)}MB`);
+        console.log(`Archivo: ${file.name}, Tipo: ${file.type}, Tamaño: ${(file.size/1024/1024).toFixed(2)}MB`);
         
         if (!file.type) {
             errors.push(`${file.name}: Sin tipo MIME (intente otro formato)`);
@@ -852,7 +851,7 @@ function handleFileSelection(files) {
     });
     
     if (selectedFiles.length + validFiles.length > MAX_FILES) {
-        errors.push(`MÃ¡ximo ${MAX_FILES} imÃ¡genes (ya tiene ${selectedFiles.length})`);
+        errors.push(`MÃ¡ximo ${MAX_FILES} imágenes (ya tiene ${selectedFiles.length})`);
         showEvidenciasStatus(errors.join('<br>'), 'error');
         console.warn(`âŒ LÃ­mite de archivos excedido`);
         return;
@@ -860,7 +859,7 @@ function handleFileSelection(files) {
     
     if (errors.length > 0) {
         showEvidenciasStatus(errors.join('<br>'), 'error');
-        console.warn(`âš ï¸ ${errors.length} archivo(s) rechazado(s)`);
+        console.warn(`⚠ï¸ ${errors.length} archivo(s) rechazado(s)`);
     }
     
     validFiles.forEach(file => {
@@ -915,7 +914,7 @@ function updatePreview() {
 // Solo para Android/Windows (iOS NO soporta DataTransfer)
 function updateFileInput() {
     if (isIOS) {
-        console.log('ðŸŽ¯ iOS: Saltando updateFileInput (no soportado)');
+        console.log('🎯 iOS: Saltando updateFileInput (no soportado)');
         return;
     }
     
@@ -925,7 +924,7 @@ function updateFileInput() {
         selectedFiles.forEach(file => dt.items.add(file));
         input.files = dt.files;
     } catch (error) {
-        console.warn('âš ï¸ Error actualizando input.files:', error);
+        console.warn('⚠ï¸ Error actualizando input.files:', error);
         // No es crÃ­tico, continuar normal
     }
 }
@@ -950,11 +949,11 @@ function resetEvidenciasSection() {
 // ========== UPLOAD ==========
 async function uploadEvidencias() {
     if (selectedFiles.length === 0) {
-        console.log('â„¹ï¸ No hay archivos para subir');
+        console.log('ℹ️ No hay archivos para subir');
         return [];
     }
     
-    console.log(`ðŸ“¤ Iniciando subida de ${selectedFiles.length} archivo(s)...`);
+    console.log(`📤 Iniciando subida de ${selectedFiles.length} archivo(s)...`);
     
     const tipoRegistro = document.getElementById('tipo_registro').value || 'sin_tipo';
     const evidenciasInfo = [];
@@ -968,7 +967,7 @@ async function uploadEvidencias() {
         const fullFileName = `${fileName}.${extension}`;
         
         try {
-            console.log(`ðŸ“¤ [${i+1}/${selectedFiles.length}] Procesando: ${file.name}`);
+            console.log(`📤 [${i+1}/${selectedFiles.length}] Procesando: ${file.name}`);
             showEvidenciasStatus(`Subiendo imagen ${i + 1}/${selectedFiles.length}: ${file.name}`, 'loading');
             
             if (!file || !file.type || file.size === 0) {
@@ -978,9 +977,9 @@ async function uploadEvidencias() {
             let base64Data;
             try {
                 base64Data = await fileToBase64(file);
-                console.log(`âœ… ConversiÃ³n Base64 exitosa: ${(base64Data.length/1024).toFixed(1)}KB`);
+                console.log(`âœ… Conversión Base64 exitosa: ${(base64Data.length/1024).toFixed(1)}KB`);
             } catch (b64Error) {
-                console.error(`âŒ Error en conversiÃ³n Base64:`, b64Error);
+                console.error(`âŒ Error en conversión Base64:`, b64Error);
                 throw new Error(`Error al procesar la imagen: ${b64Error.message}`);
             }
             
@@ -994,7 +993,7 @@ async function uploadEvidencias() {
                 timestamp: new Date().toISOString()
             };
             
-            console.log(`ðŸš€ Enviando archivo ${i + 1}: ${fullFileName} (${file.type})`);
+            console.log(`🚀 Enviando archivo ${i + 1}: ${fullFileName} (${file.type})`);
             
             const uploadResult = await Promise.race([
                 sendDataWithFallback(uploadData),
@@ -1028,7 +1027,7 @@ async function uploadEvidencias() {
             });
             
             showEvidenciasStatus(
-                `âš ï¸ Error en ${file.name}: ${error.message}`, 
+                `⚠ï¸ Error en ${file.name}: ${error.message}`, 
                 'warning'
             );
             
@@ -1043,13 +1042,13 @@ async function uploadEvidencias() {
     const successCount = evidenciasInfo.filter(e => e.uploadStatus === 'SUCCESS').length;
     const failCount = evidenciasInfo.filter(e => e.uploadStatus === 'FAILED').length;
     
-    console.log(`\nðŸ“Š RESUMEN DE SUBIDA:`);
+    console.log(`\n📊 RESUMEN DE SUBIDA:`);
     console.log(`   âœ… Exitosas: ${successCount}`);
     console.log(`   âŒ Fallidas: ${failCount}`);
-    console.log(`   ðŸ“ Total: ${evidenciasInfo.length}`);
+    console.log(`   📍 Total: ${evidenciasInfo.length}`);
     
     if (failCount > 0) {
-        console.log(`\nâš ï¸ ARCHIVOS FALLIDOS:`);
+        console.log(`\n⚠ï¸ ARCHIVOS FALLIDOS:`);
         evidenciasInfo.filter(e => e.uploadStatus === 'FAILED').forEach(e => {
             console.log(`   - ${e.originalName}: ${e.error}`);
         });
@@ -1071,7 +1070,7 @@ async function uploadEvidencias() {
 }
 
 async function sendDataWithFallback(data) {
-  console.warn('âš ï¸ sendDataWithFallback obsoleto, use ');
+  console.warn('⚠ï¸ sendDataWithFallback obsoleto, use ');
   return sendDataWithIframe(data);
 }
 
@@ -1126,7 +1125,7 @@ function fileToBase64(file) {
             return;
         }
         
-        console.log(`ðŸ“„ Convirtiendo ${file.name} a Base64...`);
+        console.log(`🔄 Convirtiendo ${file.name} a Base64...`);
         
         const reader = new FileReader();
         
@@ -1140,7 +1139,7 @@ function fileToBase64(file) {
                 
                 const base64 = result.split(',')[1];
                 if (!base64 || base64.length === 0) {
-                    reject(new Error('Error: conversiÃ³n Base64 fallÃ³'));
+                    reject(new Error('Error: conversión Base64 fallÃ³'));
                     return;
                 }
                 
@@ -1178,7 +1177,7 @@ function generateRegistroID() {
   const random = Math.random().toString(36).substring(2, 10);
   const registroID = `REG_${timestamp}_${email}_${random}`.replace(/[^a-zA-Z0-9_]/g, '');
   
-  console.log('ðŸ“‹ Registro ID generado:', registroID);
+  console.log('📋 Registro ID generado:', registroID);
   return registroID;
 }
 
@@ -1192,20 +1191,20 @@ async function sendWithVerification(data, attempt = 1) {
   const MAX_ATTEMPTS = 3;
   
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`ðŸš€ INTENTO ${attempt}/${MAX_ATTEMPTS}`);
+  console.log(`🚀 INTENTO ${attempt}/${MAX_ATTEMPTS}`);
   console.log(`Registro ID: ${data.registro_id}`);
   console.log(`${'='.repeat(60)}`);
   
   try {
     // ========== PASO 1: VALIDAR DATOS ANTES DE ENVIAR ==========
-    console.log('ðŸ” Validando datos antes de enviar...');
+    console.log('🔒 Validando datos antes de enviar...');
     
     if (!data.modalidad || data.modalidad === '' || data.modalidad === 'undefined' || data.modalidad === 'null') {
       throw new Error('VALIDACIÃ“N: Campo Modalidad vacÃ­o o invÃ¡lido');
     }
     
     if (!data.email || !data.google_user_id) {
-      throw new Error('VALIDACIÃ“N: Datos de autenticaciÃ³n faltantes');
+      throw new Error('VALIDACIÃ“N: Datos de autenticación faltantes');
     }
     
     if (!data.latitude || !data.longitude) {
@@ -1216,10 +1215,10 @@ async function sendWithVerification(data, attempt = 1) {
       throw new Error('VALIDACIÃ“N: registro_id vacÃ­o');
     }
     
-    console.log('âœ… ValidaciÃ³n previa exitosa');
+    console.log('âœ… Validación previa exitosa');
     
     // ========== PASO 2: ENVIAR DATOS ==========
-    console.log('ðŸ“¤ Enviando datos al backend...');
+    console.log('📤 Enviando datos al backend...');
     await sendDataWithIframe(data);
     
     console.log('âœ… Formulario enviado al servidor');
@@ -1229,19 +1228,19 @@ async function sendWithVerification(data, attempt = 1) {
     await sleep(TIEMPO_ESPERA_INICIAL);
     
     // ========== PASO 3: VERIFICACIÃ“N CON MANEJO MEJORADO DE ERRORES ==========
-    console.log(`\nðŸ” INICIANDO VERIFICACIÃ“N (${VERIFICATION_ATTEMPTS} intentos)...`);
+    console.log(`\n🔒 INICIANDO VERIFICACIÃ“N (${VERIFICATION_ATTEMPTS} intentos)...`);
     
     let verificationResult = null;
     let verificationSuccess = false;
     let networkErrors = 0;
     
     for (let v = 1; v <= VERIFICATION_ATTEMPTS; v++) {
-      console.log(`\nðŸ” VerificaciÃ³n ${v}/${VERIFICATION_ATTEMPTS}...`);
+      console.log(`\n🔒 Verificación ${v}/${VERIFICATION_ATTEMPTS}...`);
       
       try {
         verificationResult = await verifyWithScriptTag(data.registro_id);
         
-        console.log('Resultado verificaciÃ³n:', verificationResult);
+        console.log('Resultado verificación:', verificationResult);
         
         // â­ NUEVO: Detectar errores de red
         if (verificationResult.error && (
@@ -1252,11 +1251,11 @@ async function sendWithVerification(data, attempt = 1) {
           verificationResult.timeout
         )) {
           networkErrors++;
-          console.warn(`âš ï¸ Error de red detectado (${networkErrors}/${VERIFICATION_ATTEMPTS})`);
+          console.warn(`⚠ï¸ Error de red detectado (${networkErrors}/${VERIFICATION_ATTEMPTS})`);
           
           // Si tenemos mÃºltiples errores de red consecutivos, asumir que SÃ se guardÃ³
-          if (attempt >= MAX_ATTEMPTS && networkErrors >= 2 && ENABLE_VERIFICATION_FALLBACK) {
-            console.log('âš ï¸âš ï¸ MODO FALLBACK ACTIVADO');
+          if (networkErrors >= 2 && ENABLE_VERIFICATION_FALLBACK) {
+            console.log('⚠ï¸⚠ï¸ MODO FALLBACK ACTIVADO');
             console.log('MÃºltiples errores de red - Asumiendo que el registro SÃ se guardÃ³');
             
             return {
@@ -1269,7 +1268,7 @@ async function sendWithVerification(data, attempt = 1) {
                 registro_id: data.registro_id,
                 row_number: 'No verificable',
                 timestamp: new Date().toISOString(),
-                message: 'âš ï¸ Registro enviado pero no verificable por problemas de red. VERIFIQUE MANUALMENTE en Google Sheets.',
+                message: '⚠ï¸ Registro enviado pero no verificable por problemas de red. VERIFIQUE MANUALMENTE en Google Sheets.',
                 user_name: data.authenticated_user_name,
                 modalidad: data.modalidad,
                 ubicacion: data.ubicacion_detectada,
@@ -1282,7 +1281,7 @@ async function sendWithVerification(data, attempt = 1) {
           }
         }
         
-        // Verificar si existe y estÃ¡ confirmado
+        // Verificar si existe y está confirmado
         if (verificationResult.success && verificationResult.verified && verificationResult.exists) {
           verificationSuccess = true;
           console.log(`âœ…âœ… REGISTRO VERIFICADO en fila ${verificationResult.row_number}`);
@@ -1291,7 +1290,7 @@ async function sendWithVerification(data, attempt = 1) {
         
         // Si no existe, seguir intentando
         if (!verificationResult.exists && !verificationResult.error) {
-          console.log(`â³ Registro aÃºn no encontrado (intento ${v}/${VERIFICATION_ATTEMPTS})`);
+          console.log(`⏳ Registro aún no encontrado (intento ${v}/${VERIFICATION_ATTEMPTS})`);
           
           if (v < VERIFICATION_ATTEMPTS) {
             const waitTime = TIEMPO_ENTRE_VERIFICACIONES[v - 1] || 5000;
@@ -1300,7 +1299,7 @@ async function sendWithVerification(data, attempt = 1) {
           }
         }
       } catch (verifyError) {
-        console.error(`âš ï¸ Error en verificaciÃ³n ${v}:`, verifyError.message);
+        console.error(`⚠ï¸ Error en verificación ${v}:`, verifyError.message);
         networkErrors++;
         
         if (v < VERIFICATION_ATTEMPTS) {
@@ -1333,12 +1332,12 @@ async function sendWithVerification(data, attempt = 1) {
       };
     } else {
       // NO SE PUDO VERIFICAR
-      console.warn('\nâš ï¸âš ï¸ NO SE PUDO VERIFICAR EL REGISTRO');
+      console.warn('\n⚠ï¸⚠ï¸ NO SE PUDO VERIFICAR EL REGISTRO');
       console.warn('Errores de red detectados:', networkErrors);
       
       // â­â­â­ FIX CRÃTICO: Si hay errores de red, NO reintentar todo â­â­â­
       if (networkErrors >= 2 && ENABLE_VERIFICATION_FALLBACK) {
-        console.log('\nâš ï¸ ACTIVANDO MODO FALLBACK FINAL');
+        console.log('\n⚠ï¸ ACTIVANDO MODO FALLBACK FINAL');
         console.log('El sistema asume que el registro SÃ se guardÃ³');
         console.log('IMPORTANTE: Usuario debe verificar manualmente');
         
@@ -1353,7 +1352,7 @@ async function sendWithVerification(data, attempt = 1) {
             registro_id: data.registro_id,
             row_number: 'No verificable',
             timestamp: new Date().toISOString(),
-            message: 'âš ï¸ Registro probablemente guardado pero no verificable. VERIFIQUE MANUALMENTE.',
+            message: '⚠ï¸ Registro probablemente guardado pero no verificable. VERIFIQUE MANUALMENTE.',
             user_name: data.authenticated_user_name,
             modalidad: data.modalidad,
             ubicacion: data.ubicacion_detectada,
@@ -1368,15 +1367,15 @@ async function sendWithVerification(data, attempt = 1) {
       // Si no hay errores de red, intentar reenvÃ­o completo
       if (attempt < MAX_ATTEMPTS) {
         const waitTime = 10000 * attempt;
-        console.log(`\nðŸ”„ Reintentando envÃ­o completo (${attempt + 1}/${MAX_ATTEMPTS})...`);
-        console.log(`â³ Esperando ${waitTime/1000}s...`);
+        console.log(`\n🔒„ Reintentando envÃ­o completo (${attempt + 1}/${MAX_ATTEMPTS})...`);
+        console.log(`⏳ Esperando ${waitTime/1000}s...`);
         await sleep(waitTime);
         
         return sendWithVerification(data, attempt + 1);
       }
       
       // Si ya agotamos intentos, retornar error
-      throw new Error('No se pudo verificar el registro despuÃ©s de mÃºltiples intentos');
+      throw new Error('No se pudo verificar el registro después de mÃºltiples intentos');
     }
     
   } catch (error) {
@@ -1384,7 +1383,7 @@ async function sendWithVerification(data, attempt = 1) {
     
     if (attempt < MAX_ATTEMPTS) {
       const waitTime = 5000 * attempt;
-      console.log(`â³ Esperando ${waitTime/1000}s antes de reintentar...`);
+      console.log(`⏳ Esperando ${waitTime/1000}s antes de reintentar...`);
       await sleep(waitTime);
       
       return sendWithVerification(data, attempt + 1);
@@ -1425,9 +1424,9 @@ async function verifyWithSimpleGet(registroID) {
     .then(() => {
       clearTimeout(timeoutId);
       // En modo no-cors no podemos leer la respuesta
-      // AsÃ­ que asumimos que se enviÃ³ y verificamos de otra forma
+      // Así que asumimos que se enviÃ³ y verificamos de otra forma
       
-      // Intentar verificaciÃ³n alternativa con script tag
+      // Intentar verificación alternativa con script tag
       return (registroID);
     })
     .then(result => {
@@ -1447,7 +1446,7 @@ async function verifyWithSimpleGet(registroID) {
 
 // ========== VERIFICAR CON SCRIPT TAG (JSONP) ==========
 async function verifyWithScriptTag(registroID) {
-  console.log('ðŸ” Verificando con script tag JSONP...');
+  console.log('🔒 Verificando con script tag JSONP...');
   
   return new Promise((resolve) => {
     const callbackName = 'verify_' + Date.now().toString().substring(5);
@@ -1456,12 +1455,12 @@ async function verifyWithScriptTag(registroID) {
     // â­ FIX: Timeout aumentado y mejor manejo de errores de red
     const timeoutId = setTimeout(() => {
       cleanup();
-      console.warn('â±ï¸ Timeout en verificaciÃ³n JSONP (20s)');
+      console.warn('â±ï¸ Timeout en verificación JSONP (20s)');
       resolve({
         success: false,
         verified: false,
         exists: false,
-        error: 'Timeout en verificaciÃ³n - posible problema de red',
+        error: 'Timeout en verificación - posible problema de red',
         timeout: true,
         networkError: true
       });
@@ -1517,7 +1516,7 @@ async function verifyWithScriptTag(registroID) {
 
 // ========== ENVIAR DATOS CON IFRAME (MEJORADO) ==========
 async function sendDataWithIframe(data) {
-  console.log('ðŸ“¨ Enviando con iframe (sin leer respuesta)...');
+  console.log('🔨 Enviando con iframe (sin leer respuesta)...');
   
   return new Promise((resolve) => {
     const iframe = document.createElement('iframe');
@@ -1547,7 +1546,7 @@ async function sendDataWithIframe(data) {
     document.body.appendChild(iframe);
     document.body.appendChild(form);
     
-    console.log('ðŸ“® Enviando formulario...');
+    console.log('🔮 Enviando formulario...');
     form.submit();
     
     // Esperar 5 segundos y asumir que se enviÃ³
@@ -1561,11 +1560,11 @@ async function sendDataWithIframe(data) {
         if (document.body.contains(form)) document.body.removeChild(form);
       } catch (e) {}
       
-      // Retornar respuesta que requiere verificaciÃ³n
+      // Retornar respuesta que requiere verificación
       resolve({
         success: true,
         verified: false,
-        message: 'Datos enviados (verificaciÃ³n requerida)',
+        message: 'Datos enviados (verificación requerida)',
         needs_verification: true
       });
     }, 5000);
@@ -1574,14 +1573,14 @@ async function sendDataWithIframe(data) {
 
 // ========== VERIFICAR REGISTRO EN SHEETS ==========
 async function verifyRegistro(registroID) {
-  console.log('ðŸ” Verificando registro:', registroID);
+  console.log('🔒 Verificando registro:', registroID);
   
   // Intentar con script tag directamente
   try {
     const result = await verifyWithScriptTag(registroID);
     return result;
   } catch (error) {
-    console.error('âŒ Error en verificaciÃ³n:', error);
+    console.error('âŒ Error en verificación:', error);
     return {
       success: false,
       verified: false,
@@ -1593,7 +1592,7 @@ async function verifyRegistro(registroID) {
 
 // ========== VERIFICAR CON IFRAME (FALLBACK) ==========
 async function verifyWithIframe(registroID) {
-  console.log('ðŸ” Verificando con iframe GET...');
+  console.log('🔒 Verificando con iframe GET...');
   
   return new Promise((resolve) => {
     // Crear un script tag en lugar de iframe para evitar CORS
@@ -1612,24 +1611,24 @@ async function verifyWithIframe(registroID) {
     script.src = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}&callback=${callbackName}&_t=${Date.now()}`;
     
     script.onerror = function(error) {
-      console.error('âŒ Error cargando script de verificaciÃ³n');
+      console.error('âŒ Error cargando script de verificación');
       cleanup();
       resolve({
         success: false,
         verified: false,
         exists: false,
-        error: 'Error de red en verificaciÃ³n'
+        error: 'Error de red en verificación'
       });
     };
     
     const timeoutId = setTimeout(() => {
-      console.warn('â±ï¸ Timeout en verificaciÃ³n (10s)');
+      console.warn('â±ï¸ Timeout en verificación (10s)');
       cleanup();
       resolve({
         success: false,
         verified: false,
         exists: false,
-        error: 'Timeout en verificaciÃ³n'
+        error: 'Timeout en verificación'
       });
     }, 10000);
     
@@ -1644,7 +1643,7 @@ async function verifyWithIframe(registroID) {
       }
     }
     
-    console.log('ðŸ“¡ Cargando script de verificaciÃ³n...');
+    console.log('📡 Cargando script de verificación...');
     document.body.appendChild(script);
   });
 }
@@ -1654,7 +1653,7 @@ async function handleSubmit(e) {
   e.preventDefault();
   
   console.log('\n' + '='.repeat(70));
-  console.log('ðŸš€ INICIANDO ENVÃO (MODO IDEMPOTENTE CON VERIFICACIÃ“N MEJORADA)');
+  console.log('🚀 INICIANDO ENVÃO (MODO IDEMPOTENTE CON VERIFICACIÃ“N MEJORADA)');
   console.log('='.repeat(70));
   
   // ========== VALIDACIONES INICIALES ==========
@@ -1664,12 +1663,12 @@ async function handleSubmit(e) {
   }
   
   if (!locationValid || !currentLocation) {
-    showStatus('âŒ UbicaciÃ³n GPS requerida', 'error');
+    showStatus('âŒ Ubicación GPS requerida', 'error');
     return;
   }
   
   if (currentLocation.accuracy > REQUIRED_ACCURACY) {
-    showStatus(`âŒ PrecisiÃ³n GPS insuficiente: ${Math.round(currentLocation.accuracy)}m`, 'error');
+    showStatus(`âŒ Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m`, 'error');
     return;
   }
   
@@ -1677,26 +1676,26 @@ async function handleSubmit(e) {
     return;
   }
   
-  // Deshabilitar botÃ³n de envÃ­o
+  // Deshabilitar botón de envÃ­o
   const submitBtn = document.querySelector('.submit-btn');
   const originalText = submitBtn.textContent;
   submitBtn.disabled = true;
-  submitBtn.textContent = 'â³ Procesando...';
+  submitBtn.textContent = '⏳ Procesando...';
   
   try {
     // ========== GENERAR ID ÃšNICO ==========
     const registroID = generateRegistroID();
     
-    console.log('ðŸ“‹ ID:', registroID);
-    console.log('ðŸ‘¤ Usuario:', currentUser.name);
-    console.log('ðŸ“± Dispositivo:', deviceType);
-    console.log('ðŸŽ¯ GPS:', Math.round(currentLocation.accuracy) + 'm');
+    console.log('📋 ID:', registroID);
+    console.log('👤 Usuario:', currentUser.name);
+    console.log('📱 Dispositivo:', deviceType);
+    console.log('🎯 GPS:', Math.round(currentLocation.accuracy) + 'm');
     
     // ========== SUBIR EVIDENCIAS (SI EXISTEN) ==========
     let evidenciasUrls = [];
     if (selectedFiles.length > 0) {
-      console.log('\nðŸ“¸ SUBIENDO EVIDENCIAS...');
-      showStatus('ðŸ“¤ Subiendo evidencias...', 'success');
+      console.log('\n📸 SUBIENDO EVIDENCIAS...');
+      showStatus('📤 Subiendo evidencias...', 'success');
       
       evidenciasUrls = await uploadEvidencias();
       
@@ -1708,8 +1707,8 @@ async function handleSubmit(e) {
         const errorDetails = failedUploads.map(e => `â€¢ ${e.originalName}: ${e.error}`).join('\n');
         
         const userDecision = confirm(
-          `âš ï¸ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n` +
-          `Â¿Continuar SIN evidencias?`
+          `⚠ï¸ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n` +
+          `¿Continuar SIN evidencias?`
         );
         
         if (!userDecision) {
@@ -1719,7 +1718,7 @@ async function handleSubmit(e) {
     }
     
     // ========== PREPARAR DATOS DEL FORMULARIO ==========
-    console.log('\nðŸ“ PREPARANDO DATOS...');
+    console.log('\n📍 PREPARANDO DATOS...');
     
     const formData = new FormData(e.target);
     const data = {};
@@ -1759,7 +1758,7 @@ async function handleSubmit(e) {
     data.evidencias_nombres = successUploads.map(e => e.fileName).join(', ');
     data.carpeta_evidencias = generateStudentFolderName();
     
-    // UbicaciÃ³n (asegurar valores actuales)
+    // Ubicación (asegurar valores actuales)
     data.modalidad = document.getElementById('modalidad').value;
     data.ubicacion_detectada = document.getElementById('ubicacion_detectada').value;
     data.direccion_completa = document.getElementById('direccion_completa').value;
@@ -1785,17 +1784,17 @@ async function handleSubmit(e) {
     }
     
     console.log('âœ… Datos preparados correctamente');
-    console.log('ðŸ“Š Modalidad:', data.modalidad);
-    console.log('ðŸ“ UbicaciÃ³n:', data.ubicacion_detectada);
-    console.log('ðŸŽ¯ PrecisiÃ³n:', data.precision_gps_metros + 'm');
+    console.log('📊 Modalidad:', data.modalidad);
+    console.log('📍 Ubicación:', data.ubicacion_detectada);
+    console.log('🎯 Precisión:', data.precision_gps_metros + 'm');
     
     // ========== ENVIAR CON VERIFICACIÃ“N ==========
-    console.log('\nðŸ“¤ ENVIANDO CON VERIFICACIÃ“N MEJORADA...');
-    showStatus('ðŸ“¤ Enviando asistencia (esto puede tomar hasta 60 segundos)...', 'success');
+    console.log('\n📤 ENVIANDO CON VERIFICACIÃ“N MEJORADA...');
+    showStatus('📤 Enviando asistencia (esto puede tomar hasta 60 segundos)...', 'success');
     
     const result = await sendWithVerification(data);
     
-    console.log('\nðŸ“Š RESULTADO FINAL:');
+    console.log('\n📊 RESULTADO FINAL:');
     console.log('   Success:', result.success);
     console.log('   Verified:', result.verified);
     console.log('   Exists:', result.exists);
@@ -1811,39 +1810,37 @@ async function handleSubmit(e) {
       
       const rowNumber = result.data?.row_number || 'N/A';
       const searchMethod = result.data?.search_method || 'unknown';
-      const foundInFinal = result.found_in_final_check ? '(encontrado en verificaciÃ³n final)' : '';
+      const foundInFinal = result.found_in_final_check ? '(encontrado en verificación final)' : '';
       
-      let statusMessage = `âœ… Â¡Asistencia VERIFICADA en Google Sheets! ${foundInFinal}
+      let statusMessage = `âœ… ¡Asistencia VERIFICADA en Google Sheets! ${foundInFinal}
 
-ðŸ“‹ Registro ID: ${data.registro_id}
-ðŸ‘¤ Usuario: ${currentUser.name}
-ðŸ“± Dispositivo: ${deviceType}
-ðŸ“Š Modalidad: ${data.modalidad}
-ðŸ“ UbicaciÃ³n: ${data.ubicacion_detectada}
-ðŸŽ¯ PrecisiÃ³n GPS: ${data.precision_gps_metros}m
-ðŸ“¢ Fila en Sheets: ${rowNumber}
-ðŸ”„ Intentos usados: ${result.attempts}/${result.verification_attempts || 3}
-ðŸ” MÃ©todo bÃºsqueda: ${searchMethod}`;
+📋 Registro ID: ${data.registro_id}
+👤 Usuario: ${currentUser.name}
+📱 Dispositivo: ${deviceType}
+📊 Modalidad: ${data.modalidad}
+📍 Ubicación: ${data.ubicacion_detectada}
+🎯 Precisión GPS: ${data.precision_gps_metros}m
+🔢 Fila en Sheets: ${rowNumber}
+🔒„ Intentos usados: ${result.attempts}/${result.verification_attempts || 3}
+🔒 MÃ©todo bÃºsqueda: ${searchMethod}`;
       
       if (data.total_evidencias > 0) {
-        statusMessage += `\nðŸ“¸ Evidencias subidas: ${data.total_evidencias}`;
+        statusMessage += `\n📸 Evidencias subidas: ${data.total_evidencias}`;
       }
       
       if (data.evidencias_failed > 0) {
-        statusMessage += `\nâš ï¸ Evidencias fallidas: ${data.evidencias_failed}`;
+        statusMessage += `\n⚠ï¸ Evidencias fallidas: ${data.evidencias_failed}`;
       }
       
       if (result.duplicate_prevented) {
-        statusMessage += `\nðŸ”’ Duplicado prevenido (idempotencia)`;
+        statusMessage += `\n🔒’ Duplicado prevenido (idempotencia)`;
       }
       
       showStatus(statusMessage, 'success');
       
       // Preguntar al usuario si quiere registrar otra asistencia
       setTimeout(() => {
-      // Mostrar registros del día antes del confirm
-      setTimeout(() => showTodayRecords(), 2000);
-      setTimeout(() => { showTodayRecords(); updateRegistrosSection(); }, 2000);
+        if (confirm('âœ… Registro verificado exitosamente en Google Sheets.\n\n¿Desea registrar otra asistencia?')) {
           resetFormOnly();
           getCurrentLocation();
         } else {
@@ -1853,84 +1850,84 @@ async function handleSubmit(e) {
       }, 8000);
       
     } 
-    // â­â­â­ CASO 2: âš ï¸ NUEVO - Enviado pero no verificable por problemas de red
+    // â­â­â­ CASO 2: ⚠ï¸ NUEVO - Enviado pero no verificable por problemas de red
     else if (result.success && result.assumedSaved && result.networkIssues) {
-      console.log('\nâš ï¸âš ï¸ REGISTRO ENVIADO - VERIFICACIÃ“N BLOQUEADA POR RED');
+      console.log('\n⚠ï¸⚠ï¸ REGISTRO ENVIADO - VERIFICACIÃ“N BLOQUEADA POR RED');
       console.log('Registro ID:', data.registro_id);
       console.log('Errores de red:', result.network_errors);
       console.log('Modo fallback:', result.mustVerifyManually ? 'SÃ' : 'NO');
       
-      showStatus(`âš ï¸ REGISTRO PROBABLEMENTE GUARDADO
+      showStatus(`⚠ï¸ REGISTRO PROBABLEMENTE GUARDADO
 
 El sistema procesÃ³ su solicitud correctamente y enviÃ³ los datos a Google Sheets.
 Sin embargo, no se pudo VERIFICAR debido a problemas de red.
 
-ðŸ“‹ Registro ID: ${data.registro_id}
-ðŸ‘¤ Usuario: ${currentUser.name}
-ðŸ“± Dispositivo: ${deviceType}
-ðŸ“Š Modalidad: ${data.modalidad}
-ðŸ“ UbicaciÃ³n: ${data.ubicacion_detectada}
-ðŸŽ¯ PrecisiÃ³n GPS: ${data.precision_gps_metros}m
+📋 Registro ID: ${data.registro_id}
+👤 Usuario: ${currentUser.name}
+📱 Dispositivo: ${deviceType}
+📊 Modalidad: ${data.modalidad}
+📍 Ubicación: ${data.ubicacion_detectada}
+🎯 Precisión GPS: ${data.precision_gps_metros}m
 
 âœ… DATOS ENVIADOS EXITOSAMENTE al servidor
-âš ï¸ VERIFICACIÃ“N BLOQUEADA por problemas de red (error 403 o timeout)
+⚠ï¸ VERIFICACIÃ“N BLOQUEADA por problemas de red (error 403 o timeout)
 
-ðŸ” ACCIÃ“N REQUERIDA - VERIFICACIÃ“N MANUAL:
+🔒 ACCIÃ“N REQUERIDA - VERIFICACIÃ“N MANUAL:
 â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 1. Abra Google Sheets en otra pestaÃ±a
 2. Presione Ctrl+F (Cmd+F en Mac) 
 3. Busque exactamente: ${data.registro_id}
 4. Resultados:
-   â€¢ âœ… SI ENCUENTRA EL REGISTRO â†’ Todo estÃ¡ bien, puede continuar
+   â€¢ âœ… SI ENCUENTRA EL REGISTRO â†’ Todo está bien, puede continuar
    â€¢ âŒ NO ENCUENTRA EL REGISTRO â†’ Intente registrar nuevamente
 
-ðŸ’¡ INFORMACIÃ“N IMPORTANTE:
+💡 INFORMACIÃ“N IMPORTANTE:
 â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-â€¢ En el 90% de casos cuando hay errores de red en la verificaciÃ³n,
+â€¢ En el 90% de casos cuando hay errores de red en la verificación,
   el registro SÃ se guardÃ³ correctamente en Google Sheets
 â€¢ Los errores de red (403, timeout) solo afectan la VERIFICACIÃ“N,
   NO el envÃ­o de datos
 â€¢ Google puede tardar 5-30 segundos en procesar el registro
 
 â±ï¸ Tiempo de envÃ­o: EXITOSO âœ…
-âš ï¸ Verificaciones fallidas: ${result.network_errors || 0} (problemas de red)
-ðŸ”„ Intentos realizados: ${result.attempts || 1}
+⚠ï¸ Verificaciones fallidas: ${result.network_errors || 0} (problemas de red)
+🔒„ Intentos realizados: ${result.attempts || 1}
 
-Â¿QUÃ‰ HACER AHORA?
+¿QUÃ‰ HACER AHORA?
 â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-ðŸ‘‰ OpciÃ³n 1 (RECOMENDADO): 
-   Abra Google Sheets y verifique si el registro estÃ¡ guardado
+👉 OpciÃ³n 1 (RECOMENDADO): 
+   Abra Google Sheets y verifique si el registro está guardado
 
-ðŸ‘‰ OpciÃ³n 2: 
+👉 OpciÃ³n 2: 
    Espere 30 segundos y registre nuevamente (el sistema detectarÃ¡ duplicados)
 
 â“ PREGUNTAS FRECUENTES:
 â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-Q: Â¿Se guardÃ³ mi registro?
+Q: ¿Se guardÃ³ mi registro?
 A: Probablemente SÃ. Los datos se enviaron correctamente al servidor.
 
-Q: Â¿Por quÃ© no se puede verificar?
+Q: ¿Por qué no se puede verificar?
 A: Problemas temporales de red o lÃ­mites de Google Scripts.
 
-Q: Â¿Puedo registrar nuevamente?
-A: SÃ. El sistema detecta duplicados automÃ¡ticamente.
+Q: ¿Puedo registrar nuevamente?
+A: SÃ. El sistema detecta duplicados automáticamente.
 
-Q: Â¿QuÃ© hago si NO estÃ¡ en Sheets?
+Q: ¿Qué hago si NO está en Sheets?
 A: Intente registrar nuevamente. Si persiste, contacte al administrador.
 
-ðŸ“ž Soporte: Si el problema persiste despuÃ©s de 2 intentos,
+📞 Soporte: Si el problema persiste después de 2 intentos,
 capture pantalla de este mensaje y contacte al administrador.`, 'warning');
       
-      // Rehabilitar botÃ³n para permitir verificaciÃ³n manual o nuevo intento
+      // Rehabilitar botón para permitir verificación manual o nuevo intento
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
       
-      // Mantener el mensaje visible por mÃ¡s tiempo
+      // Mantener el mensaje visible por más tiempo
       setTimeout(() => {
         const userChoice = confirm(
-          'âš ï¸ El registro probablemente se guardÃ³ pero no se pudo verificar.\n\n' +
-          'Â¿Desea intentar registrar nuevamente?\n\n' +
-          '(El sistema detectarÃ¡ duplicados automÃ¡ticamente si ya existe)'
+          '⚠ï¸ El registro probablemente se guardÃ³ pero no se pudo verificar.\n\n' +
+          '¿Desea intentar registrar nuevamente?\n\n' +
+          '(El sistema detectarÃ¡ duplicados automáticamente si ya existe)'
         );
         
         if (userChoice) {
@@ -1943,28 +1940,28 @@ capture pantalla de este mensaje y contacte al administrador.`, 'warning');
       }, 60000); // 60 segundos para leer
       
     }
-    // â­â­â­ CASO 3: âš ï¸ Inconsistencia - Dice verificado pero no existe (no deberÃ­a pasar)
+    // â­â­â­ CASO 3: ⚠ï¸ Inconsistencia - Dice verificado pero no existe (no deberÃ­a pasar)
     else if (result.success && result.verified && !result.exists) {
-      console.error('\nâš ï¸âš ï¸ INCONSISTENCIA DETECTADA');
-      console.error('El sistema reportÃ³ Ã©xito pero la verificaciÃ³n indica que NO existe');
+      console.error('\n⚠ï¸⚠ï¸ INCONSISTENCIA DETECTADA');
+      console.error('El sistema reportÃ³ Ã©xito pero la verificación indica que NO existe');
       console.error('Registro ID:', data.registro_id);
       
-      showStatus(`âš ï¸ ADVERTENCIA: Inconsistencia detectada
+      showStatus(`⚠ï¸ ADVERTENCIA: Inconsistencia detectada
 
 El sistema procesÃ³ su solicitud pero no puede confirmar que el registro existe en Google Sheets.
 
-ðŸ“‹ Registro ID: ${data.registro_id}
-ðŸ‘¤ Usuario: ${currentUser.name}
-ðŸ”„ Intentos realizados: ${result.attempts}
+📋 Registro ID: ${data.registro_id}
+👤 Usuario: ${currentUser.name}
+🔒„ Intentos realizados: ${result.attempts}
 
-âš ï¸ ACCIÃ“N REQUERIDA:
-1. Capture una captura de pantalla de esta pÃ¡gina
+⚠ï¸ ACCIÃ“N REQUERIDA:
+1. Capture una captura de pantalla de esta página
 2. Abra Google Sheets manualmente
 3. Busque el Registro ID: ${data.registro_id}
 4. Si NO existe, registre nuevamente
 5. Si SÃ existe, ignore este mensaje
 
-âš ï¸ Por favor, reporte este incidente al administrador.`, 'error');
+⚠ï¸ Por favor, reporte este incidente al administrador.`, 'error');
       
       // No resetear el formulario para que el usuario pueda capturar pantalla
       submitBtn.disabled = false;
@@ -1985,37 +1982,37 @@ El sistema procesÃ³ su solicitud pero no puede confirmar que el registro exist
       
       showStatus(`âŒ ERROR: No se pudo verificar la asistencia
 
-ðŸš« Motivo: ${errorDetail}
+🚫 Motivo: ${errorDetail}
 
-âš ï¸ IMPORTANTE: 
+⚠ï¸ IMPORTANTE: 
 Por favor, VERIFIQUE MANUALMENTE en Google Sheets si el registro existe.
 
-ðŸ“‹ Registro ID: ${data.registro_id}
-ðŸ”„ Intentos realizados: ${result.attempts || 1}
-âš ï¸ Errores de red: ${result.network_errors || 0}
+📋 Registro ID: ${data.registro_id}
+🔒„ Intentos realizados: ${result.attempts || 1}
+⚠ï¸ Errores de red: ${result.network_errors || 0}
 â±ï¸ Tiempo total: ~${(result.attempts || 1) * 30}s
 
-ðŸ” VERIFICACIÃ“N MANUAL:
+🔒 VERIFICACIÃ“N MANUAL:
 1. Abra Google Sheets
 2. Busque (Ctrl+F) el ID: ${data.registro_id}
 3. Si EXISTE: Ignore este mensaje, el registro SÃ se guardÃ³
 4. Si NO EXISTE: Intente registrar nuevamente
 
 Por favor, verifique:
-â€¢ Su conexiÃ³n a Internet estÃ¡ activa
-â€¢ Los permisos de ubicaciÃ³n estÃ¡n habilitados
+â€¢ Su conexiÃ³n a Internet está activa
+â€¢ Los permisos de ubicación están habilitados
 â€¢ Tiene espacio disponible en su cuenta Google
 â€¢ No hay problemas con su red (firewall, proxy)
 
-ðŸ”§ QUÃ‰ HACER:
+🔒§ QUÃ‰ HACER:
 â€¢ Intente registrar nuevamente
 â€¢ Si el problema persiste, contacte al administrador
 â€¢ Mencione este Registro ID: ${data.registro_id}
 â€¢ Capture una captura de pantalla de la consola (F12)
 
-ðŸ’¡ CONSEJO: Verifique que el campo "Modalidad" estÃ© seleccionado correctamente.`, 'error');
+💡 CONSEJO: Verifique que el campo "Modalidad" estÃ© seleccionado correctamente.`, 'error');
       
-      // Habilitar botÃ³n para permitir reintento
+      // Habilitar botón para permitir reintento
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
       
@@ -2040,37 +2037,37 @@ Por favor, verifique:
     
     // Mensajes de error especÃ­ficos
     if (errorMessage.includes('cancelado')) {
-      showStatus(`âš ï¸ Registro cancelado
+      showStatus(`⚠ï¸ Registro cancelado
 
 El usuario decidiÃ³ no continuar sin evidencias.`, 'error');
     } else if (errorMessage.includes('Modalidad')) {
       showStatus(`âŒ ERROR: Campo Modalidad invÃ¡lido
 
-ðŸš« ${errorMessage}
+🚫 ${errorMessage}
 
 Por favor:
 1. Verifique que haya seleccionado una modalidad
-2. Recargue la pÃ¡gina si el problema persiste
+2. Recargue la página si el problema persiste
 3. Contacte al administrador si continÃºa
 
-ðŸ“‹ Registro ID intentado: ${registroID}`, 'error');
+📋 Registro ID intentado: ${registroID}`, 'error');
     } else if (errorMessage.includes('red') || errorMessage.includes('network') || errorMessage.includes('timeout')) {
       showStatus(`âŒ ERROR: Problema de conexiÃ³n
 
-ðŸš« ${errorMessage}
+🚫 ${errorMessage}
 
 Por favor:
 1. Verifique su conexiÃ³n a Internet
 2. Intente nuevamente en unos momentos
-3. Si estÃ¡ en WiFi, intente con datos mÃ³viles (o viceversa)
+3. Si está en WiFi, intente con datos móviles (o viceversa)
 
-ðŸ“‹ Registro ID intentado: ${registroID}`, 'error');
+📋 Registro ID intentado: ${registroID}`, 'error');
     } else {
       showStatus(`âŒ ERROR: No se pudo registrar la asistencia
 
-ðŸš« ${errorMessage}
+🚫 ${errorMessage}
 
-âš ï¸ GARANTÃA: El registro NO se guardÃ³.
+⚠ï¸ GARANTÃA: El registro NO se guardÃ³.
 
 Por favor:
 1. Capture una captura de pantalla
@@ -2083,10 +2080,10 @@ Si el problema persiste:
 â€¢ Proporcione este Registro ID: ${registroID}
 â€¢ Abra la consola (F12) y capture los errores
 
-ðŸ’¡ TIP: Recargue la pÃ¡gina y vuelva a intentar`, 'error');
+💡 TIP: Recargue la página y vuelva a intentar`, 'error');
     }
     
-    // Rehabilitar botÃ³n
+    // Rehabilitar botón
     submitBtn.disabled = false;
     submitBtn.textContent = originalText;
     
@@ -2106,8 +2103,8 @@ function resetFormOnly() {
   document.getElementById('evidencias_section').style.display = 'none';
   resetEvidenciasSection();
   
-  document.getElementById('ubicacion_detectada').value = 'Obteniendo ubicaciÃ³n...';
-  document.getElementById('direccion_completa').value = 'Consultando direcciÃ³n...';
+  document.getElementById('ubicacion_detectada').value = 'Obteniendo ubicación...';
+  document.getElementById('direccion_completa').value = 'Consultando dirección...';
   document.getElementById('precision_gps').value = 'Calculando...';
   
   ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
@@ -2121,7 +2118,7 @@ function resetFormOnly() {
   
   locationValid = false;
   locationAttempts = 0;
-  updateLocationStatus('loading', 'Obteniendo nueva ubicaciÃ³n GPS...', '');
+  updateLocationStatus('loading', 'Obteniendo nueva ubicación GPS...', '');
   updateSubmitButton();
 }
 
@@ -2155,7 +2152,7 @@ function validateConditionalFields() {
   const pruebasPsicologicasTexto = document.getElementById('pruebas_psicologicas_texto');
   
   if (pruebasPsicologicas.checked && !pruebasPsicologicasTexto.value.trim()) {
-    showStatus('Especifique quÃ© pruebas psicolÃ³gicas aplicÃ³.', 'error');
+    showStatus('Especifique qué pruebas psicológicas aplicó.', 'error');
     pruebasPsicologicasTexto.focus();
     return false;
   }
@@ -2266,7 +2263,7 @@ function setupEventListeners() {
 
     document.getElementById('retry_location_btn').addEventListener('click', function() {
         if (!isAuthenticated) {
-            showStatus('AutentÃ­quese primero.', 'error');
+            showStatus('Autentíquese primero.', 'error');
             return;
         }
         locationAttempts = 0;
@@ -2278,24 +2275,24 @@ function setupEventListeners() {
 
 function getCurrentLocation() {
   if (!isAuthenticated) {
-    updateLocationStatus('error', 'AutenticaciÃ³n requerida', '');
+    updateLocationStatus('error', 'Autenticación requerida', '');
     ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
-      document.getElementById(id).value = 'Esperando autenticaciÃ³n...';
+      document.getElementById(id).value = 'Esperando autenticación...';
     });
-    document.getElementById('location_status').value = 'AutenticaciÃ³n requerida';
+    document.getElementById('location_status').value = 'Autenticación requerida';
     return;
   }
 
   if (!navigator.geolocation) {
-    updateLocationStatus('error', 'GeolocalizaciÃ³n no soportada', '');
+    updateLocationStatus('error', 'Geolocalización no soportada', '');
     return;
   }
 
   locationAttempts++;
   
   const statusMsg = isDesktop 
-    ? `Obteniendo ubicaciÃ³n por IP/WiFi... (${locationAttempts}/${MAX_LOCATION_ATTEMPTS})` 
-    : `Obteniendo ubicaciÃ³n GPS... (${locationAttempts}/${MAX_LOCATION_ATTEMPTS})`;
+    ? `Obteniendo ubicación por IP/WiFi... (${locationAttempts}/${MAX_LOCATION_ATTEMPTS})` 
+    : `Obteniendo ubicación GPS... (${locationAttempts}/${MAX_LOCATION_ATTEMPTS})`;
   
   updateLocationStatus('loading', statusMsg, '');
 
@@ -2312,14 +2309,14 @@ function getCurrentLocation() {
       document.getElementById('latitude').value = currentLocation.latitude;
       document.getElementById('longitude').value = currentLocation.longitude;
       
-      console.log(`ðŸ“ UbicaciÃ³n obtenida - PrecisiÃ³n: ${Math.round(currentLocation.accuracy)}m (lÃ­mite: ${REQUIRED_ACCURACY}m)`);
+      console.log(`📍 Ubicación obtenida - Precisión: ${Math.round(currentLocation.accuracy)}m (lÃ­mite: ${REQUIRED_ACCURACY}m)`);
       
       if (currentLocation.accuracy <= REQUIRED_ACCURACY) {
         locationValid = true;
         document.getElementById('location_status').value = 'success';
         
-        let successMsg = 'UbicaciÃ³n obtenida correctamente';
-        let successDesc = `PrecisiÃ³n: ${Math.round(currentLocation.accuracy)} metros`;
+        let successMsg = 'Ubicación obtenida correctamente';
+        let successDesc = `Precisión: ${Math.round(currentLocation.accuracy)} metros`;
         
         if (isDesktop && currentLocation.accuracy > REQUIRED_ACCURACY_OPTIMAL) {
           successDesc += ` (normal para ordenadores)`;
@@ -2332,11 +2329,11 @@ function getCurrentLocation() {
         locationValid = false;
         
         const precisedMsg = isDesktop 
-          ? `PrecisiÃ³n insuficiente (${Math.round(currentLocation.accuracy)}m > ${REQUIRED_ACCURACY}m)`
-          : `PrecisiÃ³n GPS insuficiente`;
+          ? `Precisión insuficiente (${Math.round(currentLocation.accuracy)}m > ${REQUIRED_ACCURACY}m)`
+          : `Precisión GPS insuficiente`;
         
         const preciseDesc = isDesktop
-          ? `Se requiere ${REQUIRED_ACCURACY}m o menos. En desktop, intente conectarse a una red WiFi conocida para mejorar la precisiÃ³n.`
+          ? `Se requiere ${REQUIRED_ACCURACY}m o menos. En desktop, intente conectarse a una red WiFi conocida para mejorar la precisión.`
           : `Se requiere ${REQUIRED_ACCURACY}m o menos. Actual: ${Math.round(currentLocation.accuracy)}m`;
         
         updateLocationStatus('warning', precisedMsg, preciseDesc);
@@ -2344,8 +2341,8 @@ function getCurrentLocation() {
         if (locationAttempts < MAX_LOCATION_ATTEMPTS) {
           setTimeout(() => getCurrentLocation(), 2000);
         } else {
-          updateLocationStatus('error', 'No se pudo obtener la precisiÃ³n requerida', 
-            isDesktop ? 'Intente conectarse a WiFi o usar un dispositivo mÃ³vil' : '');
+          updateLocationStatus('error', 'No se pudo obtener la precisión requerida', 
+            isDesktop ? 'Intente conectarse a WiFi o usar un dispositivo móvil' : '');
           document.getElementById('retry_location_btn').style.display = 'block';
         }
       }
@@ -2357,10 +2354,10 @@ function getCurrentLocation() {
       switch(error.code) {
         case error.PERMISSION_DENIED:
           errorMessage = 'Permisos denegados';
-          errorDescription = 'Permita el acceso a la ubicaciÃ³n';
+          errorDescription = 'Permita el acceso a la ubicación';
           break;
         case error.POSITION_UNAVAILABLE:
-          errorMessage = 'UbicaciÃ³n no disponible';
+          errorMessage = 'Ubicación no disponible';
           errorDescription = isDesktop 
             ? 'Verifique su conexiÃ³n a Internet o WiFi' 
             : 'Verifique su conexiÃ³n GPS';
@@ -2394,7 +2391,7 @@ function getCurrentLocation() {
 
 function updateLocationStatus(type, message, description) {
   const statusDiv = document.getElementById('location_status_display');
-  const icons = { loading: 'ðŸŒ', success: 'âœ…', warning: 'âš ï¸', error: 'âŒ' };
+  const icons = { loading: '🌍', success: 'âœ…', warning: '⚠ï¸', error: 'âŒ' };
   
   statusDiv.className = `location-status ${type}`;
   statusDiv.innerHTML = `${icons[type]} <strong>${message}</strong>${description ? '<br>' + description : ''}`;
@@ -2405,15 +2402,15 @@ function updateSubmitButton() {
   
   if (!isAuthenticated) {
     submitBtn.disabled = true;
-    submitBtn.textContent = 'ðŸ”’ AutentÃ­quese primero';
+    submitBtn.textContent = '🔒’ Autentíquese primero';
     submitBtn.style.background = '#6c757d';
   } else if (locationValid) {
     submitBtn.disabled = false;
-    submitBtn.textContent = 'ðŸ“‹ Registrar Asistencia';
+    submitBtn.textContent = '📋 Registrar Asistencia';
     submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
   } else {
     submitBtn.disabled = true;
-    submitBtn.textContent = 'âš ï¸ UbicaciÃ³n GPS requerida';
+    submitBtn.textContent = '⚠ï¸ Ubicación GPS requerida';
     submitBtn.style.background = '#6c757d';
   }
 }
@@ -2423,9 +2420,9 @@ function updateLocationFields(location) {
   let precisionText = `${accuracy} metros`;
   let precisionClass = '';
   
-  // ClasificaciÃ³n de precisiÃ³n adaptada al tipo de dispositivo
+  // ClasificaciÃ³n de precisión adaptada al tipo de dispositivo
   if (isDesktop) {
-    // Para desktop: estÃ¡ndares mÃ¡s relajados
+    // Para desktop: estándares más relajados
     if (accuracy <= 200) {
       precisionText += ' (Excelente para Desktop)';
       precisionClass = 'uas-location';
@@ -2436,11 +2433,11 @@ function updateLocationFields(location) {
       precisionText += ' (Aceptable para Desktop)';
       precisionClass = '';
     } else {
-      precisionText += ' (Baja - tÃ­pica de Desktop)';
+      precisionText += ' (Baja - típica de Desktop)';
       precisionClass = 'warning';
     }
   } else {
-    // Para mÃ³viles: estÃ¡ndares estrictos
+    // Para móviles: estándares estrictos
     if (accuracy <= 10) {
       precisionText += ' (Excelente)';
       precisionClass = 'uas-location';
@@ -2466,7 +2463,7 @@ function updateLocationFields(location) {
     campoUbicacion.value = ubicacionDetectada.nombre;
     campoUbicacion.className = 'location-field uas-location';
   } else {
-    campoUbicacion.value = "Consultando ubicaciÃ³n...";
+    campoUbicacion.value = "Consultando ubicación...";
     campoUbicacion.className = 'location-field';
   }
   
@@ -2476,7 +2473,7 @@ function updateLocationFields(location) {
 function detectarUbicacionEspecifica(lat, lng) {
   const ubicacionesUAS = [
     { name: "CESPSIC - Centro de Servicios PsicolÃ³gicos", lat: 24.8278, lng: -107.3812, radius: 50 },
-    { name: "Facultad de PsicologÃ­a UAS", lat: 24.7993, lng: -107.3950, radius: 100 },
+    { name: "Facultad de Psicología UAS", lat: 24.7993, lng: -107.3950, radius: 100 },
     { name: "Universidad AutÃ³noma de Sinaloa - Campus Central", lat: 24.7990, lng: -107.3950, radius: 200 }
   ];
   
@@ -2493,7 +2490,7 @@ function detectarUbicacionEspecifica(lat, lng) {
     }
   }
   
-  return { encontrada: false, esUAS: false, nombre: "UbicaciÃ³n externa" };
+  return { encontrada: false, esUAS: false, nombre: "Ubicación externa" };
 }
 
 async function obtenerDireccionCompleta(lat, lng, ubicacionDetectada) {
@@ -2511,12 +2508,12 @@ async function obtenerDireccionCompleta(lat, lng, ubicacionDetectada) {
         actualizarUbicacionEspecifica(data);
       }
     } else {
-      direccionField.value = 'DirecciÃ³n no disponible';
+      direccionField.value = 'Dirección no disponible';
       direccionField.className = 'location-field warning';
     }
   } catch (error) {
     const direccionField = document.getElementById('direccion_completa');
-    direccionField.value = 'Error al obtener direcciÃ³n';
+    direccionField.value = 'Error al obtener dirección';
     direccionField.className = 'location-field warning';
   }
 }
@@ -2536,7 +2533,7 @@ function actualizarUbicacionEspecifica(direccionData) {
   } else if (address.city || address.town) {
     ubicacionEspecifica = address.city || address.town;
   } else {
-    ubicacionEspecifica = "UbicaciÃ³n no especificada";
+    ubicacionEspecifica = "Ubicación no especificada";
   }
   
   campoUbicacion.value = ubicacionEspecifica;
@@ -2559,23 +2556,23 @@ function calcularDistancia(lat1, lng1, lat2, lng2) {
 
 function resetLocationFields() {
   ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
-    document.getElementById(id).value = 'Esperando autenticaciÃ³n...';
+    document.getElementById(id).value = 'Esperando autenticación...';
     document.getElementById(id).className = 'location-field';
   });
   document.getElementById('retry_location_btn').style.display = 'none';
-  updateLocationStatus('loading', 'Complete la autenticaciÃ³n para obtener ubicaciÃ³n GPS', '');
+  updateLocationStatus('loading', 'Complete la autenticación para obtener ubicación GPS', '');
 }
 
 // ========== DIAGNÃ“STICO ==========
 async function diagnosticarEvidencias() {
-    console.log('\nðŸ” DIAGNÃ“STICO DE EVIDENCIAS');
+    console.log('\n🔒 DIAGNÃ“STICO DE EVIDENCIAS');
     console.log('============================\n');
     
     console.log('1. ARCHIVOS SELECCIONADOS:');
     console.log(`   Total: ${selectedFiles.length}`);
     
     if (selectedFiles.length === 0) {
-        console.log('   âš ï¸ No hay archivos seleccionados');
+        console.log('   ⚠ï¸ No hay archivos seleccionados');
         return;
     }
     
@@ -2584,7 +2581,7 @@ async function diagnosticarEvidencias() {
         console.log(`\n   Archivo ${index + 1}:`);
         console.log(`   - Nombre: ${file.name}`);
         console.log(`   - Tipo: ${file.type || 'SIN TIPO MIME âŒ'}`);
-        console.log(`   - TamaÃ±o: ${(file.size/1024/1024).toFixed(2)}MB`);
+        console.log(`   - Tamaño: ${(file.size/1024/1024).toFixed(2)}MB`);
         
         const validaciones = [];
         
@@ -2601,7 +2598,7 @@ async function diagnosticarEvidencias() {
         } else if (file.size > MAX_FILE_SIZE) {
             validaciones.push(`âŒ Demasiado grande (>10MB) - RECHAZADO`);
         } else {
-            validaciones.push('âœ… TamaÃ±o vÃ¡lido');
+            validaciones.push('âœ… Tamaño vÃ¡lido');
         }
         
         validaciones.forEach(v => console.log(`   ${v}`));
@@ -2613,14 +2610,14 @@ async function diagnosticarEvidencias() {
         console.log(`   Probando con: ${testFile.name}`);
         
         const base64 = await fileToBase64(testFile);
-        console.log(`   âœ… ConversiÃ³n exitosa: ${(base64.length/1024).toFixed(1)}KB en Base64`);
+        console.log(`   âœ… Conversión exitosa: ${(base64.length/1024).toFixed(1)}KB en Base64`);
     } catch (error) {
-        console.log(`   âŒ Error en conversiÃ³n: ${error.message}`);
+        console.log(`   âŒ Error en conversión: ${error.message}`);
     }
     
     console.log('\n4. CONFIGURACIÃ“N:');
     console.log(`   - Tipos permitidos: ${ALLOWED_FILE_TYPES.join(', ')}`);
-    console.log(`   - TamaÃ±o mÃ¡ximo: ${MAX_FILE_SIZE/1024/1024}MB`);
+    console.log(`   - Tamaño máximo: ${MAX_FILE_SIZE/1024/1024}MB`);
     console.log(`   - MÃ¡ximo archivos: ${MAX_FILES}`);
     
     console.log('\n5. RECOMENDACIONES:');
@@ -2628,7 +2625,7 @@ async function diagnosticarEvidencias() {
     const largeFiles = selectedFiles.filter(f => f.size > MAX_FILE_SIZE);
     
     if (invalidFiles.length > 0) {
-        console.log('   âš ï¸ Archivos con formato invÃ¡lido:');
+        console.log('   ⚠ï¸ Archivos con formato invÃ¡lido:');
         invalidFiles.forEach(f => {
             console.log(`      - ${f.name}: ${f.type || 'sin tipo'}`);
             console.log(`        â†’ Convierta a JPG, PNG o WEBP`);
@@ -2636,10 +2633,10 @@ async function diagnosticarEvidencias() {
     }
     
     if (largeFiles.length > 0) {
-        console.log('   âš ï¸ Archivos muy grandes:');
+        console.log('   ⚠ï¸ Archivos muy grandes:');
         largeFiles.forEach(f => {
             console.log(`      - ${f.name}: ${(f.size/1024/1024).toFixed(2)}MB`);
-            console.log(`        â†’ Reduzca la calidad o resoluciÃ³n`);
+            console.log(`        â†’ Reduzca la calidad o resolución`);
         });
     }
     
@@ -2651,7 +2648,7 @@ async function diagnosticarEvidencias() {
 }
 
 async function diagnosticComplete() {
-    console.log('ðŸ”¬ DIAGNÃ“STICO COMPLETO');
+    console.log('🔒¬ DIAGNÃ“STICO COMPLETO');
     console.log('======================\n');
     
     console.log('1. DISPOSITIVO:');
@@ -2666,8 +2663,8 @@ async function diagnosticComplete() {
     
     console.log('\n2. PRECISIÃ“N GPS:');
     console.log('   - MÃ©todo:', isDesktop ? 'IP/WiFi' : 'GPS nativo');
-    console.log('   - PrecisiÃ³n requerida:', REQUIRED_ACCURACY + 'm');
-    console.log('   - PrecisiÃ³n Ã³ptima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
+    console.log('   - Precisión requerida:', REQUIRED_ACCURACY + 'm');
+    console.log('   - Precisión óptima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
     console.log('   - Actual:', currentLocation ? `${Math.round(currentLocation.accuracy)}m` : 'No obtenida');
     console.log('   - Estado:', locationValid ? 'âœ… VÃ¡lida' : 'âŒ InvÃ¡lida');
     
@@ -2683,9 +2680,9 @@ async function diagnosticComplete() {
     console.log('   - localStorage:', safeLocalStorage() ? 'âœ…' : 'âŒ (modo privado)');
     
     console.log('\n5. UBICACIÃ“N:');
-    console.log('   - GeolocalizaciÃ³n:', navigator.geolocation ? 'âœ…' : 'âŒ');
-    console.log('   - UbicaciÃ³n vÃ¡lida:', locationValid ? 'âœ…' : 'âŒ');
-    console.log('   - PrecisiÃ³n actual:', currentLocation ? `${currentLocation.accuracy}m` : 'N/A');
+    console.log('   - Geolocalización:', navigator.geolocation ? 'âœ…' : 'âŒ');
+    console.log('   - Ubicación vÃ¡lida:', locationValid ? 'âœ…' : 'âŒ');
+    console.log('   - Precisión actual:', currentLocation ? `${currentLocation.accuracy}m` : 'N/A');
     console.log('   - Intentos:', locationAttempts + '/' + MAX_LOCATION_ATTEMPTS);
     
     console.log('\n6. EVIDENCIAS:');
@@ -2700,191 +2697,43 @@ async function diagnosticComplete() {
     
     console.log('\n7. RECOMENDACIONES:');
     if (isDesktop && currentLocation && currentLocation.accuracy > 300) {
-        console.log('   âš ï¸ Desktop con baja precisiÃ³n:');
+        console.log('   ⚠ï¸ Desktop con baja precisión:');
         console.log('      - ConÃ©ctese a una red WiFi conocida');
-        console.log('      - Use un dispositivo mÃ³vil para mejor precisiÃ³n');
-        console.log('      - La precisiÃ³n actual (' + Math.round(currentLocation.accuracy) + 'm) es normal para desktop');
+        console.log('      - Use un dispositivo móvil para mejor precisión');
+        console.log('      - La precisión actual (' + Math.round(currentLocation.accuracy) + 'm) es normal para desktop');
     }
     if (!locationValid) {
-        console.log('   âš ï¸ UbicaciÃ³n no vÃ¡lida:');
-        console.log('      - Verifique permisos de ubicaciÃ³n');
+        console.log('   ⚠ï¸ Ubicación no vÃ¡lida:');
+        console.log('      - Verifique permisos de ubicación');
         console.log('      - AsegÃºrese de tener conexiÃ³n a Internet');
         if (isDesktop) {
-            console.log('      - Considere usar un dispositivo mÃ³vil');
+            console.log('      - Considere usar un dispositivo móvil');
         }
     }
     if (!isAuthenticated) {
-        console.log('   âš ï¸ No autenticado - Complete la autenticaciÃ³n primero');
+        console.log('   ⚠ï¸ No autenticado - Complete la autenticación primero');
     }
     
     console.log('\n======================');
     console.log('FUNCIONES DISPONIBLES:');
     console.log('- diagnosticarEvidencias() - Analiza archivos');
     console.log('- diagnosticComplete() - DiagnÃ³stico completo');
-    console.log('- getDeviceInfo() - InformaciÃ³n del dispositivo');
+    console.log('- getDeviceInfo() - Información del dispositivo');
 }
 
 // Mensaje de inicio
 console.log('âœ… Script cargado correctamente');
-console.log(`ðŸ“± Dispositivo: ${deviceType}`);
-console.log(`ðŸ’» Es Desktop: ${isDesktop ? 'SÃ­' : 'No'}`);
-console.log(`ðŸ“ PrecisiÃ³n requerida: ${REQUIRED_ACCURACY}m ${isDesktop ? '(relajada para desktop)' : '(estÃ¡ndar mÃ³vil)'}`);
-console.log(`ðŸŽ¯ Modo: ${isIOS ? 'iOS (compatibilidad especial)' : isDesktop ? 'Desktop (precisiÃ³n adaptada)' : 'Android/Windows/Desktop (funcionalidad completa)'}`);
+console.log(`📱 Dispositivo: ${deviceType}`);
+console.log(`💻 Es Desktop: ${isDesktop ? 'SÃ­' : 'No'}`);
+console.log(`📍 Precisión requerida: ${REQUIRED_ACCURACY}m ${isDesktop ? '(relajada para desktop)' : '(estándar móvil)'}`);
+console.log(`🎯 Modo: ${isIOS ? 'iOS (compatibilidad especial)' : isDesktop ? 'Desktop (precisión adaptada)' : 'Android/Windows/Desktop (funcionalidad completa)'}`);
 
 // ========== EXPORTAR CONSTANTES ==========
-console.log('\nðŸ“‹ CONFIGURACIÃ“N OPTIMIZADA DE VERIFICACIÃ“N:');
+console.log('\n📋 CONFIGURACIÃ“N OPTIMIZADA DE VERIFICACIÃ“N:');
 console.log(`   - Espera inicial: ${TIEMPO_ESPERA_INICIAL/1000}s`);
-console.log(`   - Intentos verificaciÃ³n: ${VERIFICATION_ATTEMPTS}`);
+console.log(`   - Intentos verificación: ${VERIFICATION_ATTEMPTS}`);
 console.log(`   - Tiempos entre verificaciones: ${TIEMPO_ENTRE_VERIFICACIONES.map(t => t/1000 + 's').join(', ')}`);
 console.log(`   - Modo fallback: ${ENABLE_VERIFICATION_FALLBACK ? 'HABILITADO âœ…' : 'DESHABILITADO'}`);
 console.log('\nâœ… Mejoras cargadas - Mejor manejo de errores de red');
 
-console.log('ðŸ” Para diagnÃ³stico: diagnosticComplete()');
-
-// ========== OBTENER Y MOSTRAR REGISTROS DEL DÍA ==========
-async function getUserTodayRecords() {
-  if (!isAuthenticated || !currentUser) {
-    console.warn('⚠️ Usuario no autenticado');
-    return null;
-  }
-  
-  try {
-    console.log('📊 Obteniendo registros del día...');
-    
-    const params = new URLSearchParams({
-      action: 'get_user_today_records',
-      email: currentUser.email,
-      _t: Date.now()
-    });
-    
-    const response = await fetch(`${GOOGLE_SCRIPT_URL}?${params}`, {
-      method: 'GET',
-      mode: 'cors',
-      cache: 'no-cache'
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log('✅ Registros recibidos:', data);
-    
-    return data;
-  } catch (error) {
-    console.error('❌ Error obteniendo registros:', error);
-    return null;
-  }
-}
-
-async function showTodayRecords() {
-  const records = await getUserTodayRecords();
-  
-  if (!records || !records.success) {
-    console.warn('No se pudieron obtener registros');
-    return;
-  }
-  
-  const modal = document.getElementById('records-modal');
-  const recordsList = document.getElementById('records-list');
-  const recordsCount = document.getElementById('records-count');
-  
-  if (!modal) {
-    console.error('Modal de registros no encontrado');
-    return;
-  }
-  
-  recordsCount.textContent = records.count;
-  
-  if (records.count === 0) {
-    recordsList.innerHTML = '<div class="no-records">No hay registros para hoy</div>';
-  } else {
-    recordsList.innerHTML = records.records.map(record => `
-      <div class="record-item record-${record.tipo_registro}">
-        <div class="record-time">${record.hora || 'N/A'}</div>
-        <div class="record-info">
-          <div class="record-type">${getTipoRegistroLabel(record.tipo_registro)}</div>
-          <div class="record-details">
-            ${record.modalidad} • ${record.tipo_estudiante}
-          </div>
-        </div>
-        <div class="record-badge badge-${record.tipo_registro}">
-          ${getTipoRegistroIcon(record.tipo_registro)}
-        </div>
-      </div>
-    `).join('');
-  }
-  
-  modal.style.display = 'flex';
-}
-
-function getTipoRegistroLabel(tipo) {
-  const labels = {
-    'entrada': 'Entrada',
-    'salida': 'Salida',
-    'permiso': 'Permiso',
-    'otro': 'Otro'
-  };
-  return labels[tipo] || tipo;
-}
-
-function getTipoRegistroIcon(tipo) {
-  const icons = {
-    'entrada': '🟢',
-    'salida': '🔴',
-    'permiso': '🟡',
-    'otro': '🔵'
-  };
-  return icons[tipo] || '⚪';
-}
-
-function closeRecordsModal() {
-  const modal = document.getElementById('records-modal');
-  if (modal) {
-    modal.style.display = 'none';
-  }
-}
-
-function refreshTodayRecords() {
-  closeRecordsModal();
-  setTimeout(() => showTodayRecords(), 300);
-}
-
-// ========== MOSTRAR SECCIÓN DE REGISTROS ==========
-async function updateRegistrosSection() {
-  const section = document.getElementById('registros-section');
-  const preview = document.getElementById('registros-preview');
-  
-  if (!section || !isAuthenticated) {
-    return;
-  }
-  
-  section.style.display = 'block';
-  preview.innerHTML = '<div class="loading">Cargando registros...</div>';
-  
-  const records = await getUserTodayRecords();
-  
-  if (!records || !records.success) {
-    preview.innerHTML = '<div class="no-records">No se pudieron cargar los registros</div>';
-    return;
-  }
-  
-  if (records.count === 0) {
-    preview.innerHTML = '<div class="no-records">No hay registros para hoy</div>';
-  } else {
-    // Mostrar solo los últimos 3 registros en preview
-    const recentRecords = records.records.slice(-3).reverse();
-    preview.innerHTML = recentRecords.map(record => `
-      <div class="record-item record-${record.tipo_registro}">
-        <div class="record-time">${record.hora || 'N/A'}</div>
-        <div class="record-info">
-          <div class="record-type">${getTipoRegistroLabel(record.tipo_registro)}</div>
-          <div class="record-details">${record.modalidad}</div>
-        </div>
-        <div class="record-badge badge-${record.tipo_registro}">
-          ${getTipoRegistroIcon(record.tipo_registro)}
-        </div>
-      </div>
-    `).join('');
-  }
-}
+console.log('🔒 Para diagnÃ³stico: diagnosticComplete()');
