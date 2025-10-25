@@ -1,4 +1,4 @@
-// ========== DETECCIÃ“N DE DISPOSITIVO Y NAVEGADOR ==========
+// ========== DETECCIÓN DE DISPOSITIVO Y NAVEGADOR ==========
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || 
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
@@ -8,9 +8,9 @@ const isDesktop = detectDesktop();
 const deviceType = getDeviceType();
 
 console.log(`📱 Tipo dispositivo: ${deviceType}`);
-console.log(`💻 Es Desktop: ${isDesktop ? 'SÃ­' : 'No'}`);
-console.log(`📱 Es iOS: ${isIOS ? 'SÃ­' : 'No'}`);
-console.log(`🌍 Navegador: ${isSafari ? 'Safari' : 'Otro'}`);
+console.log(`💻 Es Desktop: ${isDesktop ? 'Sí' : 'No'}`);
+console.log(`📱 Es iOS: ${isIOS ? 'Sí' : 'No'}`);
+console.log(`🌐 Navegador: ${isSafari ? 'Safari' : 'Otro'}`);
 
 // Variables globales
 let currentLocation = null;
@@ -45,12 +45,12 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw10UgiYsuGYi
 const GOOGLE_CLIENT_ID = '154864030871-ck4l5krb7qm68kmp6a7rcq7h072ldm6g.apps.googleusercontent.com';
 
 const ubicacionesUAS = [
-    { name: "CESPSIC - Centro de Servicios PsicolÃ³gicos", lat: 24.8278, lng: -107.3812, radius: 50 },
+    { name: "CESPSIC - Centro de Servicios Psicológicos", lat: 24.8278, lng: -107.3812, radius: 50 },
     { name: "Facultad de Psicología UAS", lat: 24.7993, lng: -107.3950, radius: 100 },
-    { name: "Universidad AutÃ³noma de Sinaloa - Campus Central", lat: 24.7990, lng: -107.3950, radius: 200 }
+    { name: "Universidad Autónoma de Sinaloa - Campus Central", lat: 24.7990, lng: -107.3950, radius: 200 }
 ];
 
-// ========== FUNCIONES DE DETECCIÃ“N DE DISPOSITIVO ==========
+// ========== FUNCIONES DE DETECCIÓN DE DISPOSITIVO ==========
 function detectDesktop() {
     const ua = navigator.userAgent.toLowerCase();
     
@@ -101,14 +101,14 @@ function getDeviceInfo() {
 
 // Inicializar aplicación
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('=== INFORMACIÃ“N DEL DISPOSITIVO ===');
+    console.log('=== INFORMACIÓN DEL DISPOSITIVO ===');
     console.log('Tipo:', deviceType);
     console.log('Es Desktop:', isDesktop);
     console.log('Precisión requerida:', REQUIRED_ACCURACY + 'm');
     console.log('Precisión óptima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
     
     if (isDesktop) {
-        console.log('⚠ï¸ MODO DESKTOP ACTIVADO');
+        console.log('⚠️ MODO DESKTOP ACTIVADO');
         console.log('   Los ordenadores no tienen GPS integrado.');
         console.log('   La ubicación se obtiene por IP/WiFi (menor precisión).');
         console.log('   Precisión aceptada: hasta ' + REQUIRED_ACCURACY + 'm');
@@ -128,11 +128,11 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateCurrentTime, 1000);
 });
 
-// ========== VALIDACIÃ“N HTTPS PARA iOS ==========
+// ========== VALIDACIÓN HTTPS PARA iOS ==========
 function checkHTTPS() {
     if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-        console.warn('⚠ï¸ iOS requiere HTTPS para geolocalización');
-        showStatus('⚠ï¸ Se recomienda usar HTTPS para mejor funcionalidad en iOS', 'warning');
+        console.warn('⚠️ iOS requiere HTTPS para geolocalización');
+        showStatus('⚠️ Se recomienda usar HTTPS para mejor funcionalidad en iOS', 'warning');
         setTimeout(() => hideStatus(), 5000);
     }
 }
@@ -160,7 +160,7 @@ function showDesktopWarning() {
             <strong>💻 Dispositivo Desktop Detectado (${deviceType})</strong><br>
             Los ordenadores no tienen GPS integrado y usan ubicación por IP/WiFi.<br>
             <strong>Precisión esperada:</strong> 100-1000 metros (vs 5-50m en móviles)<br>
-            ℹ️ El sistema aceptarÃ¡ precisiones de hasta ${REQUIRED_ACCURACY} metros.
+            ℹ️ El sistema aceptará precisiones de hasta ${REQUIRED_ACCURACY} metros.
         `;
         authSection.appendChild(desktopWarning);
     }
@@ -174,7 +174,7 @@ function safeLocalStorage() {
         localStorage.removeItem(test);
         return true;
     } catch (e) {
-        console.warn('⚠ï¸ localStorage no disponible (modo privado)', e);
+        console.warn('⚠️ localStorage no disponible (modo privado)', e);
         return false;
     }
 }
@@ -189,7 +189,7 @@ function safeSetItem(key, value) {
             return false;
         }
     }
-    console.warn('⚠ï¸ localStorage bloqueado - datos no persistirÃ¡n');
+    console.warn('⚠️ localStorage bloqueado - datos no persistirán');
     return false;
 }
 
@@ -442,14 +442,14 @@ function proceedWithGoogleSignIn() {
     }
 }
 
-// ========== iOS: BOTÃ“N GOOGLE (USA MODAL HTML EXISTENTE) ==========
+// ========== iOS: BOTÓN GOOGLE (USA MODAL HTML EXISTENTE) ==========
 function showIOSGoogleButton() {
     const modal = document.getElementById('privacy-modal');
     const modalHeader = modal.querySelector('.modal-header');
     const modalBody = modal.querySelector('.modal-body');
     const modalFooter = modal.querySelector('.modal-footer');
     
-    modalHeader.innerHTML = '<h2>🔒 Autenticación con Google</h2>';
+    modalHeader.innerHTML = '<h2>🔐 Autenticación con Google</h2>';
     modalBody.innerHTML = `
         <p style="text-align: center; margin-bottom: 20px; color: #666;">
             Haga clic en el botón azul para continuar:
@@ -488,7 +488,7 @@ function closeIOSAuthModal() {
     }
 }
 
-// ========== OTROS NAVEGADORES: MODAL DINÃMICO ==========
+// ========== OTROS NAVEGADORES: MODAL DINÁMICO ==========
 function showVisibleGoogleButton() {
     const existingOverlay = document.getElementById('google-auth-overlay');
     if (existingOverlay) existingOverlay.remove();
@@ -663,7 +663,7 @@ function updateAuthenticationUI() {
 
   if (isAuthenticated && currentUser) {
     authSection.classList.add('authenticated');
-    authTitle.textContent = 'âœ… Autenticación Exitosa';
+    authTitle.textContent = '✅ Autenticación Exitosa';
     authTitle.classList.add('authenticated');
 
     document.getElementById('user-avatar').src = currentUser.picture;
@@ -673,7 +673,7 @@ function updateAuthenticationUI() {
     signinContainer.style.display = 'none';
   } else {
     authSection.classList.remove('authenticated');
-    authTitle.textContent = '🔒’ Autenticación Requerida';
+    authTitle.textContent = '🔒 Autenticación Requerida';
     authTitle.classList.remove('authenticated');
     userInfo.classList.remove('show');
     signinContainer.style.display = 'block';
@@ -771,37 +771,37 @@ function handleIOSFileSelection(files) {
         
         if (!file.type) {
             errors.push(`${file.name}: Sin tipo MIME`);
-            console.warn(`âŒ ${file.name}: No tiene tipo MIME`);
+            console.warn(`❌ ${file.name}: No tiene tipo MIME`);
             return;
         }
         
         if (!ALLOWED_FILE_TYPES.includes(file.type)) {
             errors.push(`${file.name}: Solo JPG, PNG, WEBP`);
-            console.warn(`âŒ ${file.name}: Tipo no permitido`);
+            console.warn(`❌ ${file.name}: Tipo no permitido`);
             return;
         }
         
         const sizeMB = file.size / 1024 / 1024;
         if (file.size > MAX_FILE_SIZE) {
-            errors.push(`${file.name}: ${sizeMB.toFixed(1)}MB (mÃ¡x. 10MB)`);
-            console.warn(`âŒ ${file.name}: Muy grande`);
+            errors.push(`${file.name}: ${sizeMB.toFixed(1)}MB (máx. 10MB)`);
+            console.warn(`❌ ${file.name}: Muy grande`);
             return;
         }
         
         validFiles.push(file);
-        console.log(`âœ… ${file.name}: VÃ¡lido`);
+        console.log(`✅ ${file.name}: Válido`);
     });
     
     if (selectedFiles.length + validFiles.length > MAX_FILES) {
-        errors.push(`MÃ¡ximo ${MAX_FILES} imágenes (ya tiene ${selectedFiles.length})`);
+        errors.push(`Máximo ${MAX_FILES} imágenes (ya tiene ${selectedFiles.length})`);
         showEvidenciasStatus(errors.join('<br>'), 'error');
-        console.warn(`âŒ LÃ­mite excedido`);
+        console.warn(`❌ Límite excedido`);
         return;
     }
     
     if (errors.length > 0) {
         showEvidenciasStatus(errors.join('<br>'), 'error');
-        console.warn(`⚠ï¸ ${errors.length} archivo(s) rechazado(s)`);
+        console.warn(`⚠️ ${errors.length} archivo(s) rechazado(s)`);
     }
     
     // iOS: Guardar archivos directamente (NO tocar input.files)
@@ -812,7 +812,7 @@ function handleIOSFileSelection(files) {
     
     if (validFiles.length > 0) {
         showEvidenciasStatus(`${validFiles.length} imagen(es) agregada(s).`, 'success');
-        console.log(`âœ… Total iOS: ${selectedFiles.length}`);
+        console.log(`✅ Total iOS: ${selectedFiles.length}`);
     }
 }
 
@@ -822,44 +822,44 @@ function handleFileSelection(files) {
     const validFiles = [];
     const errors = [];
     
-    console.log(`🔒 Procesando ${fileArray.length} archivo(s)...`);
+    console.log(`🔍 Procesando ${fileArray.length} archivo(s)...`);
     
     fileArray.forEach(file => {
         console.log(`Archivo: ${file.name}, Tipo: ${file.type}, Tamaño: ${(file.size/1024/1024).toFixed(2)}MB`);
         
         if (!file.type) {
             errors.push(`${file.name}: Sin tipo MIME (intente otro formato)`);
-            console.warn(`âŒ ${file.name}: No tiene tipo MIME`);
+            console.warn(`❌ ${file.name}: No tiene tipo MIME`);
             return;
         }
         
         if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-            errors.push(`${file.name}: Formato no vÃ¡lido (solo JPG, PNG, WEBP)`);
-            console.warn(`âŒ ${file.name}: Tipo ${file.type} no permitido`);
+            errors.push(`${file.name}: Formato no válido (solo JPG, PNG, WEBP)`);
+            console.warn(`❌ ${file.name}: Tipo ${file.type} no permitido`);
             return;
         }
         
         const sizeMB = file.size / 1024 / 1024;
         if (file.size > MAX_FILE_SIZE) {
-            errors.push(`${file.name}: ${sizeMB.toFixed(1)}MB (mÃ¡x. 10MB)`);
-            console.warn(`âŒ ${file.name}: Demasiado grande (${sizeMB.toFixed(1)}MB)`);
+            errors.push(`${file.name}: ${sizeMB.toFixed(1)}MB (máx. 10MB)`);
+            console.warn(`❌ ${file.name}: Demasiado grande (${sizeMB.toFixed(1)}MB)`);
             return;
         }
         
         validFiles.push(file);
-        console.log(`âœ… ${file.name}: VÃ¡lido`);
+        console.log(`✅ ${file.name}: Válido`);
     });
     
     if (selectedFiles.length + validFiles.length > MAX_FILES) {
-        errors.push(`MÃ¡ximo ${MAX_FILES} imágenes (ya tiene ${selectedFiles.length})`);
+        errors.push(`Máximo ${MAX_FILES} imágenes (ya tiene ${selectedFiles.length})`);
         showEvidenciasStatus(errors.join('<br>'), 'error');
-        console.warn(`âŒ LÃ­mite de archivos excedido`);
+        console.warn(`❌ Límite de archivos excedido`);
         return;
     }
     
     if (errors.length > 0) {
         showEvidenciasStatus(errors.join('<br>'), 'error');
-        console.warn(`⚠ï¸ ${errors.length} archivo(s) rechazado(s)`);
+        console.warn(`⚠️ ${errors.length} archivo(s) rechazado(s)`);
     }
     
     validFiles.forEach(file => {
@@ -871,7 +871,7 @@ function handleFileSelection(files) {
     
     if (validFiles.length > 0) {
         showEvidenciasStatus(`${validFiles.length} imagen(es) agregada(s) correctamente.`, 'success');
-        console.log(`âœ… Total de archivos seleccionados: ${selectedFiles.length}`);
+        console.log(`✅ Total de archivos seleccionados: ${selectedFiles.length}`);
     }
 }
 
@@ -889,7 +889,7 @@ function addFilePreview(file, index) {
                 ${file.name.length > 15 ? file.name.substring(0, 15) + '...' : file.name}<br>
                 <small>${(file.size / 1024).toFixed(1)} KB</small>
             </div>
-            <button type="button" class="evidencia-remove" onclick="removeFile(${index})">Ã—</button>
+            <button type="button" class="evidencia-remove" onclick="removeFile(${index})">×</button>
         `;
     };
     reader.readAsDataURL(file);
@@ -924,8 +924,8 @@ function updateFileInput() {
         selectedFiles.forEach(file => dt.items.add(file));
         input.files = dt.files;
     } catch (error) {
-        console.warn('⚠ï¸ Error actualizando input.files:', error);
-        // No es crÃ­tico, continuar normal
+        console.warn('⚠️ Error actualizando input.files:', error);
+        // No es crítico, continuar normal
     }
 }
 
@@ -949,7 +949,7 @@ function resetEvidenciasSection() {
 // ========== UPLOAD ==========
 async function uploadEvidencias() {
     if (selectedFiles.length === 0) {
-        console.log('ℹ️ No hay archivos para subir');
+        console.log('ℹ️ No hay archivos para subir');
         return [];
     }
     
@@ -971,15 +971,15 @@ async function uploadEvidencias() {
             showEvidenciasStatus(`Subiendo imagen ${i + 1}/${selectedFiles.length}: ${file.name}`, 'loading');
             
             if (!file || !file.type || file.size === 0) {
-                throw new Error('Archivo invÃ¡lido o corrupto');
+                throw new Error('Archivo inválido o corrupto');
             }
             
             let base64Data;
             try {
                 base64Data = await fileToBase64(file);
-                console.log(`âœ… Conversión Base64 exitosa: ${(base64Data.length/1024).toFixed(1)}KB`);
+                console.log(`✅ Conversión Base64 exitosa: ${(base64Data.length/1024).toFixed(1)}KB`);
             } catch (b64Error) {
-                console.error(`âŒ Error en conversión Base64:`, b64Error);
+                console.error(`❌ Error en conversión Base64:`, b64Error);
                 throw new Error(`Error al procesar la imagen: ${b64Error.message}`);
             }
             
@@ -1011,10 +1011,10 @@ async function uploadEvidencias() {
                 url: null
             });
             
-            console.log(`âœ… Archivo ${fullFileName} enviado exitosamente`);
+            console.log(`✅ Archivo ${fullFileName} enviado exitosamente`);
             
         } catch (error) {
-            console.error(`âŒ Error subiendo archivo ${file.name}:`, error);
+            console.error(`❌ Error subiendo archivo ${file.name}:`, error);
             
             evidenciasInfo.push({
                 fileName: fullFileName,
@@ -1027,7 +1027,7 @@ async function uploadEvidencias() {
             });
             
             showEvidenciasStatus(
-                `⚠ï¸ Error en ${file.name}: ${error.message}`, 
+                `⚠️ Error en ${file.name}: ${error.message}`, 
                 'warning'
             );
             
@@ -1043,12 +1043,12 @@ async function uploadEvidencias() {
     const failCount = evidenciasInfo.filter(e => e.uploadStatus === 'FAILED').length;
     
     console.log(`\n📊 RESUMEN DE SUBIDA:`);
-    console.log(`   âœ… Exitosas: ${successCount}`);
-    console.log(`   âŒ Fallidas: ${failCount}`);
-    console.log(`   📍 Total: ${evidenciasInfo.length}`);
+    console.log(`   ✅ Exitosas: ${successCount}`);
+    console.log(`   ❌ Fallidas: ${failCount}`);
+    console.log(`   📁 Total: ${evidenciasInfo.length}`);
     
     if (failCount > 0) {
-        console.log(`\n⚠ï¸ ARCHIVOS FALLIDOS:`);
+        console.log(`\n⚠️ ARCHIVOS FALLIDOS:`);
         evidenciasInfo.filter(e => e.uploadStatus === 'FAILED').forEach(e => {
             console.log(`   - ${e.originalName}: ${e.error}`);
         });
@@ -1056,12 +1056,12 @@ async function uploadEvidencias() {
     
     if (successCount > 0) {
         showEvidenciasStatus(
-            `âœ… ${successCount} evidencia(s) subida(s)${failCount > 0 ? ` (${failCount} errores - revise consola)` : ''}`, 
+            `✅ ${successCount} evidencia(s) subida(s)${failCount > 0 ? ` (${failCount} errores - revise consola)` : ''}`, 
             failCount > 0 ? 'warning' : 'success'
         );
     } else if (failCount > 0) {
         showEvidenciasStatus(
-            `âŒ No se pudo subir ninguna evidencia. Errores: ${evidenciasInfo.map(e => e.error).join(', ')}`, 
+            `❌ No se pudo subir ninguna evidencia. Errores: ${evidenciasInfo.map(e => e.error).join(', ')}`, 
             'error'
         );
     }
@@ -1070,7 +1070,7 @@ async function uploadEvidencias() {
 }
 
 async function sendDataWithFallback(data) {
-  console.warn('⚠ï¸ sendDataWithFallback obsoleto, use ');
+  console.warn('⚠️ sendDataWithFallback obsoleto, use ');
   return sendDataWithIframe(data);
 }
 
@@ -1082,14 +1082,14 @@ function generateEvidenciaFileName(tipoRegistro, index) {
     
     const dia = String(fecha.getDate()).padStart(2, '0');
     const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-    const aÃ±o = fecha.getFullYear();
+    const año = fecha.getFullYear();
     const hora = String(fecha.getHours()).padStart(2, '0');
     const minuto = String(fecha.getMinutes()).padStart(2, '0');
     const segundo = String(fecha.getSeconds()).padStart(2, '0');
     const consecutivo = String(index + 1).padStart(3, '0');
     
     const nombreLimpio = `${apellidoPaterno}_${apellidoMaterno}_${nombre}`.replace(/[^a-zA-Z0-9_]/g, '');
-    const fechaFormateada = `${dia}_${mes}_${aÃ±o}`;
+    const fechaFormateada = `${dia}_${mes}_${año}`;
     const horaFormateada = `${hora}_${minuto}_${segundo}`;
     
     return `${nombreLimpio}_${fechaFormateada}_${horaFormateada}_${tipoRegistro}_${consecutivo}`;
@@ -1106,7 +1106,7 @@ function generateStudentFolderName() {
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         if (!file) {
-            reject(new Error('Archivo no vÃ¡lido'));
+            reject(new Error('Archivo no válido'));
             return;
         }
         
@@ -1116,7 +1116,7 @@ function fileToBase64(file) {
         }
         
         if (file.size === 0) {
-            reject(new Error('Archivo vacÃ­o (0 bytes)'));
+            reject(new Error('Archivo vacío (0 bytes)'));
             return;
         }
         
@@ -1125,7 +1125,7 @@ function fileToBase64(file) {
             return;
         }
         
-        console.log(`🔄 Convirtiendo ${file.name} a Base64...`);
+        console.log(`📄 Convirtiendo ${file.name} a Base64...`);
         
         const reader = new FileReader();
         
@@ -1133,44 +1133,44 @@ function fileToBase64(file) {
             try {
                 const result = reader.result;
                 if (!result || typeof result !== 'string') {
-                    reject(new Error('Error: resultado de lectura invÃ¡lido'));
+                    reject(new Error('Error: resultado de lectura inválido'));
                     return;
                 }
                 
                 const base64 = result.split(',')[1];
                 if (!base64 || base64.length === 0) {
-                    reject(new Error('Error: conversión Base64 fallÃ³'));
+                    reject(new Error('Error: conversión Base64 falló'));
                     return;
                 }
                 
-                console.log(`âœ… Base64 generado: ${(base64.length/1024).toFixed(1)}KB`);
+                console.log(`✅ Base64 generado: ${(base64.length/1024).toFixed(1)}KB`);
                 resolve(base64);
             } catch (error) {
-                console.error('âŒ Error procesando Base64:', error);
+                console.error('❌ Error procesando Base64:', error);
                 reject(new Error(`Error al procesar: ${error.message}`));
             }
         };
         
         reader.onerror = (error) => {
-            console.error('âŒ Error leyendo archivo:', error);
+            console.error('❌ Error leyendo archivo:', error);
             reject(new Error(`Error al leer archivo: ${file.name}`));
         };
         
         reader.onabort = () => {
-            console.error('âŒ Lectura abortada');
+            console.error('❌ Lectura abortada');
             reject(new Error('Lectura de archivo abortada'));
         };
         
         try {
             reader.readAsDataURL(file);
         } catch (error) {
-            console.error('âŒ Error iniciando lectura:', error);
+            console.error('❌ Error iniciando lectura:', error);
             reject(new Error(`No se pudo leer el archivo: ${error.message}`));
         }
     });
 }
 
-// ========== GENERACIÃ“N DE REGISTRO ID ÃšNICO ==========
+// ========== GENERACIÓN DE REGISTRO ID ÚNICO ==========
 function generateRegistroID() {
   const timestamp = new Date().getTime();
   const email = userEmail ? userEmail.substring(0, 10) : 'unknown';
@@ -1181,12 +1181,12 @@ function generateRegistroID() {
   return registroID;
 }
 
-// ========== FUNCIÃ“N SLEEP ==========
+// ========== FUNCIÓN SLEEP ==========
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ========== ENVÃO CON VERIFICACIÃ“N, REINTENTOS E IDEMPOTENCIA ==========
+// ========== ENVÍO CON VERIFICACIÓN, REINTENTOS E IDEMPOTENCIA ==========
 async function sendWithVerification(data, attempt = 1) {
   const MAX_ATTEMPTS = 3;
   
@@ -1197,52 +1197,52 @@ async function sendWithVerification(data, attempt = 1) {
   
   try {
     // ========== PASO 1: VALIDAR DATOS ANTES DE ENVIAR ==========
-    console.log('🔒 Validando datos antes de enviar...');
+    console.log('🔍 Validando datos antes de enviar...');
     
     if (!data.modalidad || data.modalidad === '' || data.modalidad === 'undefined' || data.modalidad === 'null') {
-      throw new Error('VALIDACIÃ“N: Campo Modalidad vacÃ­o o invÃ¡lido');
+      throw new Error('VALIDACIÓN: Campo Modalidad vacío o inválido');
     }
     
     if (!data.email || !data.google_user_id) {
-      throw new Error('VALIDACIÃ“N: Datos de autenticación faltantes');
+      throw new Error('VALIDACIÓN: Datos de autenticación faltantes');
     }
     
     if (!data.latitude || !data.longitude) {
-      throw new Error('VALIDACIÃ“N: Coordenadas GPS faltantes');
+      throw new Error('VALIDACIÓN: Coordenadas GPS faltantes');
     }
     
     if (!data.registro_id || data.registro_id.trim() === '') {
-      throw new Error('VALIDACIÃ“N: registro_id vacÃ­o');
+      throw new Error('VALIDACIÓN: registro_id vacío');
     }
     
-    console.log('âœ… Validación previa exitosa');
+    console.log('✅ Validación previa exitosa');
     
     // ========== PASO 2: ENVIAR DATOS ==========
     console.log('📤 Enviando datos al backend...');
     await sendDataWithIframe(data);
     
-    console.log('âœ… Formulario enviado al servidor');
+    console.log('✅ Formulario enviado al servidor');
     
-    // â­â­â­ FIX: Esperar tiempo adecuado para procesamiento â­â­â­
-    console.log(`â±ï¸ Esperando ${TIEMPO_ESPERA_INICIAL/1000}s para procesamiento inicial...`);
+    // ⭐⭐⭐ FIX: Esperar tiempo adecuado para procesamiento ⭐⭐⭐
+    console.log(`⏱️ Esperando ${TIEMPO_ESPERA_INICIAL/1000}s para procesamiento inicial...`);
     await sleep(TIEMPO_ESPERA_INICIAL);
     
-    // ========== PASO 3: VERIFICACIÃ“N CON MANEJO MEJORADO DE ERRORES ==========
-    console.log(`\n🔒 INICIANDO VERIFICACIÃ“N (${VERIFICATION_ATTEMPTS} intentos)...`);
+    // ========== PASO 3: VERIFICACIÓN CON MANEJO MEJORADO DE ERRORES ==========
+    console.log(`\n🔍 INICIANDO VERIFICACIÓN (${VERIFICATION_ATTEMPTS} intentos)...`);
     
     let verificationResult = null;
     let verificationSuccess = false;
     let networkErrors = 0;
     
     for (let v = 1; v <= VERIFICATION_ATTEMPTS; v++) {
-      console.log(`\n🔒 Verificación ${v}/${VERIFICATION_ATTEMPTS}...`);
+      console.log(`\n🔍 Verificación ${v}/${VERIFICATION_ATTEMPTS}...`);
       
       try {
         verificationResult = await verifyWithScriptTag(data.registro_id);
         
         console.log('Resultado verificación:', verificationResult);
         
-        // â­ NUEVO: Detectar errores de red
+        // ⭐ NUEVO: Detectar errores de red
         if (verificationResult.error && (
           verificationResult.error.includes('red') || 
           verificationResult.error.includes('network') ||
@@ -1251,24 +1251,24 @@ async function sendWithVerification(data, attempt = 1) {
           verificationResult.timeout
         )) {
           networkErrors++;
-          console.warn(`⚠ï¸ Error de red detectado (${networkErrors}/${VERIFICATION_ATTEMPTS})`);
+          console.warn(`⚠️ Error de red detectado (${networkErrors}/${VERIFICATION_ATTEMPTS})`);
           
-          // Si tenemos mÃºltiples errores de red consecutivos, asumir que SÃ se guardÃ³
+          // Si tenemos múltiples errores de red consecutivos, asumir que SÍ se guardó
           if (networkErrors >= 2 && ENABLE_VERIFICATION_FALLBACK) {
-            console.log('⚠ï¸⚠ï¸ MODO FALLBACK ACTIVADO');
-            console.log('MÃºltiples errores de red - Asumiendo que el registro SÃ se guardÃ³');
+            console.log('⚠️⚠️ MODO FALLBACK ACTIVADO');
+            console.log('Múltiples errores de red - Asumiendo que el registro SÍ se guardó');
             
             return {
               success: true,
               verified: false, // No verificado directamente
               exists: true, // Asumimos que existe
-              assumedSaved: true, // â­ NUEVO FLAG
+              assumedSaved: true, // ⭐ NUEVO FLAG
               networkIssues: true,
               data: {
                 registro_id: data.registro_id,
                 row_number: 'No verificable',
                 timestamp: new Date().toISOString(),
-                message: '⚠ï¸ Registro enviado pero no verificable por problemas de red. VERIFIQUE MANUALMENTE en Google Sheets.',
+                message: '⚠️ Registro enviado pero no verificable por problemas de red. VERIFIQUE MANUALMENTE en Google Sheets.',
                 user_name: data.authenticated_user_name,
                 modalidad: data.modalidad,
                 ubicacion: data.ubicacion_detectada,
@@ -1284,7 +1284,7 @@ async function sendWithVerification(data, attempt = 1) {
         // Verificar si existe y está confirmado
         if (verificationResult.success && verificationResult.verified && verificationResult.exists) {
           verificationSuccess = true;
-          console.log(`âœ…âœ… REGISTRO VERIFICADO en fila ${verificationResult.row_number}`);
+          console.log(`✅✅ REGISTRO VERIFICADO en fila ${verificationResult.row_number}`);
           break;
         }
         
@@ -1294,12 +1294,12 @@ async function sendWithVerification(data, attempt = 1) {
           
           if (v < VERIFICATION_ATTEMPTS) {
             const waitTime = TIEMPO_ENTRE_VERIFICACIONES[v - 1] || 5000;
-            console.log(`â±ï¸ Esperando ${waitTime/1000}s antes de verificar nuevamente...`);
+            console.log(`⏱️ Esperando ${waitTime/1000}s antes de verificar nuevamente...`);
             await sleep(waitTime);
           }
         }
       } catch (verifyError) {
-        console.error(`⚠ï¸ Error en verificación ${v}:`, verifyError.message);
+        console.error(`⚠️ Error en verificación ${v}:`, verifyError.message);
         networkErrors++;
         
         if (v < VERIFICATION_ATTEMPTS) {
@@ -1310,7 +1310,7 @@ async function sendWithVerification(data, attempt = 1) {
     
     // ========== PASO 4: EVALUAR RESULTADO ==========
     if (verificationSuccess && verificationResult) {
-      console.log('\nâœ…âœ…âœ… REGISTRO COMPLETADO Y VERIFICADO');
+      console.log('\n✅✅✅ REGISTRO COMPLETADO Y VERIFICADO');
       
       return {
         success: true,
@@ -1332,13 +1332,13 @@ async function sendWithVerification(data, attempt = 1) {
       };
     } else {
       // NO SE PUDO VERIFICAR
-      console.warn('\n⚠ï¸⚠ï¸ NO SE PUDO VERIFICAR EL REGISTRO');
+      console.warn('\n⚠️⚠️ NO SE PUDO VERIFICAR EL REGISTRO');
       console.warn('Errores de red detectados:', networkErrors);
       
-      // â­â­â­ FIX CRÃTICO: Si hay errores de red, NO reintentar todo â­â­â­
+      // ⭐⭐⭐ FIX CRÍTICO: Si hay errores de red, NO reintentar todo ⭐⭐⭐
       if (networkErrors >= 2 && ENABLE_VERIFICATION_FALLBACK) {
-        console.log('\n⚠ï¸ ACTIVANDO MODO FALLBACK FINAL');
-        console.log('El sistema asume que el registro SÃ se guardÃ³');
+        console.log('\n⚠️ ACTIVANDO MODO FALLBACK FINAL');
+        console.log('El sistema asume que el registro SÍ se guardó');
         console.log('IMPORTANTE: Usuario debe verificar manualmente');
         
         return {
@@ -1352,7 +1352,7 @@ async function sendWithVerification(data, attempt = 1) {
             registro_id: data.registro_id,
             row_number: 'No verificable',
             timestamp: new Date().toISOString(),
-            message: '⚠ï¸ Registro probablemente guardado pero no verificable. VERIFIQUE MANUALMENTE.',
+            message: '⚠️ Registro probablemente guardado pero no verificable. VERIFIQUE MANUALMENTE.',
             user_name: data.authenticated_user_name,
             modalidad: data.modalidad,
             ubicacion: data.ubicacion_detectada,
@@ -1364,10 +1364,10 @@ async function sendWithVerification(data, attempt = 1) {
         };
       }
       
-      // Si no hay errores de red, intentar reenvÃ­o completo
+      // Si no hay errores de red, intentar reenvío completo
       if (attempt < MAX_ATTEMPTS) {
         const waitTime = 10000 * attempt;
-        console.log(`\n🔒„ Reintentando envÃ­o completo (${attempt + 1}/${MAX_ATTEMPTS})...`);
+        console.log(`\n🔄 Reintentando envío completo (${attempt + 1}/${MAX_ATTEMPTS})...`);
         console.log(`⏳ Esperando ${waitTime/1000}s...`);
         await sleep(waitTime);
         
@@ -1375,11 +1375,11 @@ async function sendWithVerification(data, attempt = 1) {
       }
       
       // Si ya agotamos intentos, retornar error
-      throw new Error('No se pudo verificar el registro después de mÃºltiples intentos');
+      throw new Error('No se pudo verificar el registro después de múltiples intentos');
     }
     
   } catch (error) {
-    console.error(`\nâŒ Error en intento ${attempt}:`, error.message);
+    console.error(`\n❌ Error en intento ${attempt}:`, error.message);
     
     if (attempt < MAX_ATTEMPTS) {
       const waitTime = 5000 * attempt;
@@ -1388,7 +1388,7 @@ async function sendWithVerification(data, attempt = 1) {
       
       return sendWithVerification(data, attempt + 1);
     } else {
-      console.error('\nâŒâŒ TODOS LOS INTENTOS FALLARON');
+      console.error('\n❌❌ TODOS LOS INTENTOS FALLARON');
       
       return {
         success: false,
@@ -1397,13 +1397,13 @@ async function sendWithVerification(data, attempt = 1) {
         error: error.message,
         attempts: attempt,
         registro_id: data.registro_id,
-        note: 'El registro NO se guardÃ³. Intente nuevamente.'
+        note: 'El registro NO se guardó. Intente nuevamente.'
       };
     }
   }
 }
 
-// ========== VERIFICACIÃ“N SIMPLE CON GET ==========
+// ========== VERIFICACIÓN SIMPLE CON GET ==========
 async function verifyWithSimpleGet(registroID) {
   return new Promise((resolve, reject) => {
     const img = document.createElement('img');
@@ -1424,7 +1424,7 @@ async function verifyWithSimpleGet(registroID) {
     .then(() => {
       clearTimeout(timeoutId);
       // En modo no-cors no podemos leer la respuesta
-      // Así que asumimos que se enviÃ³ y verificamos de otra forma
+      // Así que asumimos que se envió y verificamos de otra forma
       
       // Intentar verificación alternativa con script tag
       return (registroID);
@@ -1434,7 +1434,7 @@ async function verifyWithSimpleGet(registroID) {
     })
     .catch(error => {
       clearTimeout(timeoutId);
-      console.warn('Fetch fallÃ³, intentando con script tag:', error.message);
+      console.warn('Fetch falló, intentando con script tag:', error.message);
       
       // Fallback a script tag
       (registroID)
@@ -1446,16 +1446,16 @@ async function verifyWithSimpleGet(registroID) {
 
 // ========== VERIFICAR CON SCRIPT TAG (JSONP) ==========
 async function verifyWithScriptTag(registroID) {
-  console.log('🔒 Verificando con script tag JSONP...');
+  console.log('🔍 Verificando con script tag JSONP...');
   
   return new Promise((resolve) => {
     const callbackName = 'verify_' + Date.now().toString().substring(5);
     const scriptId = 'script_' + callbackName;
     
-    // â­ FIX: Timeout aumentado y mejor manejo de errores de red
+    // ⭐ FIX: Timeout aumentado y mejor manejo de errores de red
     const timeoutId = setTimeout(() => {
       cleanup();
-      console.warn('â±ï¸ Timeout en verificación JSONP (20s)');
+      console.warn('⏱️ Timeout en verificación JSONP (20s)');
       resolve({
         success: false,
         verified: false,
@@ -1469,7 +1469,7 @@ async function verifyWithScriptTag(registroID) {
     // Callback global
     window[callbackName] = function(result) {
       clearTimeout(timeoutId);
-      console.log('âœ… JSONP callback recibido:', result);
+      console.log('✅ JSONP callback recibido:', result);
       cleanup();
       resolve(result);
     };
@@ -1479,10 +1479,10 @@ async function verifyWithScriptTag(registroID) {
     script.id = scriptId;
     script.onerror = function(event) {
       clearTimeout(timeoutId);
-      console.error('âŒ Error cargando script JSONP');
+      console.error('❌ Error cargando script JSONP');
       console.error('Evento error:', event);
       
-      // â­ NUEVO: Detectar tipo de error
+      // ⭐ NUEVO: Detectar tipo de error
       const errorType = event.type || 'unknown';
       const errorMsg = event.message || 'Error de red o 403 - servidor no accesible';
       
@@ -1493,8 +1493,8 @@ async function verifyWithScriptTag(registroID) {
         exists: false,
         error: errorMsg,
         errorType: errorType,
-        networkError: true, // â­ FLAG IMPORTANTE
-        code403: true // â­ FLAG IMPORTANTE
+        networkError: true, // ⭐ FLAG IMPORTANTE
+        code403: true // ⭐ FLAG IMPORTANTE
       });
     };
     
@@ -1516,7 +1516,7 @@ async function verifyWithScriptTag(registroID) {
 
 // ========== ENVIAR DATOS CON IFRAME (MEJORADO) ==========
 async function sendDataWithIframe(data) {
-  console.log('🔨 Enviando con iframe (sin leer respuesta)...');
+  console.log('📨 Enviando con iframe (sin leer respuesta)...');
   
   return new Promise((resolve) => {
     const iframe = document.createElement('iframe');
@@ -1546,13 +1546,13 @@ async function sendDataWithIframe(data) {
     document.body.appendChild(iframe);
     document.body.appendChild(form);
     
-    console.log('🔮 Enviando formulario...');
+    console.log('📮 Enviando formulario...');
     form.submit();
     
-    // Esperar 5 segundos y asumir que se enviÃ³
+    // Esperar 5 segundos y asumir que se envió
     // NO intentamos leer el iframe por CORS
     setTimeout(() => {
-      console.log('â±ï¸ 5 segundos transcurridos, asumiendo envÃ­o completado');
+      console.log('⏱️ 5 segundos transcurridos, asumiendo envío completado');
       
       // Limpiar
       try {
@@ -1573,14 +1573,14 @@ async function sendDataWithIframe(data) {
 
 // ========== VERIFICAR REGISTRO EN SHEETS ==========
 async function verifyRegistro(registroID) {
-  console.log('🔒 Verificando registro:', registroID);
+  console.log('🔍 Verificando registro:', registroID);
   
   // Intentar con script tag directamente
   try {
     const result = await verifyWithScriptTag(registroID);
     return result;
   } catch (error) {
-    console.error('âŒ Error en verificación:', error);
+    console.error('❌ Error en verificación:', error);
     return {
       success: false,
       verified: false,
@@ -1592,7 +1592,7 @@ async function verifyRegistro(registroID) {
 
 // ========== VERIFICAR CON IFRAME (FALLBACK) ==========
 async function verifyWithIframe(registroID) {
-  console.log('🔒 Verificando con iframe GET...');
+  console.log('🔍 Verificando con iframe GET...');
   
   return new Promise((resolve) => {
     // Crear un script tag en lugar de iframe para evitar CORS
@@ -1601,7 +1601,7 @@ async function verifyWithIframe(registroID) {
     
     // Definir callback global temporal
     window[callbackName] = function(result) {
-      console.log('âœ… Callback recibido:', result);
+      console.log('✅ Callback recibido:', result);
       cleanup();
       resolve(result);
     };
@@ -1611,7 +1611,7 @@ async function verifyWithIframe(registroID) {
     script.src = `${GOOGLE_SCRIPT_URL}?action=verify&registro_id=${encodeURIComponent(registroID)}&callback=${callbackName}&_t=${Date.now()}`;
     
     script.onerror = function(error) {
-      console.error('âŒ Error cargando script de verificación');
+      console.error('❌ Error cargando script de verificación');
       cleanup();
       resolve({
         success: false,
@@ -1622,7 +1622,7 @@ async function verifyWithIframe(registroID) {
     };
     
     const timeoutId = setTimeout(() => {
-      console.warn('â±ï¸ Timeout en verificación (10s)');
+      console.warn('⏱️ Timeout en verificación (10s)');
       cleanup();
       resolve({
         success: false,
@@ -1653,22 +1653,22 @@ async function handleSubmit(e) {
   e.preventDefault();
   
   console.log('\n' + '='.repeat(70));
-  console.log('🚀 INICIANDO ENVÃO (MODO IDEMPOTENTE CON VERIFICACIÃ“N MEJORADA)');
+  console.log('🚀 INICIANDO ENVÍO (MODO IDEMPOTENTE CON VERIFICACIÓN MEJORADA)');
   console.log('='.repeat(70));
   
   // ========== VALIDACIONES INICIALES ==========
   if (!isAuthenticated || !currentUser) {
-    showStatus('âŒ Debe autenticarse con Google', 'error');
+    showStatus('❌ Debe autenticarse con Google', 'error');
     return;
   }
   
   if (!locationValid || !currentLocation) {
-    showStatus('âŒ Ubicación GPS requerida', 'error');
+    showStatus('❌ Ubicación GPS requerida', 'error');
     return;
   }
   
   if (currentLocation.accuracy > REQUIRED_ACCURACY) {
-    showStatus(`âŒ Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m`, 'error');
+    showStatus(`❌ Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m`, 'error');
     return;
   }
   
@@ -1676,14 +1676,14 @@ async function handleSubmit(e) {
     return;
   }
   
-  // Deshabilitar botón de envÃ­o
+  // Deshabilitar botón de envío
   const submitBtn = document.querySelector('.submit-btn');
   const originalText = submitBtn.textContent;
   submitBtn.disabled = true;
   submitBtn.textContent = '⏳ Procesando...';
   
   try {
-    // ========== GENERAR ID ÃšNICO ==========
+    // ========== GENERAR ID ÚNICO ==========
     const registroID = generateRegistroID();
     
     console.log('📋 ID:', registroID);
@@ -1702,12 +1702,12 @@ async function handleSubmit(e) {
       const successUploads = evidenciasUrls.filter(e => e.uploadStatus === 'SUCCESS');
       const failedUploads = evidenciasUrls.filter(e => e.uploadStatus === 'FAILED');
       
-      // Si ninguna evidencia se subiÃ³ y habÃ­a archivos seleccionados
+      // Si ninguna evidencia se subió y había archivos seleccionados
       if (selectedFiles.length > 0 && successUploads.length === 0) {
-        const errorDetails = failedUploads.map(e => `â€¢ ${e.originalName}: ${e.error}`).join('\n');
+        const errorDetails = failedUploads.map(e => `• ${e.originalName}: ${e.error}`).join('\n');
         
         const userDecision = confirm(
-          `⚠ï¸ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n` +
+          `⚠️ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n` +
           `¿Continuar SIN evidencias?`
         );
         
@@ -1718,7 +1718,7 @@ async function handleSubmit(e) {
     }
     
     // ========== PREPARAR DATOS DEL FORMULARIO ==========
-    console.log('\n📍 PREPARANDO DATOS...');
+    console.log('\n📝 PREPARANDO DATOS...');
     
     const formData = new FormData(e.target);
     const data = {};
@@ -1778,18 +1778,18 @@ async function handleSubmit(e) {
     data.required_accuracy = REQUIRED_ACCURACY;
     data.device_info = JSON.stringify(getDeviceInfo());
     
-    // ========== VALIDACIÃ“N CRÃTICA DE MODALIDAD ==========
+    // ========== VALIDACIÓN CRÍTICA DE MODALIDAD ==========
     if (!data.modalidad || data.modalidad === '' || data.modalidad === 'undefined' || data.modalidad === 'null') {
-      throw new Error('Campo Modalidad es requerido y no puede estar vacÃ­o');
+      throw new Error('Campo Modalidad es requerido y no puede estar vacío');
     }
     
-    console.log('âœ… Datos preparados correctamente');
+    console.log('✅ Datos preparados correctamente');
     console.log('📊 Modalidad:', data.modalidad);
     console.log('📍 Ubicación:', data.ubicacion_detectada);
     console.log('🎯 Precisión:', data.precision_gps_metros + 'm');
     
-    // ========== ENVIAR CON VERIFICACIÃ“N ==========
-    console.log('\n📤 ENVIANDO CON VERIFICACIÃ“N MEJORADA...');
+    // ========== ENVIAR CON VERIFICACIÓN ==========
+    console.log('\n📤 ENVIANDO CON VERIFICACIÓN MEJORADA...');
     showStatus('📤 Enviando asistencia (esto puede tomar hasta 60 segundos)...', 'success');
     
     const result = await sendWithVerification(data);
@@ -1804,15 +1804,15 @@ async function handleSubmit(e) {
     
     // ========== MANEJO DE RESULTADOS (MEJORADO CON FALLBACK) ==========
     
-    // â­â­â­ CASO 1: âœ… Ã‰XITO VERIFICADO - Registro confirmado en Google Sheets
+    // ⭐⭐⭐ CASO 1: ✅ ÉXITO VERIFICADO - Registro confirmado en Google Sheets
     if (result.success && result.verified && result.exists && !result.assumedSaved) {
-      console.log('\nâœ…âœ…âœ… REGISTRO EXITOSO Y VERIFICADO EN SHEETS');
+      console.log('\n✅✅✅ REGISTRO EXITOSO Y VERIFICADO EN SHEETS');
       
       const rowNumber = result.data?.row_number || 'N/A';
       const searchMethod = result.data?.search_method || 'unknown';
       const foundInFinal = result.found_in_final_check ? '(encontrado en verificación final)' : '';
       
-      let statusMessage = `âœ… ¡Asistencia VERIFICADA en Google Sheets! ${foundInFinal}
+      let statusMessage = `✅ ¡Asistencia VERIFICADA en Google Sheets! ${foundInFinal}
 
 📋 Registro ID: ${data.registro_id}
 👤 Usuario: ${currentUser.name}
@@ -1820,27 +1820,27 @@ async function handleSubmit(e) {
 📊 Modalidad: ${data.modalidad}
 📍 Ubicación: ${data.ubicacion_detectada}
 🎯 Precisión GPS: ${data.precision_gps_metros}m
-🔢 Fila en Sheets: ${rowNumber}
-🔒„ Intentos usados: ${result.attempts}/${result.verification_attempts || 3}
-🔒 MÃ©todo bÃºsqueda: ${searchMethod}`;
+📢 Fila en Sheets: ${rowNumber}
+🔄 Intentos usados: ${result.attempts}/${result.verification_attempts || 3}
+🔍 Método búsqueda: ${searchMethod}`;
       
       if (data.total_evidencias > 0) {
         statusMessage += `\n📸 Evidencias subidas: ${data.total_evidencias}`;
       }
       
       if (data.evidencias_failed > 0) {
-        statusMessage += `\n⚠ï¸ Evidencias fallidas: ${data.evidencias_failed}`;
+        statusMessage += `\n⚠️ Evidencias fallidas: ${data.evidencias_failed}`;
       }
       
       if (result.duplicate_prevented) {
-        statusMessage += `\n🔒’ Duplicado prevenido (idempotencia)`;
+        statusMessage += `\n🔒 Duplicado prevenido (idempotencia)`;
       }
       
       showStatus(statusMessage, 'success');
       
       // Preguntar al usuario si quiere registrar otra asistencia
       setTimeout(() => {
-        if (confirm('âœ… Registro verificado exitosamente en Google Sheets.\n\n¿Desea registrar otra asistencia?')) {
+        if (confirm('✅ Registro verificado exitosamente en Google Sheets.\n\n¿Desea registrar otra asistencia?')) {
           resetFormOnly();
           getCurrentLocation();
         } else {
@@ -1850,16 +1850,16 @@ async function handleSubmit(e) {
       }, 8000);
       
     } 
-    // â­â­â­ CASO 2: ⚠ï¸ NUEVO - Enviado pero no verificable por problemas de red
+    // ⭐⭐⭐ CASO 2: ⚠️ NUEVO - Enviado pero no verificable por problemas de red
     else if (result.success && result.assumedSaved && result.networkIssues) {
-      console.log('\n⚠ï¸⚠ï¸ REGISTRO ENVIADO - VERIFICACIÃ“N BLOQUEADA POR RED');
+      console.log('\n⚠️⚠️ REGISTRO ENVIADO - VERIFICACIÓN BLOQUEADA POR RED');
       console.log('Registro ID:', data.registro_id);
       console.log('Errores de red:', result.network_errors);
-      console.log('Modo fallback:', result.mustVerifyManually ? 'SÃ' : 'NO');
+      console.log('Modo fallback:', result.mustVerifyManually ? 'SÍ' : 'NO');
       
-      showStatus(`⚠ï¸ REGISTRO PROBABLEMENTE GUARDADO
+      showStatus(`⚠️ REGISTRO PROBABLEMENTE GUARDADO
 
-El sistema procesÃ³ su solicitud correctamente y enviÃ³ los datos a Google Sheets.
+El sistema procesó su solicitud correctamente y envió los datos a Google Sheets.
 Sin embargo, no se pudo VERIFICAR debido a problemas de red.
 
 📋 Registro ID: ${data.registro_id}
@@ -1869,48 +1869,48 @@ Sin embargo, no se pudo VERIFICAR debido a problemas de red.
 📍 Ubicación: ${data.ubicacion_detectada}
 🎯 Precisión GPS: ${data.precision_gps_metros}m
 
-âœ… DATOS ENVIADOS EXITOSAMENTE al servidor
-⚠ï¸ VERIFICACIÃ“N BLOQUEADA por problemas de red (error 403 o timeout)
+✅ DATOS ENVIADOS EXITOSAMENTE al servidor
+⚠️ VERIFICACIÓN BLOQUEADA por problemas de red (error 403 o timeout)
 
-🔒 ACCIÃ“N REQUERIDA - VERIFICACIÃ“N MANUAL:
-â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-1. Abra Google Sheets en otra pestaÃ±a
+🔍 ACCIÓN REQUERIDA - VERIFICACIÓN MANUAL:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Abra Google Sheets en otra pestaña
 2. Presione Ctrl+F (Cmd+F en Mac) 
 3. Busque exactamente: ${data.registro_id}
 4. Resultados:
-   â€¢ âœ… SI ENCUENTRA EL REGISTRO â†’ Todo está bien, puede continuar
-   â€¢ âŒ NO ENCUENTRA EL REGISTRO â†’ Intente registrar nuevamente
+   • ✅ SI ENCUENTRA EL REGISTRO → Todo está bien, puede continuar
+   • ❌ NO ENCUENTRA EL REGISTRO → Intente registrar nuevamente
 
-💡 INFORMACIÃ“N IMPORTANTE:
-â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-â€¢ En el 90% de casos cuando hay errores de red en la verificación,
-  el registro SÃ se guardÃ³ correctamente en Google Sheets
-â€¢ Los errores de red (403, timeout) solo afectan la VERIFICACIÃ“N,
-  NO el envÃ­o de datos
-â€¢ Google puede tardar 5-30 segundos en procesar el registro
+💡 INFORMACIÓN IMPORTANTE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• En el 90% de casos cuando hay errores de red en la verificación,
+  el registro SÍ se guardó correctamente en Google Sheets
+• Los errores de red (403, timeout) solo afectan la VERIFICACIÓN,
+  NO el envío de datos
+• Google puede tardar 5-30 segundos en procesar el registro
 
-â±ï¸ Tiempo de envÃ­o: EXITOSO âœ…
-⚠ï¸ Verificaciones fallidas: ${result.network_errors || 0} (problemas de red)
-🔒„ Intentos realizados: ${result.attempts || 1}
+⏱️ Tiempo de envío: EXITOSO ✅
+⚠️ Verificaciones fallidas: ${result.network_errors || 0} (problemas de red)
+🔄 Intentos realizados: ${result.attempts || 1}
 
-¿QUÃ‰ HACER AHORA?
-â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-👉 OpciÃ³n 1 (RECOMENDADO): 
+¿QUÉ HACER AHORA?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👉 Opción 1 (RECOMENDADO): 
    Abra Google Sheets y verifique si el registro está guardado
 
-👉 OpciÃ³n 2: 
-   Espere 30 segundos y registre nuevamente (el sistema detectarÃ¡ duplicados)
+👉 Opción 2: 
+   Espere 30 segundos y registre nuevamente (el sistema detectará duplicados)
 
-â“ PREGUNTAS FRECUENTES:
-â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-Q: ¿Se guardÃ³ mi registro?
-A: Probablemente SÃ. Los datos se enviaron correctamente al servidor.
+❓ PREGUNTAS FRECUENTES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Q: ¿Se guardó mi registro?
+A: Probablemente SÍ. Los datos se enviaron correctamente al servidor.
 
 Q: ¿Por qué no se puede verificar?
-A: Problemas temporales de red o lÃ­mites de Google Scripts.
+A: Problemas temporales de red o límites de Google Scripts.
 
 Q: ¿Puedo registrar nuevamente?
-A: SÃ. El sistema detecta duplicados automáticamente.
+A: SÍ. El sistema detecta duplicados automáticamente.
 
 Q: ¿Qué hago si NO está en Sheets?
 A: Intente registrar nuevamente. Si persiste, contacte al administrador.
@@ -1925,9 +1925,9 @@ capture pantalla de este mensaje y contacte al administrador.`, 'warning');
       // Mantener el mensaje visible por más tiempo
       setTimeout(() => {
         const userChoice = confirm(
-          '⚠ï¸ El registro probablemente se guardÃ³ pero no se pudo verificar.\n\n' +
+          '⚠️ El registro probablemente se guardó pero no se pudo verificar.\n\n' +
           '¿Desea intentar registrar nuevamente?\n\n' +
-          '(El sistema detectarÃ¡ duplicados automáticamente si ya existe)'
+          '(El sistema detectará duplicados automáticamente si ya existe)'
         );
         
         if (userChoice) {
@@ -1935,33 +1935,33 @@ capture pantalla de este mensaje y contacte al administrador.`, 'warning');
           // No resetear, permitir que el usuario intente de nuevo
         } else {
           hideStatus();
-          // Usuario decidiÃ³ no intentar de nuevo
+          // Usuario decidió no intentar de nuevo
         }
       }, 60000); // 60 segundos para leer
       
     }
-    // â­â­â­ CASO 3: ⚠ï¸ Inconsistencia - Dice verificado pero no existe (no deberÃ­a pasar)
+    // ⭐⭐⭐ CASO 3: ⚠️ Inconsistencia - Dice verificado pero no existe (no debería pasar)
     else if (result.success && result.verified && !result.exists) {
-      console.error('\n⚠ï¸⚠ï¸ INCONSISTENCIA DETECTADA');
-      console.error('El sistema reportÃ³ Ã©xito pero la verificación indica que NO existe');
+      console.error('\n⚠️⚠️ INCONSISTENCIA DETECTADA');
+      console.error('El sistema reportó éxito pero la verificación indica que NO existe');
       console.error('Registro ID:', data.registro_id);
       
-      showStatus(`⚠ï¸ ADVERTENCIA: Inconsistencia detectada
+      showStatus(`⚠️ ADVERTENCIA: Inconsistencia detectada
 
-El sistema procesÃ³ su solicitud pero no puede confirmar que el registro existe en Google Sheets.
+El sistema procesó su solicitud pero no puede confirmar que el registro existe en Google Sheets.
 
 📋 Registro ID: ${data.registro_id}
 👤 Usuario: ${currentUser.name}
-🔒„ Intentos realizados: ${result.attempts}
+🔄 Intentos realizados: ${result.attempts}
 
-⚠ï¸ ACCIÃ“N REQUERIDA:
+⚠️ ACCIÓN REQUERIDA:
 1. Capture una captura de pantalla de esta página
 2. Abra Google Sheets manualmente
 3. Busque el Registro ID: ${data.registro_id}
 4. Si NO existe, registre nuevamente
-5. Si SÃ existe, ignore este mensaje
+5. Si SÍ existe, ignore este mensaje
 
-⚠ï¸ Por favor, reporte este incidente al administrador.`, 'error');
+⚠️ Por favor, reporte este incidente al administrador.`, 'error');
       
       // No resetear el formulario para que el usuario pueda capturar pantalla
       submitBtn.disabled = false;
@@ -1970,47 +1970,47 @@ El sistema procesÃ³ su solicitud pero no puede confirmar que el registro exist
       setTimeout(() => hideStatus(), 30000); // Mostrar por 30 segundos
       
     }
-    // â­â­â­ CASO 4: âŒ ERROR CONFIRMADO - No se pudo guardar O no se pudo verificar
+    // ⭐⭐⭐ CASO 4: ❌ ERROR CONFIRMADO - No se pudo guardar O no se pudo verificar
     else {
-      console.error('\nâŒâŒâŒ ERROR - REGISTRO NO VERIFICADO');
+      console.error('\n❌❌❌ ERROR - REGISTRO NO VERIFICADO');
       console.error('Registro ID intentado:', data.registro_id);
       console.error('Error:', result.error || 'Error desconocido');
       console.error('Attempts:', result.attempts);
       console.error('Network errors:', result.network_errors || 0);
       
-      const errorDetail = result.error || 'Error desconocido durante el envÃ­o';
+      const errorDetail = result.error || 'Error desconocido durante el envío';
       
-      showStatus(`âŒ ERROR: No se pudo verificar la asistencia
+      showStatus(`❌ ERROR: No se pudo verificar la asistencia
 
 🚫 Motivo: ${errorDetail}
 
-⚠ï¸ IMPORTANTE: 
+⚠️ IMPORTANTE: 
 Por favor, VERIFIQUE MANUALMENTE en Google Sheets si el registro existe.
 
 📋 Registro ID: ${data.registro_id}
-🔒„ Intentos realizados: ${result.attempts || 1}
-⚠ï¸ Errores de red: ${result.network_errors || 0}
-â±ï¸ Tiempo total: ~${(result.attempts || 1) * 30}s
+🔄 Intentos realizados: ${result.attempts || 1}
+⚠️ Errores de red: ${result.network_errors || 0}
+⏱️ Tiempo total: ~${(result.attempts || 1) * 30}s
 
-🔒 VERIFICACIÃ“N MANUAL:
+🔍 VERIFICACIÓN MANUAL:
 1. Abra Google Sheets
 2. Busque (Ctrl+F) el ID: ${data.registro_id}
-3. Si EXISTE: Ignore este mensaje, el registro SÃ se guardÃ³
+3. Si EXISTE: Ignore este mensaje, el registro SÍ se guardó
 4. Si NO EXISTE: Intente registrar nuevamente
 
 Por favor, verifique:
-â€¢ Su conexiÃ³n a Internet está activa
-â€¢ Los permisos de ubicación están habilitados
-â€¢ Tiene espacio disponible en su cuenta Google
-â€¢ No hay problemas con su red (firewall, proxy)
+• Su conexión a Internet está activa
+• Los permisos de ubicación están habilitados
+• Tiene espacio disponible en su cuenta Google
+• No hay problemas con su red (firewall, proxy)
 
-🔒§ QUÃ‰ HACER:
-â€¢ Intente registrar nuevamente
-â€¢ Si el problema persiste, contacte al administrador
-â€¢ Mencione este Registro ID: ${data.registro_id}
-â€¢ Capture una captura de pantalla de la consola (F12)
+🔧 QUÉ HACER:
+• Intente registrar nuevamente
+• Si el problema persiste, contacte al administrador
+• Mencione este Registro ID: ${data.registro_id}
+• Capture una captura de pantalla de la consola (F12)
 
-💡 CONSEJO: Verifique que el campo "Modalidad" estÃ© seleccionado correctamente.`, 'error');
+💡 CONSEJO: Verifique que el campo "Modalidad" esté seleccionado correctamente.`, 'error');
       
       // Habilitar botón para permitir reintento
       submitBtn.disabled = false;
@@ -2021,7 +2021,7 @@ Por favor, verifique:
     
   } catch (error) {
     // ========== MANEJO DE ERRORES EXCEPCIONALES ==========
-    console.error('\nâŒ ERROR EXCEPCIONAL:', error);
+    console.error('\n❌ ERROR EXCEPCIONAL:', error);
     console.error('Stack:', error.stack);
     
     let errorMessage = error.message || 'Error desconocido';
@@ -2035,50 +2035,50 @@ Por favor, verifique:
       console.warn('No se pudo extraer registro_id del error');
     }
     
-    // Mensajes de error especÃ­ficos
+    // Mensajes de error específicos
     if (errorMessage.includes('cancelado')) {
-      showStatus(`⚠ï¸ Registro cancelado
+      showStatus(`⚠️ Registro cancelado
 
-El usuario decidiÃ³ no continuar sin evidencias.`, 'error');
+El usuario decidió no continuar sin evidencias.`, 'error');
     } else if (errorMessage.includes('Modalidad')) {
-      showStatus(`âŒ ERROR: Campo Modalidad invÃ¡lido
+      showStatus(`❌ ERROR: Campo Modalidad inválido
 
 🚫 ${errorMessage}
 
 Por favor:
 1. Verifique que haya seleccionado una modalidad
 2. Recargue la página si el problema persiste
-3. Contacte al administrador si continÃºa
+3. Contacte al administrador si continúa
 
 📋 Registro ID intentado: ${registroID}`, 'error');
     } else if (errorMessage.includes('red') || errorMessage.includes('network') || errorMessage.includes('timeout')) {
-      showStatus(`âŒ ERROR: Problema de conexiÃ³n
+      showStatus(`❌ ERROR: Problema de conexión
 
 🚫 ${errorMessage}
 
 Por favor:
-1. Verifique su conexiÃ³n a Internet
+1. Verifique su conexión a Internet
 2. Intente nuevamente en unos momentos
 3. Si está en WiFi, intente con datos móviles (o viceversa)
 
 📋 Registro ID intentado: ${registroID}`, 'error');
     } else {
-      showStatus(`âŒ ERROR: No se pudo registrar la asistencia
+      showStatus(`❌ ERROR: No se pudo registrar la asistencia
 
 🚫 ${errorMessage}
 
-⚠ï¸ GARANTÃA: El registro NO se guardÃ³.
+⚠️ GARANTÍA: El registro NO se guardó.
 
 Por favor:
 1. Capture una captura de pantalla
-2. Verifique su conexiÃ³n a Internet
-3. Verifique que todos los campos requeridos estÃ©n llenos
+2. Verifique su conexión a Internet
+3. Verifique que todos los campos requeridos estén llenos
 4. Intente nuevamente
 
 Si el problema persiste:
-â€¢ Contacte al administrador
-â€¢ Proporcione este Registro ID: ${registroID}
-â€¢ Abra la consola (F12) y capture los errores
+• Contacte al administrador
+• Proporcione este Registro ID: ${registroID}
+• Abra la consola (F12) y capture los errores
 
 💡 TIP: Recargue la página y vuelva a intentar`, 'error');
     }
@@ -2169,7 +2169,7 @@ function validateConditionalFields() {
     const sumaGrupos = ninos + adolescentes + adultos + mayores + familia;
     
     if (sumaGrupos !== intervenciones) {
-      showStatus(`Error: Total intervenciones (${intervenciones}) â‰  suma grupos (${sumaGrupos})`, 'error');
+      showStatus(`Error: Total intervenciones (${intervenciones}) ≠ suma grupos (${sumaGrupos})`, 'error');
       return false;
     }
   }
@@ -2309,7 +2309,7 @@ function getCurrentLocation() {
       document.getElementById('latitude').value = currentLocation.latitude;
       document.getElementById('longitude').value = currentLocation.longitude;
       
-      console.log(`📍 Ubicación obtenida - Precisión: ${Math.round(currentLocation.accuracy)}m (lÃ­mite: ${REQUIRED_ACCURACY}m)`);
+      console.log(`📍 Ubicación obtenida - Precisión: ${Math.round(currentLocation.accuracy)}m (límite: ${REQUIRED_ACCURACY}m)`);
       
       if (currentLocation.accuracy <= REQUIRED_ACCURACY) {
         locationValid = true;
@@ -2359,8 +2359,8 @@ function getCurrentLocation() {
         case error.POSITION_UNAVAILABLE:
           errorMessage = 'Ubicación no disponible';
           errorDescription = isDesktop 
-            ? 'Verifique su conexiÃ³n a Internet o WiFi' 
-            : 'Verifique su conexiÃ³n GPS';
+            ? 'Verifique su conexión a Internet o WiFi' 
+            : 'Verifique su conexión GPS';
           break;
         case error.TIMEOUT:
           errorMessage = 'Tiempo agotado';
@@ -2391,7 +2391,7 @@ function getCurrentLocation() {
 
 function updateLocationStatus(type, message, description) {
   const statusDiv = document.getElementById('location_status_display');
-  const icons = { loading: '🌍', success: 'âœ…', warning: '⚠ï¸', error: 'âŒ' };
+  const icons = { loading: '🌐', success: '✅', warning: '⚠️', error: '❌' };
   
   statusDiv.className = `location-status ${type}`;
   statusDiv.innerHTML = `${icons[type]} <strong>${message}</strong>${description ? '<br>' + description : ''}`;
@@ -2402,7 +2402,7 @@ function updateSubmitButton() {
   
   if (!isAuthenticated) {
     submitBtn.disabled = true;
-    submitBtn.textContent = '🔒’ Autentíquese primero';
+    submitBtn.textContent = '🔒 Autentíquese primero';
     submitBtn.style.background = '#6c757d';
   } else if (locationValid) {
     submitBtn.disabled = false;
@@ -2410,7 +2410,7 @@ function updateSubmitButton() {
     submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
   } else {
     submitBtn.disabled = true;
-    submitBtn.textContent = '⚠ï¸ Ubicación GPS requerida';
+    submitBtn.textContent = '⚠️ Ubicación GPS requerida';
     submitBtn.style.background = '#6c757d';
   }
 }
@@ -2420,7 +2420,7 @@ function updateLocationFields(location) {
   let precisionText = `${accuracy} metros`;
   let precisionClass = '';
   
-  // ClasificaciÃ³n de precisión adaptada al tipo de dispositivo
+  // Clasificación de precisión adaptada al tipo de dispositivo
   if (isDesktop) {
     // Para desktop: estándares más relajados
     if (accuracy <= 200) {
@@ -2472,9 +2472,9 @@ function updateLocationFields(location) {
 
 function detectarUbicacionEspecifica(lat, lng) {
   const ubicacionesUAS = [
-    { name: "CESPSIC - Centro de Servicios PsicolÃ³gicos", lat: 24.8278, lng: -107.3812, radius: 50 },
+    { name: "CESPSIC - Centro de Servicios Psicológicos", lat: 24.8278, lng: -107.3812, radius: 50 },
     { name: "Facultad de Psicología UAS", lat: 24.7993, lng: -107.3950, radius: 100 },
-    { name: "Universidad AutÃ³noma de Sinaloa - Campus Central", lat: 24.7990, lng: -107.3950, radius: 200 }
+    { name: "Universidad Autónoma de Sinaloa - Campus Central", lat: 24.7990, lng: -107.3950, radius: 200 }
   ];
   
   for (let ubicacion of ubicacionesUAS.sort((a, b) => a.radius - b.radius)) {
@@ -2541,14 +2541,14 @@ function actualizarUbicacionEspecifica(direccionData) {
 
 function calcularDistancia(lat1, lng1, lat2, lng2) {
   const R = 6371e3;
-  const Ï†1 = lat1 * Math.PI/180;
-  const Ï†2 = lat2 * Math.PI/180;
-  const Î”Ï† = (lat2-lat1) * Math.PI/180;
-  const Î”Î» = (lng2-lng1) * Math.PI/180;
+  const φ1 = lat1 * Math.PI/180;
+  const φ2 = lat2 * Math.PI/180;
+  const Δφ = (lat2-lat1) * Math.PI/180;
+  const Δλ = (lng2-lng1) * Math.PI/180;
 
-  const a = Math.sin(Î”Ï†/2) * Math.sin(Î”Ï†/2) +
-          Math.cos(Ï†1) * Math.cos(Ï†2) *
-          Math.sin(Î”Î»/2) * Math.sin(Î”Î»/2);
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+          Math.cos(φ1) * Math.cos(φ2) *
+          Math.sin(Δλ/2) * Math.sin(Δλ/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
   return R * c;
@@ -2563,132 +2563,132 @@ function resetLocationFields() {
   updateLocationStatus('loading', 'Complete la autenticación para obtener ubicación GPS', '');
 }
 
-// ========== DIAGNÃ“STICO ==========
+// ========== DIAGNÓSTICO ==========
 async function diagnosticarEvidencias() {
-    console.log('\n🔒 DIAGNÃ“STICO DE EVIDENCIAS');
+    console.log('\n🔍 DIAGNÓSTICO DE EVIDENCIAS');
     console.log('============================\n');
     
     console.log('1. ARCHIVOS SELECCIONADOS:');
     console.log(`   Total: ${selectedFiles.length}`);
     
     if (selectedFiles.length === 0) {
-        console.log('   ⚠ï¸ No hay archivos seleccionados');
+        console.log('   ⚠️ No hay archivos seleccionados');
         return;
     }
     
-    console.log('\n2. VALIDACIÃ“N DE CADA ARCHIVO:');
+    console.log('\n2. VALIDACIÓN DE CADA ARCHIVO:');
     selectedFiles.forEach((file, index) => {
         console.log(`\n   Archivo ${index + 1}:`);
         console.log(`   - Nombre: ${file.name}`);
-        console.log(`   - Tipo: ${file.type || 'SIN TIPO MIME âŒ'}`);
+        console.log(`   - Tipo: ${file.type || 'SIN TIPO MIME ❌'}`);
         console.log(`   - Tamaño: ${(file.size/1024/1024).toFixed(2)}MB`);
         
         const validaciones = [];
         
         if (!file.type) {
-            validaciones.push('âŒ Sin tipo MIME - RECHAZADO');
+            validaciones.push('❌ Sin tipo MIME - RECHAZADO');
         } else if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-            validaciones.push(`âŒ Tipo ${file.type} no permitido - RECHAZADO`);
+            validaciones.push(`❌ Tipo ${file.type} no permitido - RECHAZADO`);
         } else {
-            validaciones.push('âœ… Tipo vÃ¡lido');
+            validaciones.push('✅ Tipo válido');
         }
         
         if (file.size === 0) {
-            validaciones.push('âŒ Archivo vacÃ­o - RECHAZADO');
+            validaciones.push('❌ Archivo vacío - RECHAZADO');
         } else if (file.size > MAX_FILE_SIZE) {
-            validaciones.push(`âŒ Demasiado grande (>10MB) - RECHAZADO`);
+            validaciones.push(`❌ Demasiado grande (>10MB) - RECHAZADO`);
         } else {
-            validaciones.push('âœ… Tamaño vÃ¡lido');
+            validaciones.push('✅ Tamaño válido');
         }
         
         validaciones.forEach(v => console.log(`   ${v}`));
     });
     
-    console.log('\n3. PRUEBA DE CONVERSIÃ“N BASE64:');
+    console.log('\n3. PRUEBA DE CONVERSIÓN BASE64:');
     try {
         const testFile = selectedFiles[0];
         console.log(`   Probando con: ${testFile.name}`);
         
         const base64 = await fileToBase64(testFile);
-        console.log(`   âœ… Conversión exitosa: ${(base64.length/1024).toFixed(1)}KB en Base64`);
+        console.log(`   ✅ Conversión exitosa: ${(base64.length/1024).toFixed(1)}KB en Base64`);
     } catch (error) {
-        console.log(`   âŒ Error en conversión: ${error.message}`);
+        console.log(`   ❌ Error en conversión: ${error.message}`);
     }
     
-    console.log('\n4. CONFIGURACIÃ“N:');
+    console.log('\n4. CONFIGURACIÓN:');
     console.log(`   - Tipos permitidos: ${ALLOWED_FILE_TYPES.join(', ')}`);
     console.log(`   - Tamaño máximo: ${MAX_FILE_SIZE/1024/1024}MB`);
-    console.log(`   - MÃ¡ximo archivos: ${MAX_FILES}`);
+    console.log(`   - Máximo archivos: ${MAX_FILES}`);
     
     console.log('\n5. RECOMENDACIONES:');
     const invalidFiles = selectedFiles.filter(f => !f.type || !ALLOWED_FILE_TYPES.includes(f.type));
     const largeFiles = selectedFiles.filter(f => f.size > MAX_FILE_SIZE);
     
     if (invalidFiles.length > 0) {
-        console.log('   ⚠ï¸ Archivos con formato invÃ¡lido:');
+        console.log('   ⚠️ Archivos con formato inválido:');
         invalidFiles.forEach(f => {
             console.log(`      - ${f.name}: ${f.type || 'sin tipo'}`);
-            console.log(`        â†’ Convierta a JPG, PNG o WEBP`);
+            console.log(`        → Convierta a JPG, PNG o WEBP`);
         });
     }
     
     if (largeFiles.length > 0) {
-        console.log('   ⚠ï¸ Archivos muy grandes:');
+        console.log('   ⚠️ Archivos muy grandes:');
         largeFiles.forEach(f => {
             console.log(`      - ${f.name}: ${(f.size/1024/1024).toFixed(2)}MB`);
-            console.log(`        â†’ Reduzca la calidad o resolución`);
+            console.log(`        → Reduzca la calidad o resolución`);
         });
     }
     
     if (invalidFiles.length === 0 && largeFiles.length === 0) {
-        console.log('   âœ… Todos los archivos parecen vÃ¡lidos');
+        console.log('   ✅ Todos los archivos parecen válidos');
     }
     
     console.log('\n============================');
 }
 
 async function diagnosticComplete() {
-    console.log('🔒¬ DIAGNÃ“STICO COMPLETO');
+    console.log('🔬 DIAGNÓSTICO COMPLETO');
     console.log('======================\n');
     
     console.log('1. DISPOSITIVO:');
     console.log('   - Tipo:', deviceType);
-    console.log('   - Es Desktop:', isDesktop ? 'âœ…' : 'âŒ');
-    console.log('   - Es MÃ³vil:', !isDesktop ? 'âœ…' : 'âŒ');
-    console.log('   - iOS:', isIOS ? 'âœ…' : 'âŒ');
-    console.log('   - Safari:', isSafari ? 'âœ…' : 'âŒ');
+    console.log('   - Es Desktop:', isDesktop ? '✅' : '❌');
+    console.log('   - Es Móvil:', !isDesktop ? '✅' : '❌');
+    console.log('   - iOS:', isIOS ? '✅' : '❌');
+    console.log('   - Safari:', isSafari ? '✅' : '❌');
     console.log('   - User Agent:', navigator.userAgent);
     console.log('   - Pantalla:', `${window.screen.width}x${window.screen.height}`);
     console.log('   - Touch Points:', navigator.maxTouchPoints || 0);
     
-    console.log('\n2. PRECISIÃ“N GPS:');
-    console.log('   - MÃ©todo:', isDesktop ? 'IP/WiFi' : 'GPS nativo');
+    console.log('\n2. PRECISIÓN GPS:');
+    console.log('   - Método:', isDesktop ? 'IP/WiFi' : 'GPS nativo');
     console.log('   - Precisión requerida:', REQUIRED_ACCURACY + 'm');
     console.log('   - Precisión óptima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
     console.log('   - Actual:', currentLocation ? `${Math.round(currentLocation.accuracy)}m` : 'No obtenida');
-    console.log('   - Estado:', locationValid ? 'âœ… VÃ¡lida' : 'âŒ InvÃ¡lida');
+    console.log('   - Estado:', locationValid ? '✅ Válida' : '❌ Inválida');
     
-    console.log('\n3. CONFIGURACIÃ“N:');
-    console.log('   - Client ID:', GOOGLE_CLIENT_ID ? 'âœ…' : 'âŒ');
-    console.log('   - Script URL:', GOOGLE_SCRIPT_URL ? 'âœ…' : 'âŒ');
-    console.log('   - HTTPS:', location.protocol === 'https:' ? 'âœ…' : 'âŒ');
+    console.log('\n3. CONFIGURACIÓN:');
+    console.log('   - Client ID:', GOOGLE_CLIENT_ID ? '✅' : '❌');
+    console.log('   - Script URL:', GOOGLE_SCRIPT_URL ? '✅' : '❌');
+    console.log('   - HTTPS:', location.protocol === 'https:' ? '✅' : '❌');
     
-    console.log('\n4. AUTENTICACIÃ“N:');
-    console.log('   - Usuario autenticado:', isAuthenticated ? 'âœ…' : 'âŒ');
-    console.log('   - Consentimiento:', privacyConsent ? 'âœ…' : 'âŒ');
-    console.log('   - Google API:', typeof google !== 'undefined' ? 'âœ…' : 'âŒ');
-    console.log('   - localStorage:', safeLocalStorage() ? 'âœ…' : 'âŒ (modo privado)');
+    console.log('\n4. AUTENTICACIÓN:');
+    console.log('   - Usuario autenticado:', isAuthenticated ? '✅' : '❌');
+    console.log('   - Consentimiento:', privacyConsent ? '✅' : '❌');
+    console.log('   - Google API:', typeof google !== 'undefined' ? '✅' : '❌');
+    console.log('   - localStorage:', safeLocalStorage() ? '✅' : '❌ (modo privado)');
     
-    console.log('\n5. UBICACIÃ“N:');
-    console.log('   - Geolocalización:', navigator.geolocation ? 'âœ…' : 'âŒ');
-    console.log('   - Ubicación vÃ¡lida:', locationValid ? 'âœ…' : 'âŒ');
+    console.log('\n5. UBICACIÓN:');
+    console.log('   - Geolocalización:', navigator.geolocation ? '✅' : '❌');
+    console.log('   - Ubicación válida:', locationValid ? '✅' : '❌');
     console.log('   - Precisión actual:', currentLocation ? `${currentLocation.accuracy}m` : 'N/A');
     console.log('   - Intentos:', locationAttempts + '/' + MAX_LOCATION_ATTEMPTS);
     
     console.log('\n6. EVIDENCIAS:');
     console.log('   - Archivos seleccionados:', selectedFiles.length);
-    console.log('   - Drag & Drop:', !isIOS ? 'âœ… Habilitado' : 'âŒ Deshabilitado (iOS)');
-    console.log('   - DataTransfer:', !isIOS ? 'âœ… Disponible' : 'âŒ No disponible (iOS)');
+    console.log('   - Drag & Drop:', !isIOS ? '✅ Habilitado' : '❌ Deshabilitado (iOS)');
+    console.log('   - DataTransfer:', !isIOS ? '✅ Disponible' : '❌ No disponible (iOS)');
     
     if (selectedFiles.length > 0) {
         console.log('\n   Analizando archivos...');
@@ -2697,43 +2697,43 @@ async function diagnosticComplete() {
     
     console.log('\n7. RECOMENDACIONES:');
     if (isDesktop && currentLocation && currentLocation.accuracy > 300) {
-        console.log('   ⚠ï¸ Desktop con baja precisión:');
-        console.log('      - ConÃ©ctese a una red WiFi conocida');
+        console.log('   ⚠️ Desktop con baja precisión:');
+        console.log('      - Conéctese a una red WiFi conocida');
         console.log('      - Use un dispositivo móvil para mejor precisión');
         console.log('      - La precisión actual (' + Math.round(currentLocation.accuracy) + 'm) es normal para desktop');
     }
     if (!locationValid) {
-        console.log('   ⚠ï¸ Ubicación no vÃ¡lida:');
+        console.log('   ⚠️ Ubicación no válida:');
         console.log('      - Verifique permisos de ubicación');
-        console.log('      - AsegÃºrese de tener conexiÃ³n a Internet');
+        console.log('      - Asegúrese de tener conexión a Internet');
         if (isDesktop) {
             console.log('      - Considere usar un dispositivo móvil');
         }
     }
     if (!isAuthenticated) {
-        console.log('   ⚠ï¸ No autenticado - Complete la autenticación primero');
+        console.log('   ⚠️ No autenticado - Complete la autenticación primero');
     }
     
     console.log('\n======================');
     console.log('FUNCIONES DISPONIBLES:');
     console.log('- diagnosticarEvidencias() - Analiza archivos');
-    console.log('- diagnosticComplete() - DiagnÃ³stico completo');
+    console.log('- diagnosticComplete() - Diagnóstico completo');
     console.log('- getDeviceInfo() - Información del dispositivo');
 }
 
 // Mensaje de inicio
-console.log('âœ… Script cargado correctamente');
+console.log('✅ Script cargado correctamente');
 console.log(`📱 Dispositivo: ${deviceType}`);
-console.log(`💻 Es Desktop: ${isDesktop ? 'SÃ­' : 'No'}`);
+console.log(`💻 Es Desktop: ${isDesktop ? 'Sí' : 'No'}`);
 console.log(`📍 Precisión requerida: ${REQUIRED_ACCURACY}m ${isDesktop ? '(relajada para desktop)' : '(estándar móvil)'}`);
 console.log(`🎯 Modo: ${isIOS ? 'iOS (compatibilidad especial)' : isDesktop ? 'Desktop (precisión adaptada)' : 'Android/Windows/Desktop (funcionalidad completa)'}`);
 
 // ========== EXPORTAR CONSTANTES ==========
-console.log('\n📋 CONFIGURACIÃ“N OPTIMIZADA DE VERIFICACIÃ“N:');
+console.log('\n📋 CONFIGURACIÓN OPTIMIZADA DE VERIFICACIÓN:');
 console.log(`   - Espera inicial: ${TIEMPO_ESPERA_INICIAL/1000}s`);
 console.log(`   - Intentos verificación: ${VERIFICATION_ATTEMPTS}`);
 console.log(`   - Tiempos entre verificaciones: ${TIEMPO_ENTRE_VERIFICACIONES.map(t => t/1000 + 's').join(', ')}`);
-console.log(`   - Modo fallback: ${ENABLE_VERIFICATION_FALLBACK ? 'HABILITADO âœ…' : 'DESHABILITADO'}`);
-console.log('\nâœ… Mejoras cargadas - Mejor manejo de errores de red');
+console.log(`   - Modo fallback: ${ENABLE_VERIFICATION_FALLBACK ? 'HABILITADO ✅' : 'DESHABILITADO'}`);
+console.log('\n✅ Mejoras cargadas - Mejor manejo de errores de red');
 
-console.log('🔒 Para diagnÃ³stico: diagnosticComplete()');
+console.log('🔍 Para diagnóstico: diagnosticComplete()');
