@@ -29,11 +29,11 @@
         <!-- Sección de Autenticación -->
         <div class="auth-section" id="auth-section">
             <div class="auth-title" id="auth-title">
-                🔒’ Autenticación Requerida
+                🔒 Autenticación Requerida
             </div>
             
             <div class="auth-warning">
-                ⚠ï¸ Para registrar su asistencia debe autenticarse con su cuenta Gmail institucional o personal
+                ⚠️ Para registrar su asistencia debe autenticarse con su cuenta Gmail institucional o personal
             </div>
             
             <!-- Información del usuario autenticado -->
@@ -60,15 +60,15 @@
             <!-- Enlace para revocar permisos (solo visible cuando hay permisos) -->
             <div class="revoke-section" id="revoke-section" style="display: none;">
                 <button class="revoke-link" onclick="requestRevocation()">
-                    🔒 Revocar permisos en este dispositivo
+                    🔐 Revocar permisos en este dispositivo
                 </button>
             </div>
 			
 			<div class="auth-info" style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 8px; font-size: 14px; color: #1565c0;">
-				ℹ️ <strong>Nota 1:</strong> La autenticación solo se realiza cuando usted haga clic en el botón. 
+				ℹ️ <strong>Nota 1:</strong> La autenticación solo se realiza cuando usted haga clic en el botón. 
 				No se intentará automáticamente al cargar la página.<br>
-				ℹ️ <strong>Nota 2:</strong> Recuerde que necesita tener activado el permiso de ubicación para esta aplicación.<br>
-				ℹ️ <strong>Nota 3:</strong> Recuerde que necesita tener espacio en su cuenta Google para que se registre la asistencia correctamente.
+				ℹ️ <strong>Nota 2:</strong> Recuerde que necesita tener activado el permiso de ubicación para esta aplicación.<br>
+				ℹ️ <strong>Nota 3:</strong> Recuerde que necesita tener espacio en su cuenta Google para que se registre la asistencia correctamente.
 			</div>			
         </div>
 
@@ -76,11 +76,11 @@
         <div class="modal-overlay" id="privacy-modal" style="display: none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>🔒’ Aviso de Privacidad - CESPSIC</h2>
+                    <h2>🔒 Aviso de Privacidad - CESPSIC</h2>
                 </div>
                 <div class="modal-body">
                     <div class="privacy-text">
-                        <p>Los datos personales que se recaban en esta plataforma (autentificaciÃ³n, registros de actividad, archivos de evidencias y de geolocalización) serán tratados por el CESPSIC de la UAS con la finalidad de gestionar la asistencia de brigadistas, practicantes y residentes; validar evidencias de actividades y fines administrativos relacionados con su labor dentro de la clínica de la universidad.</p>
+                        <p>Los datos personales que se recaban en esta plataforma (autentificación, registros de actividad, archivos de evidencias y de geolocalización) serán tratados por el CESPSIC de la UAS con la finalidad de gestionar la asistencia de brigadistas, practicantes y residentes; validar evidencias de actividades y fines administrativos relacionados con su labor dentro de la clínica de la universidad.</p>
                         
                         <p>El tratamiento es necesario para la correcta operación del servicio. Los datos se conservarán por el periodo necesario para fines administrativos y conforme a la normativa institucional.</p>
                         
@@ -98,7 +98,7 @@
         <div class="modal-overlay" id="revoke-modal" style="display: none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>⚠ï¸ Revocar Permisos de Privacidad</h2>
+                    <h2>⚠️ Revocar Permisos de Privacidad</h2>
                 </div>
                 <div class="modal-body">
                     <p>Para revocar los permisos de privacidad debe autenticarse nuevamente. Esto registrará la revocación en nuestros sistemas de auditoría.</p>
@@ -151,16 +151,16 @@
                         <div class="form-group">
                             <label for="tipo_estudiante">Tipo de estudiante <span class="required">*</span></label>
                             <select id="tipo_estudiante" name="tipo_estudiante" required>
-                                <option value="">Seleccione una opciÃ³n</option>
+                                <option value="">Seleccione una opción</option>
                                 <option value="estancia_profesional">Estancia Profesional</option>
-                                <option value="practicas_supervisadas">PrÃ¡cticas Supervisadas</option>
+                                <option value="practicas_supervisadas">Prácticas Supervisadas</option>
                                 <option value="servicio_social">Servicio Social</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label for="modalidad">Modalidad <span class="required">*</span></label>
                             <select id="modalidad" name="modalidad" required>
-                                <option value="">Seleccione una opciÃ³n</option>
+                                <option value="">Seleccione una opción</option>
                                 <option value="presencial">Presencial</option>
                                 <option value="virtual">Virtual</option>
                             </select>
@@ -181,16 +181,16 @@
                         </div>
                     </div>
                     
-                    <!-- CAMPOS DE UBICACIÃ“N -->
+                    <!-- CAMPOS DE UBICACIÓN -->
                     <div class="form-group">
                         <label for="ubicacion_detectada">Ubicación detectada <span class="required">*</span></label>
                         <input type="text" id="ubicacion_detectada" name="ubicacion_detectada" 
                                value="Esperando autenticación..." class="location-field" readonly>
                         <div id="location_status_display" class="location-status loading">
-                            📍Complete la autenticación para obtener ubicación GPS
+                            📍 Complete la autenticación para obtener ubicación GPS
                         </div>
                         <button type="button" id="retry_location_btn" class="location-retry-btn" style="display: none;">
-                            🔒„ Reintentar ubicación
+                            🔄 Reintentar ubicación
                         </button>
                     </div>
                     
@@ -234,7 +234,7 @@
                     </div>
                 </div>
 
-                <!-- SECCIÃ“N DE EVIDENCIAS FOTOGRÃFICAS (Solo para salida) -->
+                <!-- SECCIÓN DE EVIDENCIAS FOTOGRÁFICAS (Solo para salida) -->
                 <div class="form-section" id="evidencias_section" style="display: none;">
                     <div class="form-group">
                         <label for="evidencias">Evidencias fotográficas (opcional)</label>
@@ -313,7 +313,7 @@
                             </div>
                             <div class="checkbox-item">
                                 <input type="checkbox" id="encuestas_satisfaccion" name="actividades[]" value="encuestas_satisfaccion">
-                                <label for="encuestas_satisfaccion">Aplicación de encuestas de satisfacciÃ³n</label>
+                                <label for="encuestas_satisfaccion">Aplicación de encuestas de satisfacción</label>
                             </div>
                             <div class="checkbox-item">
                                 <input type="checkbox" id="entrevista_psicologica" name="actividades[]" value="entrevista_psicologica">
@@ -354,7 +354,7 @@
                 <div class="status" id="status"></div>
                 
                 <button type="submit" class="submit-btn" id="submit_btn" disabled>
-                    🔒’ Autentíquese primero para continuar
+                    🔒 Autentíquese primero para continuar
                 </button>
             </form>
         </div>
