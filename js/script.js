@@ -716,6 +716,7 @@ function signOut() {
     disableForm();
     resetLocationFields();
     resetEvidenciasSection();
+    ocultarRegistrosDelDia(); // *** NUEVO ***
 
     showStatus('Sesión cerrada correctamente.', 'success');
     setTimeout(() => hideStatus(), 3000);
