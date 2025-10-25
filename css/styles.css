@@ -76,7 +76,7 @@ h1 {
     font-weight: bold;
 }
 
-/* Estilos para autenticaciÃ³n */
+/* Estilos para autenticación */
 .auth-section {
     background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
     border: 2px solid #64b5f6;
@@ -206,7 +206,7 @@ h1 {
     gap: 8px;
 }
 
-/* NUEVOS ESTILOS PARA SECCIÃ“N DE REVOCAR */
+/* NUEVOS ESTILOS PARA SECCIÓN DE REVOCAR */
 .revoke-section {
     margin-top: 15px;
     padding-top: 15px;
