@@ -624,6 +624,12 @@ async function handleLoginFlow() {
         
         showStatus(`¡Bienvenido ${currentUser.name}! Autenticación exitosa.`, 'success');
         setTimeout(() => hideStatus(), 3000);
+        
+        // *** NUEVO: Mostrar registros del día después de autenticarse ***
+        setTimeout(async () => {
+          await mostrarRegistrosDelDia();
+        }, 2000);
+        
     } catch (error) {
         console.error('Error en flujo de login:', error);
         privacyConsent = false;
@@ -1186,7 +1192,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ========== ENVÍO CON VERIFICACIÓN, REINTENTOS E IDEMPOTENCIA ==========
+// ========== ENVÍO CON VERIFICACIÓN, REINTENTOS E IDEMPOTENCIA (CORREGIDO) ==========
 async function sendWithVerification(data, attempt = 1) {
   const MAX_ATTEMPTS = 3;
   
@@ -1223,93 +1229,80 @@ async function sendWithVerification(data, attempt = 1) {
     
     console.log('✅ Formulario enviado al servidor');
     
-    // ⭐⭐⭐ FIX: Esperar tiempo adecuado para procesamiento ⭐⭐⭐
+    // ========== PASO 3: ESPERAR PROCESAMIENTO INICIAL ==========
     console.log(`⏱️ Esperando ${TIEMPO_ESPERA_INICIAL/1000}s para procesamiento inicial...`);
     await sleep(TIEMPO_ESPERA_INICIAL);
     
-    // ========== PASO 3: VERIFICACIÓN CON MANEJO MEJORADO DE ERRORES ==========
-    console.log(`\n🔍 INICIANDO VERIFICACIÓN (${VERIFICATION_ATTEMPTS} intentos)...`);
+    // ========== PASO 4: VERIFICACIÓN CON TODOS LOS INTENTOS ==========
+    console.log(`\n🔍 INICIANDO VERIFICACIÓN (${VERIFICATION_ATTEMPTS} intentos obligatorios)...`);
     
     let verificationResult = null;
     let verificationSuccess = false;
-    let networkErrors = 0;
+    let allVerificationResults = [];
     
+    // *** FIX: COMPLETAR TODOS LOS INTENTOS ***
     for (let v = 1; v <= VERIFICATION_ATTEMPTS; v++) {
       console.log(`\n🔍 Verificación ${v}/${VERIFICATION_ATTEMPTS}...`);
       
       try {
         verificationResult = await verifyWithScriptTag(data.registro_id);
+        allVerificationResults.push(verificationResult);
         
         console.log('Resultado verificación:', verificationResult);
         
-        // ⭐ NUEVO: Detectar errores de red
-        if (verificationResult.error && (
-          verificationResult.error.includes('red') || 
-          verificationResult.error.includes('network') ||
-          verificationResult.error.includes('403') ||
-          verificationResult.error.includes('DISCONNECTED') ||
-          verificationResult.timeout
-        )) {
-          networkErrors++;
-          console.warn(`⚠️ Error de red detectado (${networkErrors}/${VERIFICATION_ATTEMPTS})`);
-          
-          // Si tenemos múltiples errores de red consecutivos, asumir que SÍ se guardó
-          if (networkErrors >= 2 && ENABLE_VERIFICATION_FALLBACK) {
-            console.log('⚠️⚠️ MODO FALLBACK ACTIVADO');
-            console.log('Múltiples errores de red - Asumiendo que el registro SÍ se guardó');
-            
-            return {
-              success: true,
-              verified: false, // No verificado directamente
-              exists: true, // Asumimos que existe
-              assumedSaved: true, // ⭐ NUEVO FLAG
-              networkIssues: true,
-              data: {
-                registro_id: data.registro_id,
-                row_number: 'No verificable',
-                timestamp: new Date().toISOString(),
-                message: '⚠️ Registro enviado pero no verificable por problemas de red. VERIFIQUE MANUALMENTE en Google Sheets.',
-                user_name: data.authenticated_user_name,
-                modalidad: data.modalidad,
-                ubicacion: data.ubicacion_detectada,
-                search_method: 'fallback_network_errors'
-              },
-              attempts: attempt,
-              verification_attempts: v,
-              network_errors: networkErrors
-            };
-          }
-        }
-        
-        // Verificar si existe y está confirmado
+        // Si encontramos el registro, ÉXITO
         if (verificationResult.success && verificationResult.verified && verificationResult.exists) {
           verificationSuccess = true;
           console.log(`✅✅ REGISTRO VERIFICADO en fila ${verificationResult.row_number}`);
-          break;
+          break; // Salir del loop, ya encontramos el registro
         }
         
-        // Si no existe, seguir intentando
+        // Si no existe (pero no hay error de red), seguir intentando
         if (!verificationResult.exists && !verificationResult.error) {
           console.log(`⏳ Registro aún no encontrado (intento ${v}/${VERIFICATION_ATTEMPTS})`);
-          
-          if (v < VERIFICATION_ATTEMPTS) {
-            const waitTime = TIEMPO_ENTRE_VERIFICACIONES[v - 1] || 5000;
-            console.log(`⏱️ Esperando ${waitTime/1000}s antes de verificar nuevamente...`);
-            await sleep(waitTime);
-          }
         }
-      } catch (verifyError) {
-        console.error(`⚠️ Error en verificación ${v}:`, verifyError.message);
-        networkErrors++;
         
-        if (v < VERIFICATION_ATTEMPTS) {
-          await sleep(3000);
+        // Si hay error (de red u otro), registrarlo pero CONTINUAR con los intentos
+        if (verificationResult.error) {
+          console.warn(`⚠️ Error en verificación ${v}: ${verificationResult.error}`);
         }
+        
+      } catch (verifyError) {
+        console.error(`⚠️ Excepción en verificación ${v}:`, verifyError.message);
+        allVerificationResults.push({
+          success: false,
+          error: verifyError.message,
+          attempt: v
+        });
+      }
+      
+      // Esperar antes del siguiente intento (excepto en el último)
+      if (v < VERIFICATION_ATTEMPTS) {
+        const waitTime = TIEMPO_ENTRE_VERIFICACIONES[v - 1] || 5000;
+        console.log(`⏱️ Esperando ${waitTime/1000}s antes del siguiente intento...`);
+        await sleep(waitTime);
       }
     }
     
-    // ========== PASO 4: EVALUAR RESULTADO ==========
+    // ========== PASO 5: EVALUAR RESULTADO DESPUÉS DE TODOS LOS INTENTOS ==========
+    
+    // Contar errores de red
+    const networkErrors = allVerificationResults.filter(r => 
+      r.networkError || r.timeout || (r.error && (
+        r.error.includes('red') || 
+        r.error.includes('network') ||
+        r.error.includes('403') ||
+        r.error.includes('DISCONNECTED')
+      ))
+    ).length;
+    
+    console.log(`\n📊 RESUMEN DE VERIFICACIONES:`);
+    console.log(`   Total intentos: ${allVerificationResults.length}`);
+    console.log(`   Errores de red: ${networkErrors}`);
+    console.log(`   Éxito: ${verificationSuccess ? 'SÍ' : 'NO'}`);
+    
     if (verificationSuccess && verificationResult) {
+      // ========== CASO 1: ÉXITO VERIFICADO ==========
       console.log('\n✅✅✅ REGISTRO COMPLETADO Y VERIFICADO');
       
       return {
@@ -1328,43 +1321,43 @@ async function sendWithVerification(data, attempt = 1) {
         },
         attempts: attempt,
         verification_attempts: VERIFICATION_ATTEMPTS,
-        network_errors: networkErrors
+        network_errors: networkErrors,
+        all_verification_results: allVerificationResults
       };
+      
+    } else if (networkErrors >= 2 && ENABLE_VERIFICATION_FALLBACK) {
+      // ========== CASO 2: MÚLTIPLES ERRORES DE RED - FALLBACK ==========
+      console.log('\n⚠️⚠️ ACTIVANDO MODO FALLBACK');
+      console.log('Múltiples errores de red detectados');
+      console.log('El sistema ASUME que el registro sí se guardó');
+      
+      return {
+        success: true,
+        verified: false,
+        exists: true,
+        assumedSaved: true,
+        networkIssues: true,
+        mustVerifyManually: true,
+        data: {
+          registro_id: data.registro_id,
+          row_number: 'No verificable',
+          timestamp: new Date().toISOString(),
+          message: '⚠️ Registro probablemente guardado pero no verificable. VERIFIQUE MANUALMENTE.',
+          user_name: data.authenticated_user_name,
+          modalidad: data.modalidad,
+          ubicacion: data.ubicacion_detectada,
+          search_method: 'fallback_network_errors'
+        },
+        attempts: attempt,
+        verification_attempts: VERIFICATION_ATTEMPTS,
+        network_errors: networkErrors,
+        all_verification_results: allVerificationResults
+      };
+      
     } else {
-      // NO SE PUDO VERIFICAR
-      console.warn('\n⚠️⚠️ NO SE PUDO VERIFICAR EL REGISTRO');
-      console.warn('Errores de red detectados:', networkErrors);
+      // ========== CASO 3: NO VERIFICADO - REINTENTAR ENVÍO COMPLETO ==========
+      console.warn('\n⚠️ NO SE PUDO VERIFICAR EL REGISTRO');
       
-      // ⭐⭐⭐ FIX CRÍTICO: Si hay errores de red, NO reintentar todo ⭐⭐⭐
-      if (networkErrors >= 2 && ENABLE_VERIFICATION_FALLBACK) {
-        console.log('\n⚠️ ACTIVANDO MODO FALLBACK FINAL');
-        console.log('El sistema asume que el registro SÍ se guardó');
-        console.log('IMPORTANTE: Usuario debe verificar manualmente');
-        
-        return {
-          success: true,
-          verified: false,
-          exists: true,
-          assumedSaved: true,
-          networkIssues: true,
-          mustVerifyManually: true,
-          data: {
-            registro_id: data.registro_id,
-            row_number: 'No verificable',
-            timestamp: new Date().toISOString(),
-            message: '⚠️ Registro probablemente guardado pero no verificable. VERIFIQUE MANUALMENTE.',
-            user_name: data.authenticated_user_name,
-            modalidad: data.modalidad,
-            ubicacion: data.ubicacion_detectada,
-            search_method: 'fallback_final'
-          },
-          attempts: attempt,
-          verification_attempts: VERIFICATION_ATTEMPTS,
-          network_errors: networkErrors
-        };
-      }
-      
-      // Si no hay errores de red, intentar reenvío completo
       if (attempt < MAX_ATTEMPTS) {
         const waitTime = 10000 * attempt;
         console.log(`\n🔄 Reintentando envío completo (${attempt + 1}/${MAX_ATTEMPTS})...`);
@@ -1374,7 +1367,7 @@ async function sendWithVerification(data, attempt = 1) {
         return sendWithVerification(data, attempt + 1);
       }
       
-      // Si ya agotamos intentos, retornar error
+      // Agotamos todos los intentos
       throw new Error('No se pudo verificar el registro después de múltiples intentos');
     }
     
@@ -1400,6 +1393,161 @@ async function sendWithVerification(data, attempt = 1) {
         note: 'El registro NO se guardó. Intente nuevamente.'
       };
     }
+  }
+}
+
+// ========== OBTENER Y MOSTRAR REGISTROS DEL DÍA ==========
+async function obtenerRegistrosDelDia() {
+  if (!isAuthenticated || !currentUser) {
+    console.error('Usuario no autenticado');
+    return [];
+  }
+  
+  const hoy = new Date();
+  const año = hoy.getFullYear();
+  const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoy.getDate()).padStart(2, '0');
+  const fechaHoy = `${año}-${mes}-${dia}`;
+  
+  console.log('📊 Obteniendo registros del día:', fechaHoy);
+  console.log('👤 Usuario:', currentUser.email);
+  
+  try {
+    const result = await obtenerRegistrosConJSONP(currentUser.email, fechaHoy);
+    
+    if (result.success) {
+      console.log(`✅ ${result.total} registro(s) obtenido(s)`);
+      return result.registros || [];
+    } else {
+      console.error('❌ Error obteniendo registros:', result.error);
+      return [];
+    }
+  } catch (error) {
+    console.error('❌ Error en obtenerRegistrosDelDia:', error);
+    return [];
+  }
+}
+
+async function obtenerRegistrosConJSONP(email, fecha) {
+  console.log('🔍 Llamando API para obtener registros...');
+  
+  return new Promise((resolve) => {
+    const callbackName = 'registros_' + Date.now().toString().substring(5);
+    const scriptId = 'script_' + callbackName;
+    
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      console.warn('⏱️ Timeout obteniendo registros');
+      resolve({
+        success: false,
+        error: 'Timeout',
+        registros: [],
+        total: 0
+      });
+    }, 15000);
+    
+    window[callbackName] = function(result) {
+      clearTimeout(timeoutId);
+      console.log('✅ Registros recibidos:', result);
+      cleanup();
+      resolve(result);
+    };
+    
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.onerror = function() {
+      clearTimeout(timeoutId);
+      console.error('❌ Error cargando script de registros');
+      cleanup();
+      resolve({
+        success: false,
+        error: 'Error de red',
+        registros: [],
+        total: 0
+      });
+    };
+    
+    const url = `${GOOGLE_SCRIPT_URL}?action=get_registros_dia&email=${encodeURIComponent(email)}&fecha=${encodeURIComponent(fecha)}&callback=${callbackName}&_t=${Date.now()}`;
+    script.src = url;
+    
+    function cleanup() {
+      try {
+        const scriptElement = document.getElementById(scriptId);
+        if (scriptElement && document.body.contains(scriptElement)) {
+          document.body.removeChild(scriptElement);
+        }
+        delete window[callbackName];
+      } catch (e) {}
+    }
+    
+    document.body.appendChild(script);
+  });
+}
+
+async function mostrarRegistrosDelDia() {
+  const registrosSection = document.getElementById('registros-section');
+  const registrosLista = document.getElementById('registros-lista');
+  const registrosCount = document.getElementById('registros-count');
+  
+  if (!registrosSection || !registrosLista) {
+    console.warn('⚠️ Sección de registros no encontrada en HTML');
+    return;
+  }
+  
+  // Mostrar loading
+  registrosSection.style.display = 'block';
+  registrosLista.innerHTML = '<div class="registro-loading">📊 Cargando registros del día...</div>';
+  
+  const registros = await obtenerRegistrosDelDia();
+  
+  if (registros.length === 0) {
+    registrosLista.innerHTML = '<div class="registro-vacio">📝 No hay registros para hoy</div>';
+    registrosCount.textContent = '0 registros';
+    return;
+  }
+  
+  registrosCount.textContent = `${registros.length} registro${registros.length !== 1 ? 's' : ''}`;
+  
+  let html = '';
+  registros.forEach((reg, index) => {
+    const tipoIcon = {
+      'entrada': '🔵',
+      'salida': '🔴',
+      'permiso': '🟡',
+      'otro': '⚪'
+    };
+    
+    const icon = tipoIcon[reg.tipo_registro] || '⚪';
+    
+    html += `
+      <div class="registro-item">
+        <div class="registro-header">
+          <span class="registro-numero">#${index + 1}</span>
+          <span class="registro-tipo">${icon} ${reg.tipo_registro || 'N/A'}</span>
+          <span class="registro-hora">⏰ ${reg.hora || 'N/A'}</span>
+        </div>
+        <div class="registro-body">
+          <div class="registro-detalle">
+            <strong>📋 Modalidad:</strong> ${reg.modalidad || 'N/A'}
+          </div>
+          <div class="registro-detalle">
+            <strong>📍 Ubicación:</strong> ${reg.ubicacion || 'N/A'}
+          </div>
+          <div class="registro-detalle">
+            <strong>🎯 Precisión:</strong> ${reg.precision_metros || 0} metros
+          </div>
+        </div>
+      </div>
+    `;
+  });
+  
+  registrosLista.innerHTML = html;
+}
+
+function ocultarRegistrosDelDia() {
+  const registrosSection = document.getElementById('registros-section');
+  if (registrosSection) {
+    registrosSection.style.display = 'none';
   }
 }
 
@@ -1839,7 +1987,10 @@ async function handleSubmit(e) {
       showStatus(statusMessage, 'success');
       
       // Preguntar al usuario si quiere registrar otra asistencia
-      setTimeout(() => {
+      setTimeout(async () => {
+        // *** NUEVO: Actualizar registros del día después de guardar ***
+        await mostrarRegistrosDelDia();
+        
         if (confirm('✅ Registro verificado exitosamente en Google Sheets.\n\n¿Desea registrar otra asistencia?')) {
           resetFormOnly();
           getCurrentLocation();
@@ -1847,8 +1998,7 @@ async function handleSubmit(e) {
           signOut();
         }
         hideStatus();
-      }, 8000);
-      
+      }, 8000);      
     } 
     // ⭐⭐⭐ CASO 2: ⚠️ NUEVO - Enviado pero no verificable por problemas de red
     else if (result.success && result.assumedSaved && result.networkIssues) {
