@@ -889,3 +889,157 @@ input:read-only.location-field.warning {
         font-size: 1.1em;
     }
 }
+
+/* ESTILOS PARA REGISTROS DEL DÍA */
+.registros-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 2px solid #dee2e6;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 25px;
+    animation: slideUp 0.5s ease-out;
+}
+
+.registros-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.registros-header h3 {
+    margin: 0;
+    color: #495057;
+    font-size: 1.3em;
+    font-weight: 600;
+}
+
+.registros-count {
+    background: #667eea;
+    color: white;
+    padding: 6px 15px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+.registros-lista {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.registro-item {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.registro-item:hover {
+    transform: translateX(5px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    border-color: #667eea;
+}
+
+.registro-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.registro-numero {
+    background: #6c757d;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.registro-tipo {
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.95em;
+}
+
+.registro-hora {
+    color: #6c757d;
+    font-size: 0.9em;
+}
+
+.registro-body {
+    display: grid;
+    gap: 8px;
+}
+
+.registro-detalle {
+    color: #495057;
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+
+.registro-detalle strong {
+    color: #343a40;
+}
+
+.registro-loading {
+    text-align: center;
+    padding: 30px;
+    color: #6c757d;
+    font-size: 1.1em;
+}
+
+.registro-vacio {
+    text-align: center;
+    padding: 30px;
+    color: #6c757d;
+    font-size: 1.1em;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+/* Scrollbar para lista de registros */
+.registros-lista::-webkit-scrollbar {
+    width: 8px;
+}
+
+.registros-lista::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.registros-lista::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 10px;
+}
+
+.registros-lista::-webkit-scrollbar-thumb:hover {
+    background: #5568d3;
+}
+
+@media (max-width: 768px) {
+    .registros-header {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    .registro-header {
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+    
+    .registros-lista {
+        max-height: 300px;
+    }
+}
