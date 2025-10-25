@@ -1238,7 +1238,7 @@ async function sendWithVerification(data, attempt = 1) {
       console.log(`\n🔍 Verificación ${v}/${VERIFICATION_ATTEMPTS}...`);
       
       try {
-        verificationResult = await verifyWithScriptTag(data.registro_id);
+        verificationResult = await (data.registro_id);
         
         console.log('Resultado verificación:', verificationResult);
         
@@ -1452,10 +1452,10 @@ async function verifyWithScriptTag(registroID) {
     const callbackName = 'verify_' + Date.now().toString().substring(5);
     const scriptId = 'script_' + callbackName;
     
-    // ⭐ FIX: Timeout aumentado y mejor manejo de errores de red
+    // ⭐ FIX: Timeout aumentado de 20s a 30s
     const timeoutId = setTimeout(() => {
       cleanup();
-      console.warn('⏱️ Timeout en verificación JSONP (20s)');
+      console.warn('⏱️ Timeout en verificación JSONP (30s)');
       resolve({
         success: false,
         verified: false,
@@ -1464,7 +1464,7 @@ async function verifyWithScriptTag(registroID) {
         timeout: true,
         networkError: true
       });
-    }, 20000); // 20 segundos
+    }, 30000); // 30 segundos (antes era 20s)
     
     // Callback global
     window[callbackName] = function(result) {
@@ -1482,7 +1482,6 @@ async function verifyWithScriptTag(registroID) {
       console.error('❌ Error cargando script JSONP');
       console.error('Evento error:', event);
       
-      // ⭐ NUEVO: Detectar tipo de error
       const errorType = event.type || 'unknown';
       const errorMsg = event.message || 'Error de red o 403 - servidor no accesible';
       
@@ -1493,8 +1492,8 @@ async function verifyWithScriptTag(registroID) {
         exists: false,
         error: errorMsg,
         errorType: errorType,
-        networkError: true, // ⭐ FLAG IMPORTANTE
-        code403: true // ⭐ FLAG IMPORTANTE
+        networkError: true,
+        code403: true
       });
     };
     
@@ -2120,6 +2119,11 @@ function resetFormOnly() {
   locationAttempts = 0;
   updateLocationStatus('loading', 'Obteniendo nueva ubicación GPS...', '');
   updateSubmitButton();
+  
+  // ⭐ NUEVO: Recargar registros del día
+  setTimeout(() => {
+    loadTodayRecords();
+  }, 1000);
 }
 
 function validateConditionalFields() {
