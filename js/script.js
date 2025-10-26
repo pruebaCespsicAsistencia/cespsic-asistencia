@@ -1454,10 +1454,11 @@ async function obtenerRegistrosConJSONP(email, fecha) {
     
     const timeoutId = setTimeout(() => {
       cleanup();
-      console.warn('⏱️ Timeout obteniendo registros');
+      console.warn('⏱️ Timeout obteniendo registros (15s)');
       resolve({
         success: false,
-        error: 'Timeout',
+        error: 'Timeout al cargar registros',
+        errorType: 'timeout',
         registros: [],
         total: 0
       });
@@ -1472,19 +1473,22 @@ async function obtenerRegistrosConJSONP(email, fecha) {
     
     const script = document.createElement('script');
     script.id = scriptId;
-    script.onerror = function() {
+    script.onerror = function(event) {
       clearTimeout(timeoutId);
       console.error('❌ Error cargando script de registros');
+      console.error('Evento error:', event);
       cleanup();
       resolve({
         success: false,
-        error: 'Error de red',
+        error: 'Error de red al cargar registros',
+        errorType: 'network',
         registros: [],
         total: 0
       });
     };
     
     const url = `${GOOGLE_SCRIPT_URL}?action=get_registros_dia&email=${encodeURIComponent(email)}&fecha=${encodeURIComponent(fecha)}&callback=${callbackName}&_t=${Date.now()}`;
+    console.log('📡 URL de registros:', url.substring(0, 100) + '...');
     script.src = url;
     
     function cleanup() {
@@ -1494,7 +1498,9 @@ async function obtenerRegistrosConJSONP(email, fecha) {
           document.body.removeChild(scriptElement);
         }
         delete window[callbackName];
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Error en cleanup:', e);
+      }
     }
     
     document.body.appendChild(script);
@@ -1514,16 +1520,52 @@ async function mostrarRegistrosDelDia() {
   // Mostrar loading
   registrosSection.style.display = 'block';
   registrosLista.innerHTML = '<div class="registro-loading">📊 Cargando registros del día...</div>';
+  registrosCount.textContent = 'Cargando...';
   
   const registros = await obtenerRegistrosDelDia();
   
+  // Si no hay registros (puede ser error o realmente vacío)
   if (registros.length === 0) {
-    registrosLista.innerHTML = '<div class="registro-vacio">📝 No hay registros para hoy</div>';
-    registrosCount.textContent = '0 registros';
+    // Determinar si es error o vacío
+    const resultado = await obtenerRegistrosConJSONP(currentUser.email, obtenerFechaHoy());
+    
+    if (!resultado.success && resultado.errorType === 'network') {
+      // Error de red
+      registrosLista.innerHTML = `
+        <div class="registro-error">
+          <div class="error-icon">⚠️</div>
+          <div class="error-text">
+            <strong>No se pudieron cargar los registros</strong><br>
+            <span style="font-size: 0.9em; color: #666;">
+              Problemas de conexión. Sus registros están guardados pero no se pueden mostrar ahora.
+            </span>
+          </div>
+          <button class="btn-retry-registros" onclick="reintentarCargarRegistros()">
+            🔄 Reintentar
+          </button>
+        </div>
+      `;
+      registrosCount.textContent = 'Error de red';
+      registrosCount.style.background = '#dc3545';
+    } else {
+      // Realmente no hay registros
+      registrosLista.innerHTML = `
+        <div class="registro-vacio">
+          <div style="font-size: 2em; margin-bottom: 10px;">📝</div>
+          <div><strong>No hay registros para hoy</strong></div>
+          <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
+            Cuando registre su primera asistencia aparecerá aquí
+          </div>
+        </div>
+      `;
+      registrosCount.textContent = '0 registros';
+      registrosCount.style.background = '#6c757d';
+    }
     return;
   }
   
   registrosCount.textContent = `${registros.length} registro${registros.length !== 1 ? 's' : ''}`;
+  registrosCount.style.background = '#667eea';
   
   let html = '';
   registros.forEach((reg, index) => {
@@ -1537,7 +1579,7 @@ async function mostrarRegistrosDelDia() {
     const icon = tipoIcon[reg.tipo_registro] || '⚪';
     
     html += `
-      <div class="registro-item">
+      <div class="registro-item" style="animation: slideInRegistro 0.3s ease-out ${index * 0.05}s both;">
         <div class="registro-header-item">
           <span class="registro-numero">#${index + 1}</span>
           <span class="registro-tipo">${icon} ${reg.tipo_registro || 'N/A'}</span>
@@ -1548,7 +1590,7 @@ async function mostrarRegistrosDelDia() {
             <strong>📋 Modalidad:</strong> ${reg.modalidad || 'N/A'}
           </div>
           <div class="registro-detalle">
-            <strong>📍 Ubicación:</strong> ${reg.ubicacion || 'N/A'}
+            <strong>📍 Ubicación:</strong> ${(reg.ubicacion || 'N/A').substring(0, 50)}${reg.ubicacion && reg.ubicacion.length > 50 ? '...' : ''}
           </div>
           <div class="registro-detalle">
             <strong>🎯 Precisión:</strong> ${reg.precision_metros || 0} metros
@@ -1559,6 +1601,21 @@ async function mostrarRegistrosDelDia() {
   });
   
   registrosLista.innerHTML = html;
+  
+  console.log('✅ Registros mostrados en pantalla');
+}
+
+function obtenerFechaHoy() {
+  const hoy = new Date();
+  const año = hoy.getFullYear();
+  const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoy.getDate()).padStart(2, '0');
+  return `${año}-${mes}-${dia}`;
+}
+
+async function reintentarCargarRegistros() {
+  console.log('🔄 Reintentando cargar registros...');
+  await mostrarRegistrosDelDia();
 }
 
 function ocultarRegistrosDelDia() {
@@ -1971,13 +2028,13 @@ async function handleSubmit(e) {
     
     // ⭐⭐⭐ CASO 1: ✅ ÉXITO VERIFICADO - Registro confirmado en Google Sheets
     if (result.success && result.verified && result.exists && !result.assumedSaved) {
+      // *** CASO 1: ÉXITO VERIFICADO ***
       console.log('\n✅✅✅ REGISTRO EXITOSO Y VERIFICADO EN SHEETS');
       
       const rowNumber = result.data?.row_number || 'N/A';
       const searchMethod = result.data?.search_method || 'unknown';
-      const foundInFinal = result.found_in_final_check ? '(encontrado en verificación final)' : '';
       
-      let statusMessage = `✅ ¡Asistencia VERIFICADA en Google Sheets! ${foundInFinal}
+      let statusMessage = `✅ ¡Asistencia VERIFICADA en Google Sheets!
 
 📋 Registro ID: ${data.registro_id}
 👤 Usuario: ${currentUser.name}
@@ -2003,20 +2060,64 @@ async function handleSubmit(e) {
       
       showStatus(statusMessage, 'success');
       
-      // Preguntar al usuario si quiere registrar otra asistencia
+      // *** ACTUALIZAR REGISTROS DEL DÍA CON RETRY ***
       setTimeout(async () => {
-        // *** ACTUALIZAR REGISTROS DEL DÍA ***
-        console.log('🔄 Actualizando registros del día...');
-        await mostrarRegistrosDelDia();
+        console.log('🔄 Actualizando registros del día después de guardar...');
         
-        if (confirm('✅ Registro verificado exitosamente en Google Sheets.\n\n¿Desea registrar otra asistencia?')) {
+        let registrosCargados = false;
+        let intentos = 0;
+        const maxIntentos = 3;
+        
+        while (!registrosCargados && intentos < maxIntentos) {
+          intentos++;
+          console.log(`📊 Intento ${intentos}/${maxIntentos} de actualizar registros...`);
+          
+          try {
+            await mostrarRegistrosDelDia();
+            
+            // Verificar si se cargaron
+            const registrosSection = document.getElementById('registros-section');
+            const registrosLista = document.getElementById('registros-lista');
+            
+            if (registrosSection && registrosSection.style.display !== 'none') {
+              const contenido = registrosLista.innerHTML;
+              
+              // Verificar si NO es mensaje de error
+              if (!contenido.includes('registro-error') && !contenido.includes('No se pudieron cargar')) {
+                registrosCargados = true;
+                console.log('✅ Registros actualizados exitosamente');
+                break;
+              }
+            }
+            
+            if (!registrosCargados && intentos < maxIntentos) {
+              console.log(`⏱️ Esperando 2s antes del siguiente intento...`);
+              await sleep(2000);
+            }
+            
+          } catch (e) {
+            console.warn(`⚠️ Error actualizando registros (intento ${intentos}):`, e);
+            if (intentos < maxIntentos) {
+              await sleep(2000);
+            }
+          }
+        }
+        
+        if (!registrosCargados) {
+          console.warn('⚠️ No se pudieron actualizar los registros después de ' + maxIntentos + ' intentos');
+        }
+        
+        // Preguntar al usuario
+        if (confirm('✅ Registro verificado exitosamente en Google Sheets.\n\n' +
+                    (registrosCargados ? '✅ Registros del día actualizados.\n\n' : '⚠️ No se pudieron actualizar los registros del día por problemas de red.\n   Use el botón "Reintentar" si lo desea.\n\n') +
+                    '¿Desea registrar otra asistencia?')) {
           resetFormOnly();
           getCurrentLocation();
         } else {
           signOut();
         }
         hideStatus();
-      }, 8000);    
+      }, 5000); // 5 segundos
     } 
     // ⭐⭐⭐ CASO 2: ⚠️ NUEVO - Enviado pero no verificable por problemas de red
     else if (result.success && result.assumedSaved && result.networkIssues) {
@@ -2061,46 +2162,65 @@ async function handleSubmit(e) {
 4. Resultados:
    • ✅ SI ENCUENTRA EL REGISTRO → Todo está bien
    • ❌ NO ENCUENTRA EL REGISTRO → Espere 30s y busque de nuevo
-   
+
 📈 ESTADÍSTICAS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 En el 95% de casos con errores 403 en verificación,
 el registro SÍ se guardó correctamente en Google Sheets.
 
-Los errores 403 son limitaciones de seguridad CORS de Google
-que impiden leer la respuesta, pero NO impiden guardar los datos.
-
-🔧 ERRORES TÉCNICOS DETECTADOS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Error 403: Restricciones CORS de Google Apps Script
-- Estos errores solo afectan la LECTURA de la respuesta
-- NO afectan el ENVÍO ni el GUARDADO de datos
-
 ⏱️ Tiempo de procesamiento: ${result.attempts} intento(s) de envío
-🔄 Verificaciones automáticas: ${result.verification_attempts} (todas completadas)
-
-✅ RECOMENDACIÓN:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Puede continuar con confianza. Verifique manualmente en Sheets
-para confirmar (casi seguro que el registro está guardado).
-
-Si después de verificar confirma que SÍ está guardado,
-puede registrar otra asistencia sin problemas.`, 'warning');
+🔄 Verificaciones automáticas: ${result.verification_attempts} (todas completadas)`, 'warning');
       
       // Rehabilitar botón
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
       
-      // Intentar cargar registros del día (puede funcionar aunque verificación falle)
-      setTimeout(async () => {
-        console.log('🔄 Intentando cargar registros del día...');
+      // *** INTENTAR CARGAR REGISTROS CON RETRY ***
+      console.log('📊 Intentando cargar registros del día (con retry)...');
+      
+      let registrosCargados = false;
+      let intentosRegistros = 0;
+      const maxIntentosRegistros = 3;
+      
+      while (!registrosCargados && intentosRegistros < maxIntentosRegistros) {
+        intentosRegistros++;
+        console.log(`🔄 Intento ${intentosRegistros}/${maxIntentosRegistros} de cargar registros...`);
+        
         try {
           await mostrarRegistrosDelDia();
-          console.log('✅ Registros cargados exitosamente');
+          
+          // Verificar si se cargaron
+          const registrosSection = document.getElementById('registros-section');
+          const registrosLista = document.getElementById('registros-lista');
+          
+          if (registrosSection && registrosSection.style.display !== 'none') {
+            const contenido = registrosLista.innerHTML;
+            
+            // Verificar si NO es mensaje de error
+            if (!contenido.includes('registro-error') && !contenido.includes('No se pudieron cargar')) {
+              registrosCargados = true;
+              console.log('✅ Registros cargados exitosamente');
+              break;
+            }
+          }
+          
+          if (!registrosCargados && intentosRegistros < maxIntentosRegistros) {
+            console.log(`⏱️ Esperando 3s antes del siguiente intento...`);
+            await sleep(3000);
+          }
+          
         } catch (e) {
-          console.warn('⚠️ No se pudieron cargar registros:', e);
+          console.warn(`⚠️ Error en intento ${intentosRegistros}:`, e);
+          if (intentosRegistros < maxIntentosRegistros) {
+            await sleep(3000);
+          }
         }
-      }, 2000);
+      }
+      
+      if (!registrosCargados) {
+        console.warn('⚠️ No se pudieron cargar los registros después de ' + maxIntentosRegistros + ' intentos');
+        console.log('💡 El usuario puede usar el botón "Reintentar" en la sección de registros');
+      }
       
       // Mantener el mensaje visible
       setTimeout(() => {
@@ -2108,16 +2228,19 @@ puede registrar otra asistencia sin problemas.`, 'warning');
           '⚠️ Registro enviado pero verificación bloqueada por red.\n\n' +
           '📊 Se completaron ' + result.verification_attempts + ' intentos de verificación.\n' +
           '🔍 Recomendación: Verifique manualmente en Google Sheets.\n\n' +
-          '¿Desea intentar registrar nuevamente?\n' +
+          (registrosCargados ? '✅ Sus registros del día se muestran abajo.\n\n' : '⚠️ Los registros del día no se pudieron cargar por problemas de red.\n   Use el botón "Reintentar" en la sección de registros.\n\n') +
+          '¿Desea intentar registrar otra asistencia?\n' +
           '(El sistema detectará duplicados automáticamente)'
         );
         
         if (userChoice) {
+          resetFormOnly();
+          getCurrentLocation();
           hideStatus();
         } else {
           hideStatus();
         }
-      }, 60000); // 60 segundos
+      }, 45000); // 45 segundos
       
     }
     // ⭐⭐⭐ CASO 3: ⚠️ Inconsistencia - Dice verificado pero no existe (no debería pasar)
