@@ -1201,6 +1201,98 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// ========== ENVIAR DATOS CON JSONP (NUEVO MÉTODO) ==========
+async function sendDataWithJSONP(data) {
+  console.log('📤 Enviando con JSONP mejorado...');
+  
+  return new Promise((resolve) => {
+    const callbackName = 'send_' + Date.now().toString().substring(5);
+    const scriptId = 'script_' + callbackName;
+    
+    // Timeout de 30 segundos
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      console.warn('⏱️ Timeout en envío JSONP (30s)');
+      resolve({
+        success: false,
+        error: 'Timeout en envío - el servidor no respondió',
+        timeout: true,
+        networkError: true
+      });
+    }, 30000);
+    
+    // Callback global
+    window[callbackName] = function(result) {
+      clearTimeout(timeoutId);
+      console.log('✅ Respuesta de envío recibida:', result);
+      cleanup();
+      
+      // IMPORTANTE: Ahora tenemos confirmación real
+      if (result.success) {
+        resolve({
+          success: true,
+          verified: true,
+          exists: true,
+          confirmed: true,  // ← NUEVO FLAG
+          data: result
+        });
+      } else {
+        resolve({
+          success: false,
+          error: result.error || 'Error desconocido en servidor',
+          confirmed: false
+        });
+      }
+    };
+    
+    // Crear script
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.onerror = function(event) {
+      clearTimeout(timeoutId);
+      console.error('❌ Error cargando script de envío');
+      cleanup();
+      resolve({
+        success: false,
+        error: 'Error de red al enviar datos',
+        networkError: true,
+        code403: true
+      });
+    };
+    
+    // Construir URL con todos los parámetros
+    const params = new URLSearchParams();
+    params.append('callback', callbackName);
+    params.append('_t', Date.now().toString());
+    
+    // Agregar todos los datos
+    for (const [key, value] of Object.entries(data)) {
+      if (typeof value === 'object' && value !== null) {
+        params.append(key, JSON.stringify(value));
+      } else {
+        params.append(key, value || '');
+      }
+    }
+    
+    script.src = `${GOOGLE_SCRIPT_URL}?${params.toString()}`;
+    
+    function cleanup() {
+      try {
+        const scriptEl = document.getElementById(scriptId);
+        if (scriptEl && document.body.contains(scriptEl)) {
+          document.body.removeChild(scriptEl);
+        }
+        delete window[callbackName];
+      } catch (e) {
+        console.warn('Error en cleanup:', e);
+      }
+    }
+    
+    console.log('📡 Enviando datos...');
+    document.body.appendChild(script);
+  });
+}
+
 // ========== ENVÍO CON VERIFICACIÓN, REINTENTOS E IDEMPOTENCIA (CORREGIDO) ==========
 async function sendWithVerification(data, attempt = 1) {
   const MAX_ATTEMPTS = 3;
