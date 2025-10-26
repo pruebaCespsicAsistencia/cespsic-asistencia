@@ -1120,3 +1120,37 @@ input:read-only.location-field.warning {
         margin-top: 10px;
     }
 }
+
+/* ESTILOS PARA MENSAJE DE ERROR 403 EN REGISTROS */
+.registro-info-403 {
+    background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+    border: 2px solid #ffc107;
+    border-radius: 12px;
+    padding: 30px 20px;
+    text-align: center;
+    color: #856404;
+}
+
+.registro-info-403 strong {
+    color: #664d03;
+    font-size: 1.05em;
+}
+
+.btn-abrir-sheets {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 12px 24px;
+    background: #667eea;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.btn-abrir-sheets:hover {
+    background: #5568d3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
