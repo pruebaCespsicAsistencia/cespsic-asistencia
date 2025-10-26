@@ -32,10 +32,10 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PRIVACY_VERSION = '1.0';
 // *** FIX: Aumentar tiempos de espera para verificación ***
-const TIEMPO_ESPERA_INICIAL = 15000; // 15s inicial (aumentado)
-const TIEMPO_ENTRE_VERIFICACIONES = [5000, 10000, 15000]; // Solo 3 intentos con tiempos largos
-const VERIFICATION_ATTEMPTS = 3; // Reducido de 5 a 3
-const ENABLE_VERIFICATION_FALLBACK = true; // Modo fallback cuando falle verificación
+const TIEMPO_ESPERA_INICIAL = 2000; // 2s - Reducido porque ahora tenemos confirmación
+const TIEMPO_ENTRE_VERIFICACIONES = [3000, 5000, 8000]; // Reducido
+const VERIFICATION_ATTEMPTS = 3;
+const ENABLE_VERIFICATION_FALLBACK = true; // Mantener pero con nueva lógica
 
 //PRODUCCION
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyllBO0vTORygvLlbTeRWfNXz1_Dt1khrM2z_BUxbNM6jWqEGYDqaLnd7LJs9Fl9Q9X/exec';
@@ -3070,12 +3070,13 @@ console.log(`📍 Precisión requerida: ${REQUIRED_ACCURACY}m ${isDesktop ? '(re
 console.log(`🎯 Modo: ${isIOS ? 'iOS (compatibilidad especial)' : isDesktop ? 'Desktop (precisión adaptada)' : 'Android/Windows/Desktop (funcionalidad completa)'}`);
 
 // ========== EXPORTAR CONSTANTES ==========
-console.log('\n📋 CONFIGURACIÓN OPTIMIZADA DE VERIFICACIÓN:');
+console.log('\n📋 CONFIGURACIÓN OPTIMIZADA DE ENVÍO:');
+console.log(`   - Método de envío: JSONP con confirmación`);
 console.log(`   - Espera inicial: ${TIEMPO_ESPERA_INICIAL/1000}s`);
 console.log(`   - Intentos verificación: ${VERIFICATION_ATTEMPTS}`);
 console.log(`   - Tiempos entre verificaciones: ${TIEMPO_ENTRE_VERIFICACIONES.map(t => t/1000 + 's').join(', ')}`);
-console.log(`   - Modo fallback: ${ENABLE_VERIFICATION_FALLBACK ? 'HABILITADO ✅' : 'DESHABILITADO'}`);
-console.log('\n✅ Mejoras cargadas - Mejor manejo de errores de red');
+console.log(`   - Confirmación en envío: HABILITADA ✅`);
+console.log('\n✅ Mejoras cargadas - Confirmación real del servidor');
 
 // Mensaje sobre errores 403
 console.log('\n📌 INFORMACIÓN IMPORTANTE SOBRE ERRORES 403:');
