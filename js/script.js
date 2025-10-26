@@ -1303,7 +1303,6 @@ async function sendWithVerification(data, attempt = 1) {
   console.log(`${'='.repeat(60)}`);
   
   try {
-    // ========== PASO 1: VALIDAR DATOS ANTES DE ENVIAR ==========
     console.log('🔍 Validando datos antes de enviar...');
     
     if (!data.modalidad || data.modalidad === '' || data.modalidad === 'undefined' || data.modalidad === 'null') {
@@ -1323,13 +1322,7 @@ async function sendWithVerification(data, attempt = 1) {
     }
     
     console.log('✅ Validación previa exitosa');
-    console.log('📊 Datos validados:');
-    console.log('   - Modalidad:', data.modalidad);
-    console.log('   - Email:', data.email);
-    console.log('   - GPS:', `${data.latitude}, ${data.longitude}`);
-    console.log('   - Precisión:', data.precision_gps_metros + 'm');
     
-    // ========== PASO 2: ENVIAR DATOS CON CONFIRMACIÓN ==========
     console.log('\n📤 Enviando datos al backend con confirmación...');
     const sendResult = await sendDataWithConfirmation(data);
     
@@ -1338,18 +1331,14 @@ async function sendWithVerification(data, attempt = 1) {
     console.log('   Confirmed:', sendResult.confirmed);
     console.log('   Error:', sendResult.error || 'Ninguno');
     
-    // ========== CASO 1: ENVÍO CONFIRMADO POR EL SERVIDOR ==========
     if (sendResult.success && sendResult.confirmed) {
       console.log('\n✅✅✅ ENVÍO CONFIRMADO POR EL SERVIDOR');
-      console.log('✅ Registro guardado en fila:', sendResult.data.row_number);
-      console.log('✅ Timestamp:', sendResult.data.timestamp);
-      console.log('✅ No se necesitan verificaciones adicionales');
       
       return {
         success: true,
         verified: true,
         exists: true,
-        confirmed: true,  // ← FLAG CRÍTICO
+        confirmed: true,
         data: {
           registro_id: data.registro_id,
           row_number: sendResult.data.row_number,
@@ -1362,28 +1351,22 @@ async function sendWithVerification(data, attempt = 1) {
         },
         attempts: attempt,
         send_confirmed: true,
-        verification_attempts: 0  // No se necesitaron verificaciones adicionales
+        verification_attempts: 0
       };
     }
     
-    // ========== CASO 2: ERROR EN ENVÍO - NO CONFIRMADO ==========
     if (!sendResult.success) {
       console.error('\n❌ Error en envío - No confirmado');
       console.error('Error:', sendResult.error);
-      console.error('Network error:', sendResult.networkError);
-      console.error('Server error:', sendResult.serverError);
       
-      // Si es error de servidor (no de red), no reintentar
       if (sendResult.serverError) {
         throw new Error(`Error del servidor: ${sendResult.error}`);
       }
       
-      // Si es error de red/403, intentar verificación de respaldo
       if (sendResult.networkError || sendResult.code403) {
         console.warn('⚠️ Error de red/403 detectado');
         console.warn('⚠️ Intentando verificaciones de respaldo...');
         
-        // ========== PASO 3: INTENTAR VERIFICACIÓN DE RESPALDO ==========
         console.log('\n🔍 INICIANDO VERIFICACIONES DE RESPALDO...');
         await sleep(TIEMPO_ESPERA_INICIAL);
         
@@ -1404,22 +1387,15 @@ async function sendWithVerification(data, attempt = 1) {
               timestamp: new Date().toISOString()
             });
             
-            console.log(`Resultado verificación ${v}:`, verificationResult);
-            
-            // Contar errores
             if (verificationResult.error) {
               if (verificationResult.error.includes('403') || verificationResult.code403) {
                 error403Count++;
-                console.warn(`⚠️ Error 403 detectado (${error403Count}/${VERIFICATION_ATTEMPTS})`);
               }
-              
               if (verificationResult.networkError || verificationResult.timeout) {
                 networkErrorCount++;
-                console.warn(`⚠️ Error de red detectado (${networkErrorCount}/${VERIFICATION_ATTEMPTS})`);
               }
             }
             
-            // Si encontramos el registro, marcar éxito
             if (verificationResult.success && verificationResult.verified && verificationResult.exists) {
               verificationSuccess = true;
               console.log(`✅✅ REGISTRO ENCONTRADO en fila ${verificationResult.row_number}`);
@@ -1435,24 +1411,19 @@ async function sendWithVerification(data, attempt = 1) {
             networkErrorCount++;
           }
           
-          // Esperar antes del siguiente intento (excepto en el último)
           if (v < VERIFICATION_ATTEMPTS) {
             const waitTime = TIEMPO_ENTRE_VERIFICACIONES[v - 1] || 5000;
-            console.log(`⏱️ Esperando ${waitTime/1000}s antes del siguiente intento...`);
             await sleep(waitTime);
           }
         }
         
-        // ========== EVALUAR RESULTADOS DE VERIFICACIÓN DE RESPALDO ==========
         console.log('\n' + '='.repeat(60));
         console.log('📊 RESUMEN DE VERIFICACIONES:');
-        console.log(`   Total intentos: ${allVerificationResults.length}`);
         console.log(`   Errores 403: ${error403Count}`);
         console.log(`   Errores de red: ${networkErrorCount}`);
         console.log(`   Éxito encontrado: ${verificationSuccess ? 'SÍ' : 'NO'}`);
         console.log('='.repeat(60));
         
-        // Si encontramos el registro en verificación de respaldo
         if (verificationSuccess && verificationResult) {
           console.log('\n✅✅✅ REGISTRO ENCONTRADO EN VERIFICACIÓN DE RESPALDO');
           
@@ -1460,7 +1431,7 @@ async function sendWithVerification(data, attempt = 1) {
             success: true,
             verified: true,
             exists: true,
-            confirmed: true,  // Confirmado mediante verificación
+            confirmed: true,
             data: {
               registro_id: data.registro_id,
               row_number: verificationResult.row_number,
@@ -1479,16 +1450,14 @@ async function sendWithVerification(data, attempt = 1) {
           };
         }
         
-        // Si todas las verificaciones fallaron con 403/red
         if ((error403Count === VERIFICATION_ATTEMPTS || networkErrorCount >= 2) && ENABLE_VERIFICATION_FALLBACK) {
           console.error('\n❌❌ TODAS LAS VERIFICACIONES FALLARON');
           console.error('No se pudo confirmar el guardado del registro');
-          console.error('El usuario debe verificar manualmente');
           
           return {
-            success: false,  // ← Cambio importante: false en lugar de true
+            success: false,
             verified: false,
-            exists: false,   // ← No sabemos si existe
+            exists: false,
             assumedSent: true,
             needsManualVerification: true,
             networkIssues: true,
@@ -1512,36 +1481,28 @@ async function sendWithVerification(data, attempt = 1) {
         }
       }
       
-      // ========== CASO 3: REINTENTAR ENVÍO COMPLETO ==========
       if (attempt < MAX_ATTEMPTS) {
         const waitTime = 10000 * attempt;
         console.log(`\n🔄 Reintentando envío completo (${attempt + 1}/${MAX_ATTEMPTS})...`);
-        console.log(`⏱️ Esperando ${waitTime/1000}s...`);
         await sleep(waitTime);
-        
         return sendWithVerification(data, attempt + 1);
       }
       
-      // Agotamos todos los intentos
       throw new Error('No se pudo confirmar el registro después de múltiples intentos');
     }
     
-    // ========== CASO 4: ESTADO DESCONOCIDO ==========
     console.error('\n⚠️ Estado desconocido del envío');
     throw new Error('Estado desconocido - no se pudo determinar si se guardó');
     
   } catch (error) {
     console.error(`\n❌ Error en intento ${attempt}:`, error.message);
-    console.error('Stack:', error.stack);
     
     if (attempt < MAX_ATTEMPTS) {
       const waitTime = 5000 * attempt;
-      console.log(`⏱️ Esperando ${waitTime/1000}s antes de reintentar envío completo...`);
       await sleep(waitTime);
-      
       return sendWithVerification(data, attempt + 1);
     } else {
-      console.error('\n❌❌ TODOS LOS INTENTOS DE ENVÍO FALLARON');
+      console.error('\n❌❌ TODOS LOS INTENTOS FALLARON');
       
       return {
         success: false,
@@ -1888,21 +1849,14 @@ async function verifyWithScriptTag(registroID) {
 
 async function sendDataWithConfirmation(data) {
   console.log('📤 Enviando con JSONP y confirmación del servidor...');
-  console.log('📋 Datos a enviar:', {
-    registro_id: data.registro_id,
-    email: data.email,
-    modalidad: data.modalidad,
-    ubicacion: data.ubicacion_detectada
-  });
   
   return new Promise((resolve) => {
     const callbackName = 'send_' + Date.now().toString().substring(5);
     const scriptId = 'script_' + callbackName;
     
-    // Timeout de 30 segundos para dar tiempo al servidor
     const timeoutId = setTimeout(() => {
       cleanup();
-      console.error('⏱️ Timeout en envío (30s) - el servidor no respondió');
+      console.error('⏱️ Timeout en envío (30s)');
       resolve({
         success: false,
         error: 'Timeout - el servidor no respondió en 30 segundos',
@@ -1912,21 +1866,18 @@ async function sendDataWithConfirmation(data) {
       });
     }, 30000);
     
-    // Callback global para recibir respuesta del servidor
     window[callbackName] = function(result) {
       clearTimeout(timeoutId);
-      console.log('✅ Respuesta del servidor recibida:', result);
+      console.log('✅ Respuesta del servidor:', result);
       cleanup();
       
-      // Evaluar respuesta
       if (result.success) {
-        // ✅ CONFIRMACIÓN REAL DEL SERVIDOR
         console.log('✅✅ Servidor confirmó guardado en fila:', result.row_number);
         resolve({
           success: true,
           verified: true,
           exists: true,
-          confirmed: true,  // ← FLAG CRÍTICO: Confirmación real
+          confirmed: true,
           data: {
             registro_id: result.registro_id,
             row_number: result.row_number,
@@ -1938,7 +1889,6 @@ async function sendDataWithConfirmation(data) {
           }
         });
       } else {
-        // Error reportado por el servidor
         console.error('❌ Servidor reportó error:', result.error);
         resolve({
           success: false,
@@ -1949,15 +1899,12 @@ async function sendDataWithConfirmation(data) {
       }
     };
     
-    // Crear script tag para JSONP
     const script = document.createElement('script');
     script.id = scriptId;
     
-    // Manejar error de carga del script
     script.onerror = function(event) {
       clearTimeout(timeoutId);
       console.error('❌ Error cargando script de envío');
-      console.error('Evento:', event);
       cleanup();
       resolve({
         success: false,
@@ -1968,15 +1915,12 @@ async function sendDataWithConfirmation(data) {
       });
     };
     
-    // Construir URL con todos los parámetros
     const params = new URLSearchParams();
     params.append('callback', callbackName);
     params.append('_t', Date.now().toString());
     
-    // Agregar todos los datos del formulario
     for (const [key, value] of Object.entries(data)) {
       if (key === 'evidencias_urls' || key === 'device_info') {
-        // Arrays y objetos complejos como JSON
         params.append(key, JSON.stringify(value));
       } else if (typeof value === 'object' && value !== null) {
         params.append(key, JSON.stringify(value));
@@ -1989,7 +1933,6 @@ async function sendDataWithConfirmation(data) {
     console.log('📡 URL de envío:', url.substring(0, 150) + '...');
     script.src = url;
     
-    // Función de limpieza
     function cleanup() {
       try {
         const scriptEl = document.getElementById(scriptId);
@@ -2146,10 +2089,9 @@ async function handleSubmit(e) {
   e.preventDefault();
   
   console.log('\n' + '='.repeat(70));
-  console.log('🚀 INICIANDO ENVÍO (CON CONFIRMACIÓN DEL SERVIDOR)');
+  console.log('🚀 INICIANDO ENVÍO (CON CONFIRMACIÓN)');
   console.log('='.repeat(70));
   
-  // ========== VALIDACIONES INICIALES ==========
   if (!isAuthenticated || !currentUser) {
     showStatus('❌ Debe autenticarse con Google', 'error');
     return;
@@ -2169,39 +2111,27 @@ async function handleSubmit(e) {
     return;
   }
   
-  // Deshabilitar botón de envío
   const submitBtn = document.querySelector('.submit-btn');
   const originalText = submitBtn.textContent;
   submitBtn.disabled = true;
   submitBtn.textContent = '⏳ Procesando...';
   
   try {
-    // ========== GENERAR ID ÚNICO ==========
     const registroID = generateRegistroID();
     
-    console.log('📋 ID:', registroID);
-    console.log('👤 Usuario:', currentUser.name);
-    console.log('📱 Dispositivo:', deviceType);
-    console.log('🎯 GPS:', Math.round(currentLocation.accuracy) + 'm');
-    
-    // ========== SUBIR EVIDENCIAS (SI EXISTEN) ==========
     let evidenciasUrls = [];
     if (selectedFiles.length > 0) {
-      console.log('\n📸 SUBIENDO EVIDENCIAS...');
       showStatus('📤 Subiendo evidencias...', 'success');
-      
       evidenciasUrls = await uploadEvidencias();
       
       const successUploads = evidenciasUrls.filter(e => e.uploadStatus === 'SUCCESS');
-      const failedUploads = evidenciasUrls.filter(e => e.uploadStatus === 'FAILED');
       
-      // Si ninguna evidencia se subió y había archivos seleccionados
       if (selectedFiles.length > 0 && successUploads.length === 0) {
+        const failedUploads = evidenciasUrls.filter(e => e.uploadStatus === 'FAILED');
         const errorDetails = failedUploads.map(e => `• ${e.originalName}: ${e.error}`).join('\n');
         
         const userDecision = confirm(
-          `⚠️ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n` +
-          `¿Continuar SIN evidencias?`
+          `⚠️ NO se pudo subir ninguna evidencia:\n\n${errorDetails}\n\n¿Continuar SIN evidencias?`
         );
         
         if (!userDecision) {
@@ -2210,15 +2140,11 @@ async function handleSubmit(e) {
       }
     }
     
-    // ========== PREPARAR DATOS DEL FORMULARIO ==========
-    console.log('\n📝 PREPARANDO DATOS...');
-    
     const formData = new FormData(e.target);
     const data = {};
     
-    // Procesar todos los campos del formulario
     for (let [key, value] of formData.entries()) {
-      if (key === 'evidencias') continue; // Skip file input
+      if (key === 'evidencias') continue;
       
       if (key.endsWith('[]')) {
         const cleanKey = key.replace('[]', '');
@@ -2237,33 +2163,23 @@ async function handleSubmit(e) {
       }
     }
     
-    // ========== AGREGAR DATOS ADICIONALES ==========
     const successUploads = evidenciasUrls.filter(e => e.uploadStatus === 'SUCCESS');
     
-    // Registro ID y timestamp
     data.registro_id = registroID;
     data.timestamp = new Date().toISOString();
-    
-    // Evidencias
     data.evidencias_urls = evidenciasUrls;
     data.total_evidencias = successUploads.length;
     data.evidencias_failed = evidenciasUrls.length - successUploads.length;
     data.evidencias_nombres = successUploads.map(e => e.fileName).join(', ');
     data.carpeta_evidencias = generateStudentFolderName();
-    
-    // Ubicación (asegurar valores actuales)
     data.modalidad = document.getElementById('modalidad').value;
     data.ubicacion_detectada = document.getElementById('ubicacion_detectada').value;
     data.direccion_completa = document.getElementById('direccion_completa').value;
     data.precision_gps = document.getElementById('precision_gps').value;
     data.precision_gps_metros = Math.round(currentLocation.accuracy);
     data.location_validation = 'passed';
-    
-    // Usuario autenticado
     data.authenticated_user_name = currentUser.name;
     data.authentication_timestamp = new Date().toISOString();
-    
-    // Dispositivo
     data.device_type = deviceType;
     data.is_desktop = isDesktop;
     data.is_mobile = !isDesktop;
@@ -2271,18 +2187,10 @@ async function handleSubmit(e) {
     data.required_accuracy = REQUIRED_ACCURACY;
     data.device_info = JSON.stringify(getDeviceInfo());
     
-    // ========== VALIDACIÓN CRÍTICA DE MODALIDAD ==========
     if (!data.modalidad || data.modalidad === '' || data.modalidad === 'undefined' || data.modalidad === 'null') {
       throw new Error('Campo Modalidad es requerido y no puede estar vacío');
     }
     
-    console.log('✅ Datos preparados correctamente');
-    console.log('📊 Modalidad:', data.modalidad);
-    console.log('📍 Ubicación:', data.ubicacion_detectada);
-    console.log('🎯 Precisión:', data.precision_gps_metros + 'm');
-    
-    // ========== ENVIAR CON VERIFICACIÓN Y CONFIRMACIÓN ==========
-    console.log('\n📤 ENVIANDO CON CONFIRMACIÓN DEL SERVIDOR...');
     showStatus('📤 Enviando asistencia con confirmación...', 'success');
     
     const result = await sendWithVerification(data);
@@ -2293,19 +2201,14 @@ async function handleSubmit(e) {
     console.log('   Exists:', result.exists);
     console.log('   Confirmed:', result.confirmed || false);
     console.log('   Assumed Sent:', result.assumedSent || false);
-    console.log('   Network Issues:', result.networkIssues || false);
     console.log('   Attempts:', result.attempts);
     
-    // ========== MANEJO DE RESULTADOS (MEJORADO CON CONFIRMACIÓN) ==========
-    
-    // ⭐⭐⭐ CASO 1: ✅ ÉXITO VERIFICADO Y CONFIRMADO
     if (result.success && result.verified && result.exists && result.confirmed) {
-      console.log('\n✅✅✅ REGISTRO EXITOSO Y CONFIRMADO POR EL SERVIDOR');
+      console.log('\n✅✅✅ REGISTRO EXITOSO Y CONFIRMADO');
       
       const rowNumber = result.data?.row_number || 'N/A';
-      const searchMethod = result.data?.search_method || 'confirmed';
       
-      let statusMessage = `✅✅✅ ASISTENCIA REGISTRADA Y VERIFICADA
+      showStatus(`✅✅✅ ASISTENCIA REGISTRADA Y VERIFICADA
 
 Su asistencia ha sido guardada y verificada exitosamente.
 
@@ -2319,37 +2222,16 @@ Su asistencia ha sido guardada y verificada exitosamente.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✅ CONFIRMACIÓN: Guardado y verificado automáticamente
-📢 Fila en sistema: ${rowNumber}
-🔍 Método de confirmación: ${searchMethod}`;
+📢 Fila en sistema: ${rowNumber}`, 'success');
       
-      if (data.total_evidencias > 0) {
-        statusMessage += `\n📸 Evidencias subidas: ${data.total_evidencias}`;
-      }
-      
-      if (data.evidencias_failed > 0) {
-        statusMessage += `\n⚠️ Evidencias fallidas: ${data.evidencias_failed}`;
-      }
-      
-      showStatus(statusMessage, 'success');
-      
-      // Intentar actualizar registros del día
       setTimeout(async () => {
-        console.log('🔄 Actualizando registros del día...');
-        
         try {
           await mostrarRegistrosDelDia();
-          console.log('✅ Registros actualizados');
         } catch (e) {
           console.warn('⚠️ Error actualizando registros:', e);
         }
         
-        // Preguntar al usuario
-        if (confirm('✅ ASISTENCIA REGISTRADA Y VERIFICADA\n\n' +
-                    'Registro ID: ' + data.registro_id + '\n' +
-                    'Usuario: ' + currentUser.name + '\n' +
-                    'Fila: ' + rowNumber + '\n' +
-                    'Hora: ' + new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) + '\n\n' +
-                    '¿Desea registrar otra asistencia?')) {
+        if (confirm('✅ ASISTENCIA REGISTRADA Y VERIFICADA\n\nRegistro ID: ' + data.registro_id + '\n¿Desea registrar otra asistencia?')) {
           resetFormOnly();
           getCurrentLocation();
         } else {
@@ -2357,15 +2239,9 @@ Su asistencia ha sido guardada y verificada exitosamente.
         }
         hideStatus();
       }, 5000);
-    } 
-    
-    // ⭐⭐⭐ CASO 2: ⚠️ NO CONFIRMADO - Necesita verificación manual
-    else if (!result.success && result.assumedSent && result.needsManualVerification) {
+      
+    } else if (!result.success && result.assumedSent && result.needsManualVerification) {
       console.error('\n⚠️⚠️ REGISTRO NO CONFIRMADO');
-      console.error('Registro ID:', data.registro_id);
-      console.error('Errores 403:', result.error_403_count || 0);
-      console.error('Errores de red:', result.network_errors || 0);
-      console.error('Verificaciones completadas:', result.verification_attempts || 0);
       
       showStatus(`⚠️⚠️ ATENCIÓN: Registro NO Confirmado
 
@@ -2375,8 +2251,6 @@ Su asistencia fue ENVIADA pero NO pudimos confirmar automáticamente que se guar
 📋 Registro ID: ${data.registro_id}
 👤 Usuario: ${currentUser.name}
 📊 Modalidad: ${data.modalidad}
-📍 Ubicación: ${data.ubicacion_detectada}
-🎯 Precisión GPS: ${data.precision_gps_metros}m
 ⏰ Hora: ${new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'})}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -2384,231 +2258,66 @@ Su asistencia fue ENVIADA pero NO pudimos confirmar automáticamente que se guar
 
 1. Abra Google Sheets en otra pestaña
 2. Busque (Ctrl+F) el Registro ID mostrado arriba
-3. Si EXISTE: ✅ Todo está bien, ignore este mensaje
-4. Si NO EXISTE: ❌ Intente registrar su asistencia nuevamente
+3. Si EXISTE: ✅ Todo está bien
+4. Si NO EXISTE: ❌ Intente registrar nuevamente
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 Detalles técnicos:
    • Intentos de verificación: ${result.verification_attempts}
-   • Errores 403 detectados: ${result.error_403_count}
+   • Errores 403: ${result.error_403_count}
    • Errores de red: ${result.network_errors}
-   • Estado: No confirmado automáticamente
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚠️ Debido a restricciones técnicas del servidor (error 403/CORS),
-no pudimos confirmar automáticamente que su registro se guardó.
-
-Por favor, verifique manualmente en Google Sheets.
-Disculpe las molestias.`, 'warning');
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'warning');
       
-      // Rehabilitar botón para permitir reintento
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
       
-      // Mostrar en sección de registros el estado incierto
-      const registrosSection = document.getElementById('registros-section');
-      const registrosLista = document.getElementById('registros-lista');
-      const registrosCount = document.getElementById('registros-count');
-      
-      if (registrosSection && registrosLista && registrosCount) {
-        registrosSection.style.display = 'block';
-        registrosLista.innerHTML = `
-          <div class="registro-advertencia-no-confirmado">
-            <div class="advertencia-icon">⚠️</div>
-            <div class="advertencia-titulo">Registro no confirmado</div>
-            <div class="advertencia-texto">
-              Su asistencia fue enviada pero no pudimos confirmar
-              automáticamente que se guardó correctamente.<br><br>
-              
-              <strong>Registro ID:</strong> ${data.registro_id.substring(0, 30)}...<br>
-              <strong>Hora:</strong> ${new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'})}<br>
-              <strong>Modalidad:</strong> ${data.modalidad}<br><br>
-              
-              <span style="color: #856404; font-weight: bold;">
-                ⚠️ Por favor, verifique manualmente en Google Sheets
-                que su registro existe buscando el ID de arriba.
-              </span>
-            </div>
-          </div>
-        `;
-        registrosCount.textContent = 'No confirmado ⚠️';
-        registrosCount.style.background = '#ffc107';
-      }
-      
-      // Mostrar alerta después de 5 segundos
       setTimeout(() => {
         const continuar = confirm(
           '⚠️ VERIFICACIÓN MANUAL REQUERIDA\n\n' +
-          'No pudimos confirmar automáticamente su registro.\n\n' +
-          'Registro ID: ' + data.registro_id + '\n' +
-          'Usuario: ' + currentUser.name + '\n' +
-          'Hora: ' + new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) + '\n\n' +
-          '1. Abra Google Sheets\n' +
-          '2. Busque el Registro ID de arriba\n' +
-          '3. Si EXISTE: Todo está bien\n' +
-          '4. Si NO EXISTE: Intente nuevamente\n\n' +
-          '¿Desea intentar registrar nuevamente ahora?'
+          'Registro ID: ' + data.registro_id + '\n\n' +
+          '¿Desea intentar registrar nuevamente?'
         );
         
-        if (continuar) {
-          // Limpiar y reintentar
-          hideStatus();
-          // No resetear el formulario para que puedan ver el ID
-        } else {
+        if (!continuar) {
           hideStatus();
         }
       }, 5000);
       
-    } 
-    
-    // ⭐⭐⭐ CASO 3: ⚠️ Inconsistencia - Dice verificado pero no existe (no debería pasar)
-    else if (result.success && result.verified && !result.exists) {
-      console.error('\n⚠️⚠️ INCONSISTENCIA DETECTADA');
-      console.error('El sistema reportó éxito pero la verificación indica que NO existe');
-      console.error('Registro ID:', data.registro_id);
-      
-      showStatus(`⚠️ ADVERTENCIA: Inconsistencia detectada
-
-El sistema procesó su solicitud pero no puede confirmar que el registro existe en Google Sheets.
-
-📋 Registro ID: ${data.registro_id}
-👤 Usuario: ${currentUser.name}
-📄 Intentos realizados: ${result.attempts}
-
-⚠️ ACCIÓN REQUERIDA:
-1. Capture una captura de pantalla de esta página
-2. Abra Google Sheets manualmente
-3. Busque el Registro ID: ${data.registro_id}
-4. Si NO existe, registre nuevamente
-5. Si SÍ existe, ignore este mensaje
-
-⚠️ Por favor, reporte este incidente al administrador.`, 'error');
-      
-      // No resetear el formulario para que el usuario pueda capturar pantalla
-      submitBtn.disabled = false;
-      submitBtn.textContent = originalText;
-      
-      setTimeout(() => hideStatus(), 30000); // Mostrar por 30 segundos
-      
-    }
-    
-    // ⭐⭐⭐ CASO 4: ❌ ERROR CONFIRMADO - No se pudo guardar
-    else {
+    } else {
       console.error('\n❌❌❌ ERROR - REGISTRO NO GUARDADO');
-      console.error('Registro ID intentado:', data.registro_id);
-      console.error('Error:', result.error || 'Error desconocido');
-      console.error('Attempts:', result.attempts);
-      console.error('Network errors:', result.network_errors || 0);
-      
-      const errorDetail = result.error || 'Error desconocido durante el envío';
       
       showStatus(`❌ ERROR: No se pudo registrar la asistencia
 
-🚫 Motivo: ${errorDetail}
+🚫 Motivo: ${result.error || 'Error desconocido'}
 
 📋 Registro ID: ${data.registro_id}
-📊 Intentos realizados: ${result.attempts || 1}
-⏰ Hora del intento: ${new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'})}
+📊 Intentos: ${result.attempts || 1}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚠️ POSIBLES CAUSAS:
-• Conexión a Internet inestable
-• Problemas con el servidor
-• Restricciones de red (firewall, proxy)
-• Campo "Modalidad" no seleccionado correctamente
-• Permisos insuficientes
-
-📝 QUÉ HACER:
-1. Verifique su conexión a Internet
-2. Asegúrese de haber seleccionado una Modalidad
-3. Revise que la ubicación GPS sea válida
-4. Intente registrar nuevamente
-5. Si el problema persiste, contacte al administrador
-
-💡 IMPORTANTE:
-Su asistencia NO fue registrada.
+⚠️ Su asistencia NO fue registrada.
 Debe intentar nuevamente.`, 'error');
       
-      // Habilitar botón para permitir reintento
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
       
-      setTimeout(() => hideStatus(), 30000); // Mostrar por 30 segundos
+      setTimeout(() => hideStatus(), 30000);
     }
     
   } catch (error) {
-    // ========== MANEJO DE ERRORES EXCEPCIONALES ==========
     console.error('\n❌ ERROR EXCEPCIONAL:', error);
-    console.error('Stack:', error.stack);
     
     let errorMessage = error.message || 'Error desconocido';
-    let registroID = 'No generado';
     
-    // Intentar extraer registro_id si fue generado
-    try {
-      const formData = new FormData(e.target);
-      registroID = formData.get('registro_id') || registroID;
-    } catch (e) {
-      console.warn('No se pudo extraer registro_id del error');
-    }
-    
-    // Mensajes de error específicos
     if (errorMessage.includes('cancelado')) {
-      showStatus(`⚠️ Registro cancelado
-
-El usuario decidió no continuar sin evidencias.`, 'error');
-      
+      showStatus(`⚠️ Registro cancelado\n\nEl usuario decidió no continuar sin evidencias.`, 'error');
     } else if (errorMessage.includes('Modalidad')) {
-      showStatus(`❌ ERROR: Campo Modalidad inválido
-
-🚫 ${errorMessage}
-
-Por favor:
-1. Verifique que haya seleccionado una modalidad
-2. Recargue la página si el problema persiste
-3. Contacte al administrador si continúa
-
-📋 Registro ID intentado: ${registroID}`, 'error');
-      
-    } else if (errorMessage.includes('red') || errorMessage.includes('network') || errorMessage.includes('timeout')) {
-      showStatus(`❌ ERROR: Problema de conexión
-
-🚫 ${errorMessage}
-
-Por favor:
-1. Verifique su conexión a Internet
-2. Intente nuevamente en unos momentos
-3. Si está en WiFi, intente con datos móviles (o viceversa)
-
-📋 Registro ID intentado: ${registroID}`, 'error');
-      
+      showStatus(`❌ ERROR: Campo Modalidad inválido\n\n🚫 ${errorMessage}`, 'error');
     } else {
-      showStatus(`❌ ERROR: No se pudo registrar la asistencia
-
-🚫 ${errorMessage}
-
-⚠️ GARANTÍA: El registro NO se guardó.
-
-Por favor:
-1. Capture una captura de pantalla
-2. Verifique su conexión a Internet
-3. Verifique que todos los campos requeridos estén llenos
-4. Intente nuevamente
-
-Si el problema persiste:
-• Contacte al administrador
-• Proporcione este Registro ID: ${registroID}
-• Abra la consola (F12) y capture los errores
-
-💡 TIP: Recargue la página y vuelva a intentar`, 'error');
+      showStatus(`❌ ERROR: No se pudo registrar la asistencia\n\n🚫 ${errorMessage}`, 'error');
     }
     
-    // Rehabilitar botón
     submitBtn.disabled = false;
     submitBtn.textContent = originalText;
     
-    // Mostrar error por 30 segundos
     setTimeout(() => hideStatus(), 30000);
   }
 }
