@@ -625,10 +625,33 @@ async function handleLoginFlow() {
         showStatus(`¡Bienvenido ${currentUser.name}! Autenticación exitosa.`, 'success');
         setTimeout(() => hideStatus(), 3000);
         
-        // *** MOSTRAR REGISTROS DEL DÍA ***
+        // *** CARGAR REGISTROS DEL DÍA CON RETRY ***
         setTimeout(async () => {
-          console.log('📊 Cargando registros del día del usuario...');
-          await mostrarRegistrosDelDia();
+          console.log('📊 Cargando registros del día del usuario (con retry)...');
+          
+          let intentos = 0;
+          const maxIntentos = 2;
+          let cargado = false;
+          
+          while (!cargado && intentos < maxIntentos) {
+            intentos++;
+            console.log(`🔄 Intento ${intentos}/${maxIntentos}...`);
+            
+            try {
+              await mostrarRegistrosDelDia();
+              cargado = true;
+              console.log('✅ Registros cargados al autenticar');
+            } catch (e) {
+              console.warn(`⚠️ Error en intento ${intentos}:`, e);
+              if (intentos < maxIntentos) {
+                await sleep(2000);
+              }
+            }
+          }
+          
+          if (!cargado) {
+            console.warn('⚠️ No se pudieron cargar registros después de autenticar');
+          }
         }, 2000);
         
     } catch (error) {
