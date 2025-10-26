@@ -1043,3 +1043,80 @@ input:read-only.location-field.warning {
         max-height: 300px;
     }
 }
+/* ESTILOS ADICIONALES PARA REGISTROS */
+@keyframes slideInRegistro {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.registro-error {
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+}
+
+.registro-error .error-icon {
+    font-size: 3em;
+    margin-bottom: 10px;
+}
+
+.registro-error .error-text {
+    margin-bottom: 15px;
+    line-height: 1.6;
+}
+
+.btn-retry-registros {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-retry-registros:hover {
+    background: #5568d3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.registro-header-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.registro-vacio {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+@media (max-width: 768px) {
+    .registro-header-item {
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+    
+    .btn-retry-registros {
+        width: 100%;
+        margin-top: 10px;
+    }
+}
