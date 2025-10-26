@@ -2146,7 +2146,7 @@ async function handleSubmit(e) {
   e.preventDefault();
   
   console.log('\n' + '='.repeat(70));
-  console.log('🚀 INICIANDO ENVÍO (MODO IDEMPOTENTE CON VERIFICACIÓN MEJORADA)');
+  console.log('🚀 INICIANDO ENVÍO (CON CONFIRMACIÓN DEL SERVIDOR)');
   console.log('='.repeat(70));
   
   // ========== VALIDACIONES INICIALES ==========
@@ -2281,9 +2281,9 @@ async function handleSubmit(e) {
     console.log('📍 Ubicación:', data.ubicacion_detectada);
     console.log('🎯 Precisión:', data.precision_gps_metros + 'm');
     
-    // ========== ENVIAR CON VERIFICACIÓN ==========
-    console.log('\n📤 ENVIANDO CON VERIFICACIÓN MEJORADA...');
-    showStatus('📤 Enviando asistencia (esto puede tomar hasta 60 segundos)...', 'success');
+    // ========== ENVIAR CON VERIFICACIÓN Y CONFIRMACIÓN ==========
+    console.log('\n📤 ENVIANDO CON CONFIRMACIÓN DEL SERVIDOR...');
+    showStatus('📤 Enviando asistencia con confirmación...', 'success');
     
     const result = await sendWithVerification(data);
     
@@ -2291,36 +2291,36 @@ async function handleSubmit(e) {
     console.log('   Success:', result.success);
     console.log('   Verified:', result.verified);
     console.log('   Exists:', result.exists);
-    console.log('   Assumed Saved:', result.assumedSaved || false);
+    console.log('   Confirmed:', result.confirmed || false);
+    console.log('   Assumed Sent:', result.assumedSent || false);
     console.log('   Network Issues:', result.networkIssues || false);
     console.log('   Attempts:', result.attempts);
     
-    // ========== MANEJO DE RESULTADOS (MEJORADO CON FALLBACK) ==========
+    // ========== MANEJO DE RESULTADOS (MEJORADO CON CONFIRMACIÓN) ==========
     
-    // ⭐⭐⭐ CASO 1: ✅ ÉXITO VERIFICADO - Registro confirmado en Google Sheets
-    if (result.success && result.verified && result.exists && !result.assumedSaved) {
-      // *** CASO 1: ÉXITO VERIFICADO ***
-      console.log('\n✅✅✅ REGISTRO EXITOSO Y VERIFICADO EN SHEETS');
+    // ⭐⭐⭐ CASO 1: ✅ ÉXITO VERIFICADO Y CONFIRMADO
+    if (result.success && result.verified && result.exists && result.confirmed) {
+      console.log('\n✅✅✅ REGISTRO EXITOSO Y CONFIRMADO POR EL SERVIDOR');
       
       const rowNumber = result.data?.row_number || 'N/A';
-      const searchMethod = result.data?.search_method || 'verified';
+      const searchMethod = result.data?.search_method || 'confirmed';
       
       let statusMessage = `✅✅✅ ASISTENCIA REGISTRADA Y VERIFICADA
 
 Su asistencia ha sido guardada y verificada exitosamente.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 Registro ID: ${data.registro_id}
 👤 Usuario: ${currentUser.name}
 📊 Modalidad: ${data.modalidad}
 📍 Ubicación: ${data.ubicacion_detectada}
 🎯 Precisión GPS: ${data.precision_gps_metros}m
 ⏰ Hora: ${new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'})}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✅ CONFIRMACIÓN: Guardado y verificado automáticamente
 📢 Fila en sistema: ${rowNumber}
-🔍 Método de verificación: ${searchMethod}`;
+🔍 Método de confirmación: ${searchMethod}`;
       
       if (data.total_evidencias > 0) {
         statusMessage += `\n📸 Evidencias subidas: ${data.total_evidencias}`;
@@ -2332,7 +2332,7 @@ Su asistencia ha sido guardada y verificada exitosamente.
       
       showStatus(statusMessage, 'success');
       
-      // *** INTENTAR ACTUALIZAR REGISTROS (1 intento) ***
+      // Intentar actualizar registros del día
       setTimeout(async () => {
         console.log('🔄 Actualizando registros del día...');
         
@@ -2347,6 +2347,7 @@ Su asistencia ha sido guardada y verificada exitosamente.
         if (confirm('✅ ASISTENCIA REGISTRADA Y VERIFICADA\n\n' +
                     'Registro ID: ' + data.registro_id + '\n' +
                     'Usuario: ' + currentUser.name + '\n' +
+                    'Fila: ' + rowNumber + '\n' +
                     'Hora: ' + new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) + '\n\n' +
                     '¿Desea registrar otra asistencia?')) {
           resetFormOnly();
@@ -2357,50 +2358,54 @@ Su asistencia ha sido guardada y verificada exitosamente.
         hideStatus();
       }, 5000);
     } 
-    // ⭐⭐⭐ CASO 2: ⚠️ NUEVO - Enviado pero no verificable por problemas de red
-    else if (result.success && result.assumedSaved && result.networkIssues) {
-      console.log('\n✅✅ REGISTRO GUARDADO - VERIFICACIÓN BLOQUEADA');
-      console.log('Registro ID:', data.registro_id);
-      console.log('Errores 403:', result.error_403_count || 0);
-      console.log('Verificaciones completadas:', result.verification_attempts || 0);
+    
+    // ⭐⭐⭐ CASO 2: ⚠️ NO CONFIRMADO - Necesita verificación manual
+    else if (!result.success && result.assumedSent && result.needsManualVerification) {
+      console.error('\n⚠️⚠️ REGISTRO NO CONFIRMADO');
+      console.error('Registro ID:', data.registro_id);
+      console.error('Errores 403:', result.error_403_count || 0);
+      console.error('Errores de red:', result.network_errors || 0);
+      console.error('Verificaciones completadas:', result.verification_attempts || 0);
       
-      // Determinar si todos los intentos tuvieron error 403
-      const todosError403 = result.error_403_count === VERIFICATION_ATTEMPTS;
-      
-      showStatus(`✅✅✅ ASISTENCIA REGISTRADA CORRECTAMENTE
+      showStatus(`⚠️⚠️ ATENCIÓN: Registro NO Confirmado
 
-Su asistencia ha sido guardada exitosamente en el sistema.
+Su asistencia fue ENVIADA pero NO pudimos confirmar automáticamente que se guardó.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 Registro ID: ${data.registro_id}
 👤 Usuario: ${currentUser.name}
 📊 Modalidad: ${data.modalidad}
 📍 Ubicación: ${data.ubicacion_detectada}
 🎯 Precisión GPS: ${data.precision_gps_metros}m
 ⏰ Hora: ${new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'})}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-✅ CONFIRMACIÓN: Los datos fueron procesados correctamente
+🚨 ACCIÓN REQUERIDA - VERIFICACIÓN MANUAL:
 
-${todosError403 ? 
-'ℹ️ Nota técnica: La confirmación automática no está disponible\ndebido a restricciones de seguridad del servidor (error 403),\npero esto NO afecta el guardado de su registro.' : 
-'ℹ️ Nota técnica: Se detectaron problemas de red al confirmar,\npero sus datos fueron enviados y procesados correctamente.'}
+1. Abra Google Sheets en otra pestaña
+2. Busque (Ctrl+F) el Registro ID mostrado arriba
+3. Si EXISTE: ✅ Todo está bien, ignore este mensaje
+4. Si NO EXISTE: ❌ Intente registrar su asistencia nuevamente
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 Detalles del envío:
-   • Estado: Exitoso ✅
-   • Intentos de confirmación: ${result.verification_attempts}
-   • Procesamiento: Completado ✅
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Detalles técnicos:
+   • Intentos de verificación: ${result.verification_attempts}
+   • Errores 403 detectados: ${result.error_403_count}
+   • Errores de red: ${result.network_errors}
+   • Estado: No confirmado automáticamente
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Puede continuar registrando otra asistencia si lo necesita.
-El sistema detecta y previene duplicados automáticamente.`, 'success');
+⚠️ Debido a restricciones técnicas del servidor (error 403/CORS),
+no pudimos confirmar automáticamente que su registro se guardó.
+
+Por favor, verifique manualmente en Google Sheets.
+Disculpe las molestias.`, 'warning');
       
-      // Rehabilitar botón
+      // Rehabilitar botón para permitir reintento
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
       
-      // *** Mostrar mensaje en sección de registros sin botón de Sheets ***
+      // Mostrar en sección de registros el estado incierto
       const registrosSection = document.getElementById('registros-section');
       const registrosLista = document.getElementById('registros-lista');
       const registrosCount = document.getElementById('registros-count');
@@ -2408,47 +2413,54 @@ El sistema detecta y previene duplicados automáticamente.`, 'success');
       if (registrosSection && registrosLista && registrosCount) {
         registrosSection.style.display = 'block';
         registrosLista.innerHTML = `
-          <div class="registro-confirmacion-guardado">
-            <div class="confirmacion-icon">✅</div>
-            <div class="confirmacion-titulo">Registro guardado exitosamente</div>
-            <div class="confirmacion-texto">
-              Su asistencia de hoy ha sido registrada correctamente.<br><br>
+          <div class="registro-advertencia-no-confirmado">
+            <div class="advertencia-icon">⚠️</div>
+            <div class="advertencia-titulo">Registro no confirmado</div>
+            <div class="advertencia-texto">
+              Su asistencia fue enviada pero no pudimos confirmar
+              automáticamente que se guardó correctamente.<br><br>
               
               <strong>Registro ID:</strong> ${data.registro_id.substring(0, 30)}...<br>
               <strong>Hora:</strong> ${new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'})}<br>
               <strong>Modalidad:</strong> ${data.modalidad}<br><br>
               
-              <span style="color: #666; font-size: 0.9em;">
-                Los detalles de sus registros están disponibles para
-                el personal administrativo.
+              <span style="color: #856404; font-weight: bold;">
+                ⚠️ Por favor, verifique manualmente en Google Sheets
+                que su registro existe buscando el ID de arriba.
               </span>
             </div>
           </div>
         `;
-        registrosCount.textContent = 'Guardado ✅';
-        registrosCount.style.background = '#28a745';
+        registrosCount.textContent = 'No confirmado ⚠️';
+        registrosCount.style.background = '#ffc107';
       }
       
-      // Preguntar después de 10 segundos
+      // Mostrar alerta después de 5 segundos
       setTimeout(() => {
         const continuar = confirm(
-          '✅ ASISTENCIA REGISTRADA CORRECTAMENTE\n\n' +
+          '⚠️ VERIFICACIÓN MANUAL REQUERIDA\n\n' +
+          'No pudimos confirmar automáticamente su registro.\n\n' +
           'Registro ID: ' + data.registro_id + '\n' +
           'Usuario: ' + currentUser.name + '\n' +
           'Hora: ' + new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) + '\n\n' +
-          '¿Desea registrar otra asistencia?'
+          '1. Abra Google Sheets\n' +
+          '2. Busque el Registro ID de arriba\n' +
+          '3. Si EXISTE: Todo está bien\n' +
+          '4. Si NO EXISTE: Intente nuevamente\n\n' +
+          '¿Desea intentar registrar nuevamente ahora?'
         );
         
         if (continuar) {
-          resetFormOnly();
-          getCurrentLocation();
+          // Limpiar y reintentar
           hideStatus();
+          // No resetear el formulario para que puedan ver el ID
         } else {
           hideStatus();
         }
-      }, 10000);
+      }, 5000);
       
     } 
+    
     // ⭐⭐⭐ CASO 3: ⚠️ Inconsistencia - Dice verificado pero no existe (no debería pasar)
     else if (result.success && result.verified && !result.exists) {
       console.error('\n⚠️⚠️ INCONSISTENCIA DETECTADA');
@@ -2461,7 +2473,7 @@ El sistema procesó su solicitud pero no puede confirmar que el registro existe 
 
 📋 Registro ID: ${data.registro_id}
 👤 Usuario: ${currentUser.name}
-🔄 Intentos realizados: ${result.attempts}
+📄 Intentos realizados: ${result.attempts}
 
 ⚠️ ACCIÓN REQUERIDA:
 1. Capture una captura de pantalla de esta página
@@ -2479,9 +2491,10 @@ El sistema procesó su solicitud pero no puede confirmar que el registro existe 
       setTimeout(() => hideStatus(), 30000); // Mostrar por 30 segundos
       
     }
-    // ⭐⭐⭐ CASO 4: ❌ ERROR CONFIRMADO - No se pudo guardar O no se pudo verificar
+    
+    // ⭐⭐⭐ CASO 4: ❌ ERROR CONFIRMADO - No se pudo guardar
     else {
-      console.error('\n❌❌❌ ERROR - REGISTRO NO VERIFICADO');
+      console.error('\n❌❌❌ ERROR - REGISTRO NO GUARDADO');
       console.error('Registro ID intentado:', data.registro_id);
       console.error('Error:', result.error || 'Error desconocido');
       console.error('Attempts:', result.attempts);
@@ -2489,43 +2502,39 @@ El sistema procesó su solicitud pero no puede confirmar que el registro existe 
       
       const errorDetail = result.error || 'Error desconocido durante el envío';
       
-      showStatus(`❌ ERROR: No se pudo verificar la asistencia
+      showStatus(`❌ ERROR: No se pudo registrar la asistencia
 
 🚫 Motivo: ${errorDetail}
 
-⚠️ IMPORTANTE: 
-Por favor, VERIFIQUE MANUALMENTE en Google Sheets si el registro existe.
-
 📋 Registro ID: ${data.registro_id}
-🔄 Intentos realizados: ${result.attempts || 1}
-⚠️ Errores de red: ${result.network_errors || 0}
-⏱️ Tiempo total: ~${(result.attempts || 1) * 30}s
+📊 Intentos realizados: ${result.attempts || 1}
+⏰ Hora del intento: ${new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'})}
 
-🔍 VERIFICACIÓN MANUAL:
-1. Abra Google Sheets
-2. Busque (Ctrl+F) el ID: ${data.registro_id}
-3. Si EXISTE: Ignore este mensaje, el registro SÍ se guardó
-4. Si NO EXISTE: Intente registrar nuevamente
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Por favor, verifique:
-• Su conexión a Internet está activa
-• Los permisos de ubicación están habilitados
-• Tiene espacio disponible en su cuenta Google
-• No hay problemas con su red (firewall, proxy)
+⚠️ POSIBLES CAUSAS:
+• Conexión a Internet inestable
+• Problemas con el servidor
+• Restricciones de red (firewall, proxy)
+• Campo "Modalidad" no seleccionado correctamente
+• Permisos insuficientes
 
-🔧 QUÉ HACER:
-• Intente registrar nuevamente
-• Si el problema persiste, contacte al administrador
-• Mencione este Registro ID: ${data.registro_id}
-• Capture una captura de pantalla de la consola (F12)
+📝 QUÉ HACER:
+1. Verifique su conexión a Internet
+2. Asegúrese de haber seleccionado una Modalidad
+3. Revise que la ubicación GPS sea válida
+4. Intente registrar nuevamente
+5. Si el problema persiste, contacte al administrador
 
-💡 CONSEJO: Verifique que el campo "Modalidad" esté seleccionado correctamente.`, 'error');
+💡 IMPORTANTE:
+Su asistencia NO fue registrada.
+Debe intentar nuevamente.`, 'error');
       
       // Habilitar botón para permitir reintento
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
       
-      setTimeout(() => hideStatus(), 45000); // Mostrar por 45 segundos
+      setTimeout(() => hideStatus(), 30000); // Mostrar por 30 segundos
     }
     
   } catch (error) {
@@ -2549,6 +2558,7 @@ Por favor, verifique:
       showStatus(`⚠️ Registro cancelado
 
 El usuario decidió no continuar sin evidencias.`, 'error');
+      
     } else if (errorMessage.includes('Modalidad')) {
       showStatus(`❌ ERROR: Campo Modalidad inválido
 
@@ -2560,6 +2570,7 @@ Por favor:
 3. Contacte al administrador si continúa
 
 📋 Registro ID intentado: ${registroID}`, 'error');
+      
     } else if (errorMessage.includes('red') || errorMessage.includes('network') || errorMessage.includes('timeout')) {
       showStatus(`❌ ERROR: Problema de conexión
 
@@ -2571,6 +2582,7 @@ Por favor:
 3. Si está en WiFi, intente con datos móviles (o viceversa)
 
 📋 Registro ID intentado: ${registroID}`, 'error');
+      
     } else {
       showStatus(`❌ ERROR: No se pudo registrar la asistencia
 
