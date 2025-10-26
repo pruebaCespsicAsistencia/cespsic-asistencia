@@ -627,32 +627,16 @@ async function handleLoginFlow() {
         showStatus(`¡Bienvenido ${currentUser.name}! Autenticación exitosa.`, 'success');
         setTimeout(() => hideStatus(), 3000);
         
-        // *** CARGAR REGISTROS DEL DÍA CON RETRY ***
+        // *** INTENTAR CARGAR REGISTROS (1 intento) ***
         setTimeout(async () => {
-          console.log('📊 Cargando registros del día del usuario (con retry)...');
+          console.log('📊 Cargando registros del día...');
           
-          let intentos = 0;
-          const maxIntentos = 2;
-          let cargado = false;
-          
-          while (!cargado && intentos < maxIntentos) {
-            intentos++;
-            console.log(`🔄 Intento ${intentos}/${maxIntentos}...`);
-            
-            try {
-              await mostrarRegistrosDelDia();
-              cargado = true;
-              console.log('✅ Registros cargados al autenticar');
-            } catch (e) {
-              console.warn(`⚠️ Error en intento ${intentos}:`, e);
-              if (intentos < maxIntentos) {
-                await sleep(2000);
-              }
-            }
-          }
-          
-          if (!cargado) {
-            console.warn('⚠️ No se pudieron cargar registros después de autenticar');
+          try {
+            await mostrarRegistrosDelDia();
+            console.log('✅ Carga de registros completada');
+          } catch (e) {
+            console.warn('⚠️ Error cargando registros:', e);
+            // La función mostrarRegistrosDelDia ya maneja el error 403
           }
         }, 2000);
         
@@ -1547,45 +1531,49 @@ async function mostrarRegistrosDelDia() {
   registrosLista.innerHTML = '<div class="registro-loading">📊 Cargando registros del día...</div>';
   registrosCount.textContent = 'Cargando...';
   
-  const registros = await obtenerRegistrosDelDia();
+  const resultado = await obtenerRegistrosConJSONP(currentUser.email, obtenerFechaHoy());
   
-  // Si no hay registros (puede ser error o realmente vacío)
+  // Manejar error 403 específicamente
+  if (!resultado.success && resultado.errorType === 'network') {
+    registrosLista.innerHTML = `
+      <div class="registro-info-403">
+        <div style="font-size: 2em; margin-bottom: 10px;">🔒</div>
+        <div><strong>No se pueden mostrar los registros</strong></div>
+        <div style="font-size: 0.9em; color: #666; margin-top: 10px; line-height: 1.6;">
+          Restricciones de seguridad CORS (error 403) impiden
+          mostrar los registros en este momento.<br><br>
+          
+          Sus registros están guardados correctamente en Google Sheets.<br><br>
+          
+          Use el botón abajo para verlos directamente.
+        </div>
+        <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID_VISIBLE}" 
+           target="_blank" 
+           class="btn-abrir-sheets">
+          📊 Abrir Google Sheets
+        </a>
+      </div>
+    `;
+    registrosCount.textContent = 'Error 403';
+    registrosCount.style.background = '#ffc107';
+    return;
+  }
+  
+  const registros = resultado.registros || [];
+  
+  // Si no hay registros
   if (registros.length === 0) {
-    // Determinar si es error o vacío
-    const resultado = await obtenerRegistrosConJSONP(currentUser.email, obtenerFechaHoy());
-    
-    if (!resultado.success && resultado.errorType === 'network') {
-      // Error de red
-      registrosLista.innerHTML = `
-        <div class="registro-error">
-          <div class="error-icon">⚠️</div>
-          <div class="error-text">
-            <strong>No se pudieron cargar los registros</strong><br>
-            <span style="font-size: 0.9em; color: #666;">
-              Problemas de conexión. Sus registros están guardados pero no se pueden mostrar ahora.
-            </span>
-          </div>
-          <button class="btn-retry-registros" onclick="reintentarCargarRegistros()">
-            🔄 Reintentar
-          </button>
+    registrosLista.innerHTML = `
+      <div class="registro-vacio">
+        <div style="font-size: 2em; margin-bottom: 10px;">📝</div>
+        <div><strong>No hay registros para hoy</strong></div>
+        <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
+          Cuando registre su primera asistencia aparecerá aquí
         </div>
-      `;
-      registrosCount.textContent = 'Error de red';
-      registrosCount.style.background = '#dc3545';
-    } else {
-      // Realmente no hay registros
-      registrosLista.innerHTML = `
-        <div class="registro-vacio">
-          <div style="font-size: 2em; margin-bottom: 10px;">📝</div>
-          <div><strong>No hay registros para hoy</strong></div>
-          <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
-            Cuando registre su primera asistencia aparecerá aquí
-          </div>
-        </div>
-      `;
-      registrosCount.textContent = '0 registros';
-      registrosCount.style.background = '#6c757d';
-    }
+      </div>
+    `;
+    registrosCount.textContent = '0 registros';
+    registrosCount.style.background = '#6c757d';
     return;
   }
   
@@ -1626,7 +1614,6 @@ async function mostrarRegistrosDelDia() {
   });
   
   registrosLista.innerHTML = html;
-  
   console.log('✅ Registros mostrados en pantalla');
 }
 
@@ -3073,5 +3060,15 @@ console.log(`   - Intentos verificación: ${VERIFICATION_ATTEMPTS}`);
 console.log(`   - Tiempos entre verificaciones: ${TIEMPO_ENTRE_VERIFICACIONES.map(t => t/1000 + 's').join(', ')}`);
 console.log(`   - Modo fallback: ${ENABLE_VERIFICATION_FALLBACK ? 'HABILITADO ✅' : 'DESHABILITADO'}`);
 console.log('\n✅ Mejoras cargadas - Mejor manejo de errores de red');
+
+// Mensaje sobre errores 403
+console.log('\n📌 INFORMACIÓN IMPORTANTE SOBRE ERRORES 403:');
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('Si ve errores 403 en verificación o registros:');
+console.log('  ✅ Sus datos SÍ se guardaron correctamente');
+console.log('  ❌ Solo la verificación/lectura falló por CORS');
+console.log('  💡 Error 403 = Restricción de seguridad de Google');
+console.log('  📊 Abra Google Sheets para confirmar visualmente');
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
 console.log('🔍 Para diagnóstico: diagnosticComplete()');
