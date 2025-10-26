@@ -40,11 +40,9 @@ const ENABLE_VERIFICATION_FALLBACK = true; // Modo fallback cuando falle verific
 //PRODUCCION
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyllBO0vTORygvLlbTeRWfNXz1_Dt1khrM2z_BUxbNM6jWqEGYDqaLnd7LJs9Fl9Q9X/exec';
 //const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com';
-//const SHEET_ID_VISIBLE = '146Q1MG0AUCnzacqrN5kBENRuiql8o07Uts-l_gimL2I'; // Para link directo
 //PRUEBAS
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw10UgiYsuGYi16MisVfk7fx-wlGU-gUmCKTz2bZmyqys_2ku1ghZ9zzv71UncZ_sXlDg/exec';
 const GOOGLE_CLIENT_ID = '154864030871-ck4l5krb7qm68kmp6a7rcq7h072ldm6g.apps.googleusercontent.com';
-const SHEET_ID_VISIBLE = '1YLmEuA-O3Vc1fWRQ1nC_BojOUSVmzBb8QxCCsb5tQwk'; // Para link directo
 
 const ubicacionesUAS = [
     { name: "CESPSIC - Centro de Servicios Psicológicos", lat: 24.8278, lng: -107.3812, radius: 50 },
@@ -2045,19 +2043,24 @@ async function handleSubmit(e) {
       console.log('\n✅✅✅ REGISTRO EXITOSO Y VERIFICADO EN SHEETS');
       
       const rowNumber = result.data?.row_number || 'N/A';
-      const searchMethod = result.data?.search_method || 'unknown';
+      const searchMethod = result.data?.search_method || 'verified';
       
-      let statusMessage = `✅ ¡Asistencia VERIFICADA en Google Sheets!
+      let statusMessage = `✅✅✅ ASISTENCIA REGISTRADA Y VERIFICADA
 
+Su asistencia ha sido guardada y verificada exitosamente.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 Registro ID: ${data.registro_id}
 👤 Usuario: ${currentUser.name}
-📱 Dispositivo: ${deviceType}
 📊 Modalidad: ${data.modalidad}
 📍 Ubicación: ${data.ubicacion_detectada}
 🎯 Precisión GPS: ${data.precision_gps_metros}m
-📢 Fila en Sheets: ${rowNumber}
-🔄 Intentos usados: ${result.attempts}/${result.verification_attempts || 3}
-🔍 Método búsqueda: ${searchMethod}`;
+⏰ Hora: ${new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'})}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ CONFIRMACIÓN: Guardado y verificado automáticamente
+📢 Fila en sistema: ${rowNumber}
+🔍 Método de verificación: ${searchMethod}`;
       
       if (data.total_evidencias > 0) {
         statusMessage += `\n📸 Evidencias subidas: ${data.total_evidencias}`;
@@ -2067,62 +2070,24 @@ async function handleSubmit(e) {
         statusMessage += `\n⚠️ Evidencias fallidas: ${data.evidencias_failed}`;
       }
       
-      if (result.duplicate_prevented) {
-        statusMessage += `\n🔒 Duplicado prevenido (idempotencia)`;
-      }
-      
       showStatus(statusMessage, 'success');
       
-      // *** ACTUALIZAR REGISTROS DEL DÍA CON RETRY ***
+      // *** INTENTAR ACTUALIZAR REGISTROS (1 intento) ***
       setTimeout(async () => {
-        console.log('🔄 Actualizando registros del día después de guardar...');
+        console.log('🔄 Actualizando registros del día...');
         
-        let registrosCargados = false;
-        let intentos = 0;
-        const maxIntentos = 3;
-        
-        while (!registrosCargados && intentos < maxIntentos) {
-          intentos++;
-          console.log(`📊 Intento ${intentos}/${maxIntentos} de actualizar registros...`);
-          
-          try {
-            await mostrarRegistrosDelDia();
-            
-            // Verificar si se cargaron
-            const registrosSection = document.getElementById('registros-section');
-            const registrosLista = document.getElementById('registros-lista');
-            
-            if (registrosSection && registrosSection.style.display !== 'none') {
-              const contenido = registrosLista.innerHTML;
-              
-              // Verificar si NO es mensaje de error
-              if (!contenido.includes('registro-error') && !contenido.includes('No se pudieron cargar')) {
-                registrosCargados = true;
-                console.log('✅ Registros actualizados exitosamente');
-                break;
-              }
-            }
-            
-            if (!registrosCargados && intentos < maxIntentos) {
-              console.log(`⏱️ Esperando 2s antes del siguiente intento...`);
-              await sleep(2000);
-            }
-            
-          } catch (e) {
-            console.warn(`⚠️ Error actualizando registros (intento ${intentos}):`, e);
-            if (intentos < maxIntentos) {
-              await sleep(2000);
-            }
-          }
-        }
-        
-        if (!registrosCargados) {
-          console.warn('⚠️ No se pudieron actualizar los registros después de ' + maxIntentos + ' intentos');
+        try {
+          await mostrarRegistrosDelDia();
+          console.log('✅ Registros actualizados');
+        } catch (e) {
+          console.warn('⚠️ Error actualizando registros:', e);
         }
         
         // Preguntar al usuario
-        if (confirm('✅ Registro verificado exitosamente en Google Sheets.\n\n' +
-                    (registrosCargados ? '✅ Registros del día actualizados.\n\n' : '⚠️ No se pudieron actualizar los registros del día por problemas de red.\n   Use el botón "Reintentar" si lo desea.\n\n') +
+        if (confirm('✅ ASISTENCIA REGISTRADA Y VERIFICADA\n\n' +
+                    'Registro ID: ' + data.registro_id + '\n' +
+                    'Usuario: ' + currentUser.name + '\n' +
+                    'Hora: ' + new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) + '\n\n' +
                     '¿Desea registrar otra asistencia?')) {
           resetFormOnly();
           getCurrentLocation();
@@ -2130,7 +2095,7 @@ async function handleSubmit(e) {
           signOut();
         }
         hideStatus();
-      }, 5000); // 5 segundos
+      }, 5000);
     } 
     // ⭐⭐⭐ CASO 2: ⚠️ NUEVO - Enviado pero no verificable por problemas de red
     else if (result.success && result.assumedSaved && result.networkIssues) {
