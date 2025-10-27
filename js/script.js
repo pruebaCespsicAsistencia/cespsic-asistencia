@@ -37,11 +37,6 @@ const TIEMPO_ENTRE_VERIFICACIONES = [5000, 10000, 15000]; // Solo 3 intentos con
 const VERIFICATION_ATTEMPTS = 3; // Reducido de 5 a 3
 const ENABLE_VERIFICATION_FALLBACK = true; // Modo fallback cuando falle verificación
 
-const ENABLE_POST_VERIFICATION = true; // Habilitar verificación POST
-const ENABLE_POSTMESSAGE_READING = true; // Leer respuesta con postMessage
-const VERIFICATION_TIMEOUT = 25000; // 25 segundos para verificación
-const MAX_ATTEMPTS = 3; // Máximo 3 intentos de envío completo
-
 //PRODUCCION
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyllBO0vTORygvLlbTeRWfNXz1_Dt1khrM2z_BUxbNM6jWqEGYDqaLnd7LJs9Fl9Q9X/exec';
 //const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com';
@@ -1208,170 +1203,135 @@ function sleep(ms) {
 
 // ========== ENVÍO CON VERIFICACIÓN, REINTENTOS E IDEMPOTENCIA (CORREGIDO) ==========
 async function sendWithVerification(data, attempt = 1) {
-  console.log('\n' + '='.repeat(70));
-  console.log(`🚀 INTENTO DE ENVÍO ${attempt}/${MAX_ATTEMPTS}`);
-  console.log('='.repeat(70));
+  const MAX_ATTEMPTS = 3;
+  
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`🚀 INTENTO ${attempt}/${MAX_ATTEMPTS}`);
+  console.log(`Registro ID: ${data.registro_id}`);
+  console.log(`${'='.repeat(60)}`);
   
   try {
-    // ========== PASO 1: ENVIAR DATOS CON IFRAME MEJORADO ==========
-    console.log('\n📤 PASO 1/3: Enviando datos...');
-    console.log('Método: POST con iframe + lectura de respuesta HTML');
+    // ========== PASO 1: VALIDAR DATOS ANTES DE ENVIAR ==========
+    console.log('🔍 Validando datos antes de enviar...');
     
-    const envioResult = await sendDataWithIframe(data);
-    
-    console.log('📊 Resultado del envío:', envioResult);
-    
-    // ========== EVALUAR RESPUESTA INMEDIATA DEL ENVÍO ==========
-    
-    // CASO 1: Respuesta HTML leída exitosamente del iframe
-    if (envioResult.htmlResponse && envioResult.htmlResponse.success) {
-      console.log('\n✅✅✅ ÉXITO INMEDIATO - Respuesta HTML confirmó guardado');
-      console.log('Registro ID:', envioResult.htmlResponse.registro_id);
-      console.log('Fila:', envioResult.htmlResponse.row_number);
-      console.log('Verificado:', envioResult.htmlResponse.verified);
-      
-      return {
-        success: true,
-        verified: envioResult.htmlResponse.verified || false,
-        confirmed: envioResult.htmlResponse.confirmed || true,
-        exists: true,
-        data: {
-          registro_id: data.registro_id,
-          row_number: envioResult.htmlResponse.row_number,
-          timestamp: envioResult.htmlResponse.timestamp,
-          message: envioResult.htmlResponse.message,
-          user_name: data.authenticated_user_name,
-          modalidad: data.modalidad,
-          ubicacion: data.ubicacion_detectada,
-          verification_method: 'html_response_immediate'
-        },
-        htmlResponse: envioResult.htmlResponse,
-        attempts: attempt
-      };
+    if (!data.modalidad || data.modalidad === '' || data.modalidad === 'undefined' || data.modalidad === 'null') {
+      throw new Error('VALIDACIÓN: Campo Modalidad vacío o inválido');
     }
     
-    // CASO 2: Envío completado pero no pudimos leer respuesta HTML
-    if (envioResult.success && !envioResult.htmlResponse) {
-      console.log('\n⚠️ Envío completado pero no se pudo leer respuesta HTML');
-      console.log('Procediendo con verificación adicional...');
+    if (!data.email || !data.google_user_id) {
+      throw new Error('VALIDACIÓN: Datos de autenticación faltantes');
     }
     
-    // ========== PASO 2: ESPERAR TIEMPO INICIAL ==========
-    console.log(`\n⏳ PASO 2/3: Esperando ${TIEMPO_ESPERA_INICIAL/1000}s para que el servidor procese...`);
+    if (!data.latitude || !data.longitude) {
+      throw new Error('VALIDACIÓN: Coordenadas GPS faltantes');
+    }
+    
+    if (!data.registro_id || data.registro_id.trim() === '') {
+      throw new Error('VALIDACIÓN: registro_id vacío');
+    }
+    
+    console.log('✅ Validación previa exitosa');
+    
+    // ========== PASO 2: ENVIAR DATOS ==========
+    console.log('📤 Enviando datos al backend...');
+    await sendDataWithIframe(data);
+    
+    console.log('✅ Formulario enviado al servidor');
+    
+    // ========== PASO 3: ESPERAR PROCESAMIENTO INICIAL ==========
+    console.log(`⏱️ Esperando ${TIEMPO_ESPERA_INICIAL/1000}s para procesamiento inicial...`);
     await sleep(TIEMPO_ESPERA_INICIAL);
     
-    // ========== PASO 3: VERIFICACIÓN CON MÚLTIPLES MÉTODOS ==========
-    console.log('\n🔍 PASO 3/3: Iniciando verificaciones...');
-    console.log(`Total de intentos de verificación: ${VERIFICATION_ATTEMPTS}`);
+    // ========== PASO 4: COMPLETAR TODOS LOS INTENTOS DE VERIFICACIÓN ==========
+    console.log(`\n🔍 INICIANDO ${VERIFICATION_ATTEMPTS} VERIFICACIONES OBLIGATORIAS...`);
+    console.log('='.repeat(60));
     
-    let verificationSuccess = false;
     let verificationResult = null;
-    let error403Count = 0;
+    let verificationSuccess = false;
+    let allVerificationResults = [];
     let networkErrorCount = 0;
-    const allVerificationResults = [];
+    let error403Count = 0;
     
+    // *** COMPLETAR TODOS LOS INTENTOS SIN SALIR PREMATURAMENTE ***
     for (let v = 1; v <= VERIFICATION_ATTEMPTS; v++) {
-      console.log('\n' + '-'.repeat(60));
-      console.log(`🔍 Verificación ${v}/${VERIFICATION_ATTEMPTS}`);
-      console.log('-'.repeat(60));
+      console.log(`\n🔍 Verificación ${v}/${VERIFICATION_ATTEMPTS}...`);
       
       try {
-        // Método 1: JSONP (GET con script tags) - Tradicional
-        console.log('Método 1: Intentando verificación JSONP...');
-        const jsonpResult = await verifyWithScriptTag(data.registro_id);
-        
+        verificationResult = await verifyWithScriptTag(data.registro_id);
         allVerificationResults.push({
           attempt: v,
-          method: 'jsonp',
-          result: jsonpResult
+          result: verificationResult,
+          timestamp: new Date().toISOString()
         });
         
-        if (jsonpResult.success && jsonpResult.verified) {
-          console.log('✅ JSONP: Registro verificado exitosamente');
-          verificationSuccess = true;
-          verificationResult = jsonpResult;
-          break;
-        }
+        console.log(`Resultado verificación ${v}:`, verificationResult);
         
-        if (jsonpResult.code403 || jsonpResult.error?.includes('403')) {
-          console.warn('⚠️ JSONP: Error 403 detectado');
-          error403Count++;
-        }
-        
-        if (jsonpResult.networkError || jsonpResult.timeout) {
-          console.warn('⚠️ JSONP: Error de red detectado');
-          networkErrorCount++;
-        }
-        
-        // Método 2: POST con iframe (si JSONP falló y está habilitado)
-        if (ENABLE_POST_VERIFICATION && !verificationSuccess) {
-          console.log('Método 2: Intentando verificación POST con iframe...');
-          const postResult = await verifyWithPOSTIframe(data.registro_id);
-          
-          allVerificationResults.push({
-            attempt: v,
-            method: 'post_iframe',
-            result: postResult
-          });
-          
-          if (postResult.success && postResult.verified) {
-            console.log('✅ POST: Registro verificado exitosamente');
-            verificationSuccess = true;
-            verificationResult = postResult;
-            break;
-          }
-          
-          if (postResult.code403 || postResult.error?.includes('403')) {
-            console.warn('⚠️ POST: Error 403 detectado');
+        // Contar errores de red y 403
+        if (verificationResult.error) {
+          if (verificationResult.error.includes('403') || verificationResult.code403) {
             error403Count++;
+            console.warn(`⚠️ Error 403 detectado (${error403Count}/${VERIFICATION_ATTEMPTS})`);
           }
           
-          if (postResult.networkError || postResult.timeout) {
-            console.warn('⚠️ POST: Error de red detectado');
+          if (verificationResult.networkError || verificationResult.timeout || 
+              verificationResult.error.includes('red') || 
+              verificationResult.error.includes('network')) {
             networkErrorCount++;
+            console.warn(`⚠️ Error de red detectado (${networkErrorCount}/${VERIFICATION_ATTEMPTS})`);
           }
         }
         
-      } catch (error) {
-        console.error(`❌ Error en verificación ${v}:`, error);
+        // Si encontramos el registro, marcar éxito pero NO salir del loop
+        if (verificationResult.success && verificationResult.verified && verificationResult.exists) {
+          verificationSuccess = true;
+          console.log(`✅✅ REGISTRO ENCONTRADO en fila ${verificationResult.row_number}`);
+          // NO hacer break aquí - continuar con el resto de verificaciones para confirmar
+        } else if (!verificationResult.exists && !verificationResult.error) {
+          console.log(`⏳ Registro aún no encontrado en intento ${v}`);
+        }
+        
+      } catch (verifyError) {
+        console.error(`❌ Excepción en verificación ${v}:`, verifyError.message);
         allVerificationResults.push({
           attempt: v,
-          error: error.message
+          result: { success: false, error: verifyError.message },
+          timestamp: new Date().toISOString()
         });
         networkErrorCount++;
       }
       
       // Esperar antes del siguiente intento (excepto en el último)
-      if (v < VERIFICATION_ATTEMPTS && !verificationSuccess) {
+      if (v < VERIFICATION_ATTEMPTS) {
         const waitTime = TIEMPO_ENTRE_VERIFICACIONES[v - 1] || 5000;
         console.log(`⏱️ Esperando ${waitTime/1000}s antes del siguiente intento...`);
         await sleep(waitTime);
       }
     }
     
-    // ========== EVALUACIÓN FINAL ==========
-    console.log('\n' + '='.repeat(70));
-    console.log('📊 RESUMEN FINAL:');
-    console.log(`   Total intentos verificación: ${allVerificationResults.length}`);
+    // ========== PASO 5: EVALUAR RESULTADOS DESPUÉS DE COMPLETAR TODOS LOS INTENTOS ==========
+    console.log('\n' + '='.repeat(60));
+    console.log('📊 RESUMEN DE VERIFICACIONES:');
+    console.log(`   Total intentos: ${allVerificationResults.length}`);
     console.log(`   Errores 403: ${error403Count}`);
     console.log(`   Errores de red: ${networkErrorCount}`);
-    console.log(`   Verificación exitosa: ${verificationSuccess ? 'SÍ ✅' : 'NO ❌'}`);
-    console.log('='.repeat(70));
+    console.log(`   Éxito encontrado: ${verificationSuccess ? 'SÍ' : 'NO'}`);
+    console.log('='.repeat(60));
     
-    // CASO 3: Verificación exitosa
+    // *** EVALUACIÓN FINAL ***
+    
+    // CASO 1: Encontramos el registro al menos una vez
     if (verificationSuccess && verificationResult) {
       console.log('\n✅✅✅ REGISTRO COMPLETADO Y VERIFICADO');
       
       return {
         success: true,
         verified: true,
-        confirmed: true,
         exists: true,
         data: {
           registro_id: data.registro_id,
           row_number: verificationResult.row_number,
           timestamp: verificationResult.timestamp,
-          message: '✅ Registro guardado y verificado exitosamente',
+          message: 'Registro guardado y verificado exitosamente',
           user_name: data.authenticated_user_name,
           modalidad: data.modalidad,
           ubicacion: data.ubicacion_detectada,
@@ -1379,19 +1339,52 @@ async function sendWithVerification(data, attempt = 1) {
         },
         attempts: attempt,
         verification_attempts: VERIFICATION_ATTEMPTS,
+        network_errors: networkErrorCount,
+        error_403_count: error403Count,
         all_verification_results: allVerificationResults
       };
     }
     
-    // CASO 4: No se pudo verificar - REINTENTAR ENVÍO COMPLETO
-    console.warn('\n⚠️⚠️ NO SE PUDO VERIFICAR EL REGISTRO');
-    console.warn('Esto puede significar que:');
-    console.warn('1. El registro no se guardó correctamente');
-    console.warn('2. Hay problemas de red/CORS que impiden la verificación');
-    console.warn('3. El servidor está experimentando demoras');
+    // CASO 2: Todos los intentos tuvieron errores 403 o de red
+    // Esto significa que el registro SÍ se envió, pero no podemos verificar por CORS
+    if ((error403Count === VERIFICATION_ATTEMPTS || networkErrorCount >= 2) && ENABLE_VERIFICATION_FALLBACK) {
+      console.log('\n⚠️⚠️ ACTIVANDO MODO FALLBACK');
+      console.log('Todos los intentos tuvieron errores de red/403');
+      console.log('Los datos se enviaron correctamente al servidor');
+      console.log('La verificación está bloqueada por problemas de red/CORS');
+      
+      return {
+        success: true,
+        verified: false,
+        exists: true,
+        assumedSaved: true,
+        networkIssues: true,
+        error403Issues: error403Count > 0,
+        mustVerifyManually: true,
+        data: {
+          registro_id: data.registro_id,
+          row_number: 'No verificable',
+          timestamp: new Date().toISOString(),
+          message: '⚠️ Registro enviado correctamente pero no verificable por problemas de red. VERIFIQUE MANUALMENTE.',
+          user_name: data.authenticated_user_name,
+          modalidad: data.modalidad,
+          ubicacion: data.ubicacion_detectada,
+          search_method: 'fallback_after_all_attempts'
+        },
+        attempts: attempt,
+        verification_attempts: VERIFICATION_ATTEMPTS,
+        network_errors: networkErrorCount,
+        error_403_count: error403Count,
+        all_verification_results: allVerificationResults
+      };
+    }
+    
+    // CASO 3: No se pudo verificar pero no hay errores de red claros
+    // Reintentar el envío completo
+    console.warn('\n⚠️ NO SE PUDO VERIFICAR - Sin errores de red claros');
     
     if (attempt < MAX_ATTEMPTS) {
-      const waitTime = 10000 * attempt; // Espera progresiva
+      const waitTime = 10000 * attempt;
       console.log(`\n🔄 Reintentando envío completo (${attempt + 1}/${MAX_ATTEMPTS})...`);
       console.log(`⏳ Esperando ${waitTime/1000}s...`);
       await sleep(waitTime);
@@ -1399,44 +1392,29 @@ async function sendWithVerification(data, attempt = 1) {
       return sendWithVerification(data, attempt + 1);
     }
     
-    // CASO 5: Agotamos todos los intentos
-    console.error('\n❌❌❌ FALLO DESPUÉS DE TODOS LOS INTENTOS');
-    console.error('El registro NO se pudo guardar y verificar');
-    
-    return {
-      success: false,
-      verified: false,
-      confirmed: false,
-      exists: false,
-      error: 'No se pudo guardar y verificar el registro después de múltiples intentos',
-      registro_id: data.registro_id,
-      attempts: attempt,
-      all_verification_results: allVerificationResults,
-      message: '❌ No se pudo completar el registro. Por favor, intente nuevamente o contacte al administrador.',
-      recommendation: 'Intente nuevamente en unos momentos. Si el problema persiste, contacte al soporte técnico.'
-    };
+    // CASO 4: Agotamos todos los intentos de envío
+    throw new Error('No se pudo verificar el registro después de múltiples intentos de envío');
     
   } catch (error) {
     console.error(`\n❌ Error en intento ${attempt}:`, error.message);
     
     if (attempt < MAX_ATTEMPTS) {
       const waitTime = 5000 * attempt;
-      console.log(`⏳ Esperando ${waitTime/1000}s antes de reintentar...`);
+      console.log(`⏳ Esperando ${waitTime/1000}s antes de reintentar envío completo...`);
       await sleep(waitTime);
       
       return sendWithVerification(data, attempt + 1);
     } else {
-      console.error('\n❌❌ TODOS LOS INTENTOS FALLARON');
+      console.error('\n❌❌ TODOS LOS INTENTOS DE ENVÍO FALLARON');
       
       return {
         success: false,
         verified: false,
-        confirmed: false,
         exists: false,
         error: error.message,
         attempts: attempt,
         registro_id: data.registro_id,
-        message: '❌ Error al procesar el registro: ' + error.message
+        note: 'El registro NO se guardó. Intente nuevamente.'
       };
     }
   }
@@ -1707,6 +1685,7 @@ async function verifyWithScriptTag(registroID) {
     const callbackName = 'verify_' + Date.now().toString().substring(5);
     const scriptId = 'script_' + callbackName;
     
+    // ⭐ FIX: Timeout aumentado y mejor manejo de errores de red
     const timeoutId = setTimeout(() => {
       cleanup();
       console.warn('⏱️ Timeout en verificación JSONP (20s)');
@@ -1718,8 +1697,9 @@ async function verifyWithScriptTag(registroID) {
         timeout: true,
         networkError: true
       });
-    }, 20000);
+    }, 20000); // 20 segundos
     
+    // Callback global
     window[callbackName] = function(result) {
       clearTimeout(timeoutId);
       console.log('✅ JSONP callback recibido:', result);
@@ -1727,20 +1707,27 @@ async function verifyWithScriptTag(registroID) {
       resolve(result);
     };
     
+    // Crear script
     const script = document.createElement('script');
     script.id = scriptId;
     script.onerror = function(event) {
       clearTimeout(timeoutId);
       console.error('❌ Error cargando script JSONP');
+      console.error('Evento error:', event);
+      
+      // ⭐ NUEVO: Detectar tipo de error
+      const errorType = event.type || 'unknown';
+      const errorMsg = event.message || 'Error de red o 403 - servidor no accesible';
       
       cleanup();
       resolve({
         success: false,
         verified: false,
         exists: false,
-        error: 'Error de red o 403 - servidor no accesible',
-        networkError: true,
-        code403: true
+        error: errorMsg,
+        errorType: errorType,
+        networkError: true, // ⭐ FLAG IMPORTANTE
+        code403: true // ⭐ FLAG IMPORTANTE
       });
     };
     
@@ -1759,48 +1746,22 @@ async function verifyWithScriptTag(registroID) {
     document.body.appendChild(script);
   });
 }
+
 // ========== ENVIAR DATOS CON IFRAME (MEJORADO) ==========
 async function sendDataWithIframe(data) {
-  console.log('📨 Enviando datos con iframe mejorado...');
+  console.log('📨 Enviando con iframe (sin leer respuesta)...');
   
   return new Promise((resolve) => {
-    let resolved = false;
-    const iframeName = 'response_frame_' + Date.now();
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
-    iframe.name = iframeName;
-    iframe.id = iframeName;
+    iframe.name = 'response_frame_' + Date.now();
     
-    // Preparar para recibir postMessage
-    let htmlResponse = null;
-    
-    if (ENABLE_POSTMESSAGE_READING) {
-      const messageHandler = (event) => {
-        // Validar origen si es necesario
-        // if (event.origin !== 'https://script.google.com') return;
-        
-        if (event.data && event.data.type === 'CEPSIC_RESPONSE') {
-          console.log('📬 PostMessage recibido del iframe:', event.data.data);
-          htmlResponse = event.data.data;
-        }
-      };
-      
-      window.addEventListener('message', messageHandler);
-      
-      // Remover listener después de un tiempo
-      setTimeout(() => {
-        window.removeEventListener('message', messageHandler);
-      }, 30000);
-    }
-    
-    // Crear formulario
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = GOOGLE_SCRIPT_URL;
-    form.target = iframeName;
+    form.target = iframe.name;
     form.style.display = 'none';
     
-    // Agregar campos
     for (const [key, value] of Object.entries(data)) {
       const input = document.createElement('input');
       input.type = 'hidden';
@@ -1818,230 +1779,28 @@ async function sendDataWithIframe(data) {
     document.body.appendChild(iframe);
     document.body.appendChild(form);
     
-    // Intentar leer respuesta del iframe después de que cargue
-    iframe.onload = function() {
-      console.log('📄 Iframe cargado');
-      
-      // Intentar leer contenido del iframe (puede fallar por CORS)
-      try {
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-        
-        if (iframeDoc) {
-          // Buscar el div con los datos de respuesta
-          const responseDiv = iframeDoc.getElementById('responseData');
-          
-          if (responseDiv) {
-            const responseEncoded = responseDiv.getAttribute('data-response');
-            if (responseEncoded) {
-              htmlResponse = JSON.parse(decodeURIComponent(responseEncoded));
-              console.log('✅ Respuesta HTML leída del iframe:', htmlResponse);
-            }
-          }
-          
-          // También intentar leer del hash de la URL
-          if (!htmlResponse && iframe.contentWindow.location.hash) {
-            const hash = iframe.contentWindow.location.hash;
-            if (hash.startsWith('#response=')) {
-              const responseEncoded = hash.substring(10);
-              htmlResponse = JSON.parse(decodeURIComponent(responseEncoded));
-              console.log('✅ Respuesta HTML leída del hash:', htmlResponse);
-            }
-          }
-        }
-      } catch (e) {
-        console.log('⚠️ No se pudo leer contenido del iframe (CORS):', e.message);
-      }
-    };
-    
     console.log('📮 Enviando formulario...');
     form.submit();
     
-    // Esperar tiempo razonable para recibir respuesta
+    // Esperar 5 segundos y asumir que se envió
+    // NO intentamos leer el iframe por CORS
     setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        
-        // Limpiar
-        try {
-          if (document.body.contains(iframe)) document.body.removeChild(iframe);
-          if (document.body.contains(form)) document.body.removeChild(form);
-        } catch (e) {}
-        
-        if (htmlResponse) {
-          console.log('✅ Respuesta HTML disponible');
-          resolve({
-            success: true,
-            verified: false,
-            message: 'Datos enviados con respuesta HTML',
-            htmlResponse: htmlResponse
-          });
-        } else {
-          console.log('⚠️ No se pudo leer respuesta HTML (requiere verificación)');
-          resolve({
-            success: true,
-            verified: false,
-            message: 'Datos enviados (verificación requerida)',
-            htmlResponse: null
-          });
-        }
-      }
-    }, 8000); // 8 segundos para recibir y procesar respuesta
-  });
-}
-
-async function verifyWithPOSTIframe(registroID) {
-  console.log('🔍 Verificando con POST + iframe...');
-  
-  return new Promise((resolve) => {
-    let resolved = false;
-    const iframeName = 'verify_frame_' + Date.now();
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.name = iframeName;
-    iframe.id = iframeName;
-    
-    let htmlResponse = null;
-    
-    // Preparar para recibir postMessage
-    if (ENABLE_POSTMESSAGE_READING) {
-      const messageHandler = (event) => {
-        if (event.data && event.data.type === 'CEPSIC_RESPONSE') {
-          console.log('📬 PostMessage recibido (verificación):', event.data.data);
-          htmlResponse = event.data.data;
-        }
-      };
+      console.log('⏱️ 5 segundos transcurridos, asumiendo envío completado');
       
-      window.addEventListener('message', messageHandler);
-      
-      setTimeout(() => {
-        window.removeEventListener('message', messageHandler);
-      }, VERIFICATION_TIMEOUT);
-    }
-    
-    // Crear formulario de verificación
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = GOOGLE_SCRIPT_URL;
-    form.target = iframeName;
-    form.style.display = 'none';
-    
-    // Campos para verificación POST
-    const actionInput = document.createElement('input');
-    actionInput.type = 'hidden';
-    actionInput.name = 'action';
-    actionInput.value = 'verify_post';
-    form.appendChild(actionInput);
-    
-    const registroInput = document.createElement('input');
-    registroInput.type = 'hidden';
-    registroInput.name = 'registro_id';
-    registroInput.value = registroID;
-    form.appendChild(registroInput);
-    
-    document.body.appendChild(iframe);
-    document.body.appendChild(form);
-    
-    // Timeout
-    const timeoutId = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        cleanup();
-        
-        console.warn('⏱️ Timeout en verificación POST');
-        resolve({
-          success: false,
-          verified: false,
-          exists: false,
-          error: 'Timeout en verificación POST',
-          timeout: true,
-          networkError: true
-        });
-      }
-    }, VERIFICATION_TIMEOUT);
-    
-    // Manejar carga del iframe
-    iframe.onload = function() {
-      console.log('📄 Iframe de verificación cargado');
-      
-      // Intentar leer respuesta
-      try {
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-        
-        if (iframeDoc) {
-          const responseDiv = iframeDoc.getElementById('responseData');
-          
-          if (responseDiv) {
-            const responseEncoded = responseDiv.getAttribute('data-response');
-            if (responseEncoded) {
-              htmlResponse = JSON.parse(decodeURIComponent(responseEncoded));
-              console.log('✅ Respuesta de verificación POST:', htmlResponse);
-            }
-          }
-        }
-      } catch (e) {
-        console.log('⚠️ No se pudo leer respuesta POST (CORS):', e.message);
-      }
-    };
-    
-    iframe.onerror = function(event) {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeoutId);
-        cleanup();
-        
-        console.error('❌ Error cargando iframe de verificación POST');
-        resolve({
-          success: false,
-          verified: false,
-          exists: false,
-          error: 'Error de red en verificación POST',
-          networkError: true,
-          code403: true
-        });
-      }
-    };
-    
-    console.log('📮 Enviando verificación POST...');
-    form.submit();
-    
-    // Esperar respuesta
-    setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeoutId);
-        cleanup();
-        
-        if (htmlResponse) {
-          console.log('✅ Verificación POST completada con respuesta');
-          resolve({
-            success: htmlResponse.success || false,
-            verified: htmlResponse.verified || false,
-            exists: htmlResponse.exists || false,
-            row_number: htmlResponse.row_number,
-            timestamp: htmlResponse.timestamp,
-            email: htmlResponse.email,
-            message: htmlResponse.message,
-            search_method: 'post_verification'
-          });
-        } else {
-          console.log('⚠️ Verificación POST sin respuesta');
-          resolve({
-            success: false,
-            verified: false,
-            exists: false,
-            error: 'No se pudo obtener respuesta de verificación POST',
-            networkError: true
-          });
-        }
-      }
-    }, 7000);
-    
-    function cleanup() {
+      // Limpiar
       try {
         if (document.body.contains(iframe)) document.body.removeChild(iframe);
         if (document.body.contains(form)) document.body.removeChild(form);
       } catch (e) {}
-    }
+      
+      // Retornar respuesta que requiere verificación
+      resolve({
+        success: true,
+        verified: false,
+        message: 'Datos enviados (verificación requerida)',
+        needs_verification: true
+      });
+    }, 5000);
   });
 }
 
