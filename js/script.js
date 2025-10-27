@@ -32,10 +32,10 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PRIVACY_VERSION = '1.0';
 // *** FIX: Aumentar tiempos de espera para verificación ***
-const TIEMPO_ESPERA_INICIAL = 2000; // 2s - Reducido porque ahora tenemos confirmación
-const TIEMPO_ENTRE_VERIFICACIONES = [3000, 5000, 8000]; // Reducido
+const TIEMPO_ESPERA_INICIAL = 2000;
+const TIEMPO_ENTRE_VERIFICACIONES = [3000, 5000, 8000];
 const VERIFICATION_ATTEMPTS = 3;
-const ENABLE_VERIFICATION_FALLBACK = true; // Mantener pero con nueva lógica
+const ENABLE_VERIFICATION_FALLBACK = true;
 
 //PRODUCCION
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyllBO0vTORygvLlbTeRWfNXz1_Dt1khrM2z_BUxbNM6jWqEGYDqaLnd7LJs9Fl9Q9X/exec';
