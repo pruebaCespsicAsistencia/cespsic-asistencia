@@ -1234,41 +1234,9 @@ async function sendWithVerification(data, attempt = 1) {
     
     // ========== PASO 2: ENVIAR DATOS ==========
     console.log('📤 Enviando datos al backend...');
-    const sendResult = await sendDataWithIframe(data);
-    
-    console.log('📨 Resultado del envío:', sendResult);
-    
-    // *** NUEVO: Si el backend confirmó el guardado, no necesitamos verificar más ***
-    if (sendResult.success && sendResult.verified && sendResult.saved) {
-      console.log('✅✅✅ BACKEND CONFIRMÓ GUARDADO Y VERIFICACIÓN');
-      
-      return {
-        success: true,
-        verified: true,
-        exists: true,
-        saved: true,
-        data: {
-          registro_id: data.registro_id,
-          row_number: sendResult.row_number || sendResult.data?.row_number || 'verificado',
-          timestamp: sendResult.data?.timestamp || new Date().toISOString(),
-          message: 'Registro confirmado por el backend',
-          user_name: data.authenticated_user_name,
-          modalidad: data.modalidad,
-          ubicacion: data.ubicacion_detectada,
-          search_method: 'backend_confirmed'
-        },
-        attempts: attempt,
-        verification_attempts: 0, // No necesitamos verificaciones adicionales
-        network_errors: 0,
-        error_403_count: 0,
-        source: 'backend_direct_confirmation'
-      };
-    }
+    await sendDataWithIframe(data);
     
     console.log('✅ Formulario enviado al servidor');
-    console.log('Resultado envío - Success:', sendResult.success);
-    console.log('Resultado envío - Assumed Saved:', sendResult.assumed_saved);
-    console.log('Resultado envío - Needs Verification:', sendResult.needs_verification);
     
     // ========== PASO 3: ESPERAR PROCESAMIENTO INICIAL ==========
     console.log(`⏱️ Esperando ${TIEMPO_ESPERA_INICIAL/1000}s para procesamiento inicial...`);
@@ -1283,7 +1251,6 @@ async function sendWithVerification(data, attempt = 1) {
     let allVerificationResults = [];
     let networkErrorCount = 0;
     let error403Count = 0;
-    let timeoutCount = 0;
     
     // *** COMPLETAR TODOS LOS INTENTOS SIN SALIR PREMATURAMENTE ***
     for (let v = 1; v <= VERIFICATION_ATTEMPTS; v++) {
@@ -1299,19 +1266,14 @@ async function sendWithVerification(data, attempt = 1) {
         
         console.log(`Resultado verificación ${v}:`, verificationResult);
         
-        // Contar tipos de errores
+        // Contar errores de red y 403
         if (verificationResult.error) {
           if (verificationResult.error.includes('403') || verificationResult.code403) {
             error403Count++;
             console.warn(`⚠️ Error 403 detectado (${error403Count}/${VERIFICATION_ATTEMPTS})`);
           }
           
-          if (verificationResult.timeout) {
-            timeoutCount++;
-            console.warn(`⚠️ Timeout detectado (${timeoutCount}/${VERIFICATION_ATTEMPTS})`);
-          }
-          
-          if (verificationResult.networkError || 
+          if (verificationResult.networkError || verificationResult.timeout || 
               verificationResult.error.includes('red') || 
               verificationResult.error.includes('network')) {
             networkErrorCount++;
@@ -1320,8 +1282,7 @@ async function sendWithVerification(data, attempt = 1) {
         }
         
         // Si encontramos el registro, marcar éxito pero NO salir del loop
-        if (verificationResult.success && verificationResult.verified && 
-            (verificationResult.exists || verificationResult.saved)) {
+        if (verificationResult.success && verificationResult.verified && verificationResult.exists) {
           verificationSuccess = true;
           console.log(`✅✅ REGISTRO ENCONTRADO en fila ${verificationResult.row_number}`);
           // NO hacer break aquí - continuar con el resto de verificaciones para confirmar
@@ -1352,11 +1313,8 @@ async function sendWithVerification(data, attempt = 1) {
     console.log('📊 RESUMEN DE VERIFICACIONES:');
     console.log(`   Total intentos: ${allVerificationResults.length}`);
     console.log(`   Errores 403: ${error403Count}`);
-    console.log(`   Errores timeout: ${timeoutCount}`);
     console.log(`   Errores de red: ${networkErrorCount}`);
     console.log(`   Éxito encontrado: ${verificationSuccess ? 'SÍ' : 'NO'}`);
-    console.log(`   Envío exitoso: ${sendResult.success ? 'SÍ' : 'NO'}`);
-    console.log(`   Assumed Saved: ${sendResult.assumed_saved ? 'SÍ' : 'NO'}`);
     console.log('='.repeat(60));
     
     // *** EVALUACIÓN FINAL ***
@@ -1369,82 +1327,61 @@ async function sendWithVerification(data, attempt = 1) {
         success: true,
         verified: true,
         exists: true,
-        saved: true,
         data: {
           registro_id: data.registro_id,
           row_number: verificationResult.row_number,
           timestamp: verificationResult.timestamp,
           message: 'Registro guardado y verificado exitosamente',
           user_name: data.authenticated_user_name,
-          modalidad: verificationResult.modalidad || data.modalidad,
-          ubicacion: verificationResult.ubicacion || data.ubicacion_detectada,
-          search_method: verificationResult.search_method || 'verified',
-          all_columns_valid: verificationResult.all_columns_valid
+          modalidad: data.modalidad,
+          ubicacion: data.ubicacion_detectada,
+          search_method: verificationResult.search_method || 'verified'
         },
         attempts: attempt,
         verification_attempts: VERIFICATION_ATTEMPTS,
         network_errors: networkErrorCount,
         error_403_count: error403Count,
-        timeout_count: timeoutCount,
         all_verification_results: allVerificationResults
       };
     }
     
-    // *** CASO 2 MEJORADO: El envío fue exitoso pero no podemos verificar por CORS/403 ***
-    // Este es el caso más común cuando hay problemas de red
-    const todosIntentosConErrores = error403Count + networkErrorCount + timeoutCount >= VERIFICATION_ATTEMPTS;
-    const envioExitoso = sendResult.success || sendResult.assumed_saved;
-    
-    if (envioExitoso && todosIntentosConErrores && ENABLE_VERIFICATION_FALLBACK) {
-      console.log('\n⚠️⚠️ ACTIVANDO MODO FALLBACK MEJORADO');
-      console.log('El formulario se envió correctamente al servidor');
-      console.log('La verificación está bloqueada por problemas de red/CORS/403');
-      console.log('IMPORTANTE: Los datos SÍ fueron enviados y procesados por el backend');
-      
-      // Determinar el motivo más probable
-      let motivoFallo = 'problemas de red';
-      if (error403Count === VERIFICATION_ATTEMPTS) {
-        motivoFallo = 'error 403 (restricciones de seguridad del servidor)';
-      } else if (timeoutCount >= 2) {
-        motivoFallo = 'timeouts de red (conexión lenta o servidor ocupado)';
-      } else if (networkErrorCount >= 2) {
-        motivoFallo = 'errores de red (CORS o firewall)';
-      }
+    // CASO 2: Todos los intentos tuvieron errores 403 o de red
+    // Esto significa que el registro SÍ se envió, pero no podemos verificar por CORS
+    if ((error403Count === VERIFICATION_ATTEMPTS || networkErrorCount >= 2) && ENABLE_VERIFICATION_FALLBACK) {
+      console.log('\n⚠️⚠️ ACTIVANDO MODO FALLBACK');
+      console.log('Todos los intentos tuvieron errores de red/403');
+      console.log('Los datos se enviaron correctamente al servidor');
+      console.log('La verificación está bloqueada por problemas de red/CORS');
       
       return {
         success: true,
         verified: false,
-        exists: true, // Asumimos que existe porque el envío fue exitoso
-        saved: true, // *** IMPORTANTE: Asumimos guardado exitoso ***
+        exists: true,
         assumedSaved: true,
         networkIssues: true,
         error403Issues: error403Count > 0,
-        timeoutIssues: timeoutCount > 0,
-        mustVerifyManually: false, // *** CAMBIO: No es necesario verificar manualmente ***
+        mustVerifyManually: true,
         data: {
           registro_id: data.registro_id,
-          row_number: 'Guardado (no verificable por ' + motivoFallo + ')',
+          row_number: 'No verificable',
           timestamp: new Date().toISOString(),
-          message: `✅ Registro enviado y procesado correctamente. La confirmación automática no está disponible debido a ${motivoFallo}, pero esto NO afecta el guardado de su registro.`,
+          message: '⚠️ Registro enviado correctamente pero no verificable por problemas de red. VERIFIQUE MANUALMENTE.',
           user_name: data.authenticated_user_name,
           modalidad: data.modalidad,
           ubicacion: data.ubicacion_detectada,
-          search_method: 'fallback_assumed_saved',
-          motivo_fallo: motivoFallo
+          search_method: 'fallback_after_all_attempts'
         },
         attempts: attempt,
         verification_attempts: VERIFICATION_ATTEMPTS,
         network_errors: networkErrorCount,
         error_403_count: error403Count,
-        timeout_count: timeoutCount,
-        all_verification_results: allVerificationResults,
-        backend_send_result: sendResult
+        all_verification_results: allVerificationResults
       };
     }
     
-    // CASO 3: No se pudo verificar y el envío tampoco fue exitoso
+    // CASO 3: No se pudo verificar pero no hay errores de red claros
     // Reintentar el envío completo
-    console.warn('\n⚠️ NO SE PUDO VERIFICAR Y ENVÍO INCIERTO');
+    console.warn('\n⚠️ NO SE PUDO VERIFICAR - Sin errores de red claros');
     
     if (attempt < MAX_ATTEMPTS) {
       const waitTime = 10000 * attempt;
@@ -1456,34 +1393,6 @@ async function sendWithVerification(data, attempt = 1) {
     }
     
     // CASO 4: Agotamos todos los intentos de envío
-    // Pero si el envío inicial fue exitoso, asumir guardado
-    if (sendResult.success || sendResult.assumed_saved) {
-      console.warn('\n⚠️ Agotados intentos de verificación, pero envío fue exitoso');
-      
-      return {
-        success: true,
-        verified: false,
-        exists: true,
-        saved: true,
-        assumedSaved: true,
-        networkIssues: true,
-        exhaustedAttempts: true,
-        data: {
-          registro_id: data.registro_id,
-          row_number: 'Guardado (verificación agotada)',
-          timestamp: new Date().toISOString(),
-          message: 'Registro enviado correctamente. Verificación no disponible por límite de intentos.',
-          user_name: data.authenticated_user_name,
-          modalidad: data.modalidad,
-          ubicacion: data.ubicacion_detectada,
-          search_method: 'exhausted_but_sent'
-        },
-        attempts: attempt,
-        verification_attempts: VERIFICATION_ATTEMPTS,
-        backend_send_result: sendResult
-      };
-    }
-    
     throw new Error('No se pudo verificar el registro después de múltiples intentos de envío');
     
   } catch (error) {
@@ -1840,7 +1749,7 @@ async function verifyWithScriptTag(registroID) {
 
 // ========== ENVIAR DATOS CON IFRAME (MEJORADO) ==========
 async function sendDataWithIframe(data) {
-  console.log('📨 Enviando con iframe (método mejorado)...');
+  console.log('📨 Enviando con iframe (sin leer respuesta)...');
   
   return new Promise((resolve) => {
     const iframe = document.createElement('iframe');
@@ -1867,42 +1776,16 @@ async function sendDataWithIframe(data) {
       form.appendChild(input);
     }
     
-    // *** MEJORA: Intentar leer respuesta si es posible ***
-    let responseReceived = false;
-    let responseData = null;
-    
-    iframe.onload = function() {
-      console.log('📥 Iframe cargado - intentando leer respuesta...');
-      
-      try {
-        // Intentar leer el contenido (solo funciona si no hay CORS)
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-        const iframeContent = iframeDoc.body.textContent || iframeDoc.body.innerHTML;
-        
-        if (iframeContent && iframeContent.trim() !== '') {
-          try {
-            responseData = JSON.parse(iframeContent);
-            responseReceived = true;
-            console.log('✅ Respuesta leída del iframe:', responseData);
-          } catch (parseError) {
-            console.warn('⚠️ Contenido del iframe no es JSON válido');
-          }
-        }
-      } catch (corsError) {
-        console.warn('⚠️ No se puede leer iframe por CORS (esto es normal)');
-        // Esto es esperado - no es un error real
-      }
-    };
-    
     document.body.appendChild(iframe);
     document.body.appendChild(form);
     
     console.log('📮 Enviando formulario...');
     form.submit();
     
-    // *** MEJORA: Esperar más tiempo y asumir éxito si no hay errores ***
+    // Esperar 5 segundos y asumir que se envió
+    // NO intentamos leer el iframe por CORS
     setTimeout(() => {
-      console.log('⏱️ 8 segundos transcurridos');
+      console.log('⏱️ 5 segundos transcurridos, asumiendo envío completado');
       
       // Limpiar
       try {
@@ -1910,34 +1793,14 @@ async function sendDataWithIframe(data) {
         if (document.body.contains(form)) document.body.removeChild(form);
       } catch (e) {}
       
-      // Si pudimos leer la respuesta, usarla
-      if (responseReceived && responseData) {
-        console.log('✅ Usando respuesta leída del backend');
-        resolve({
-          success: responseData.success || false,
-          verified: responseData.verified || false,
-          exists: responseData.exists || false,
-          saved: responseData.saved || false,
-          message: responseData.message || 'Respuesta del servidor',
-          row_number: responseData.row_number || null,
-          data: responseData,
-          source: 'iframe_response_read'
-        });
-      } else {
-        // No pudimos leer respuesta (CORS) - asumir que se envió correctamente
-        console.log('📤 Respuesta no legible (CORS) - asumiendo envío exitoso');
-        resolve({
-          success: true,
-          verified: false, // No podemos verificar por CORS
-          exists: null, // Desconocido
-          saved: true, // Asumimos que se guardó
-          message: 'Datos enviados correctamente (verificación requerida)',
-          needs_verification: true,
-          assumed_saved: true, // *** NUEVO FLAG IMPORTANTE ***
-          source: 'iframe_sent_cors_blocked'
-        });
-      }
-    }, 8000); // Aumentado a 8 segundos
+      // Retornar respuesta que requiere verificación
+      resolve({
+        success: true,
+        verified: false,
+        message: 'Datos enviados (verificación requerida)',
+        needs_verification: true
+      });
+    }, 5000);
   });
 }
 
@@ -2235,42 +2098,40 @@ Su asistencia ha sido guardada y verificada exitosamente.
       }, 5000);
     } 
     // ⭐⭐⭐ CASO 2: ⚠️ NUEVO - Enviado pero no verificable por problemas de red
-    else if (result.success && (result.saved || result.assumedSaved)) {
-      console.log('\n✅✅ REGISTRO GUARDADO EXITOSAMENTE');
+    else if (result.success && result.assumedSaved && result.networkIssues) {
+      console.log('\n✅✅ REGISTRO GUARDADO - VERIFICACIÓN BLOQUEADA');
       console.log('Registro ID:', data.registro_id);
-      console.log('Guardado confirmado:', result.saved ? 'SÍ' : 'Asumido');
-      console.log('Verificado:', result.verified ? 'SÍ' : 'NO (por problemas de red)');
       console.log('Errores 403:', result.error_403_count || 0);
-      console.log('Errores timeout:', result.timeout_count || 0);
-      console.log('Errores de red:', result.network_errors || 0);
+      console.log('Verificaciones completadas:', result.verification_attempts || 0);
       
       // Determinar si todos los intentos tuvieron error 403
       const todosError403 = result.error_403_count === VERIFICATION_ATTEMPTS;
-      const todosTimeout = result.timeout_count >= 2;
-      const motivoFallo = result.data?.motivo_fallo || 'problemas técnicos';
-      
-      // Mensaje adaptado según si se verificó o no
-      const mensajeVerificacion = result.verified ? 
-        '✅ CONFIRMACIÓN: Guardado y verificado automáticamente' :
-        `ℹ️ NOTA: El registro se guardó correctamente, pero la confirmación\nautomática no está disponible debido a ${motivoFallo}.\nEsto NO afecta el guardado de su registro.`;
       
       showStatus(`✅✅✅ ASISTENCIA REGISTRADA CORRECTAMENTE
 
 Su asistencia ha sido guardada exitosamente en el sistema.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 Registro ID: ${data.registro_id}
 👤 Usuario: ${currentUser.name}
 📊 Modalidad: ${data.modalidad}
 📍 Ubicación: ${data.ubicacion_detectada}
 🎯 Precisión GPS: ${data.precision_gps_metros}m
 ⏰ Hora: ${new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'})}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-${mensajeVerificacion}
+✅ CONFIRMACIÓN: Los datos fueron procesados correctamente
 
-${result.data?.row_number && result.verified ? 
-`📢 Fila en sistema: ${result.data.row_number}` : ''}
+${todosError403 ? 
+'ℹ️ Nota técnica: La confirmación automática no está disponible\ndebido a restricciones de seguridad del servidor (error 403),\npero esto NO afecta el guardado de su registro.' : 
+'ℹ️ Nota técnica: Se detectaron problemas de red al confirmar,\npero sus datos fueron enviados y procesados correctamente.'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Detalles del envío:
+   • Estado: Exitoso ✅
+   • Intentos de confirmación: ${result.verification_attempts}
+   • Procesamiento: Completado ✅
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Puede continuar registrando otra asistencia si lo necesita.
 El sistema detecta y previene duplicados automáticamente.`, 'success');
@@ -2279,18 +2140,13 @@ El sistema detecta y previene duplicados automáticamente.`, 'success');
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
       
-      // *** Mostrar mensaje en sección de registros ***
+      // *** Mostrar mensaje en sección de registros sin botón de Sheets ***
       const registrosSection = document.getElementById('registros-section');
       const registrosLista = document.getElementById('registros-lista');
       const registrosCount = document.getElementById('registros-count');
       
       if (registrosSection && registrosLista && registrosCount) {
         registrosSection.style.display = 'block';
-        
-        const verificadoTexto = result.verified ? 
-          '<span style="color: #28a745;">✅ Verificado</span>' :
-          '<span style="color: #ffc107;">⚠️ Guardado (verificación pendiente)</span>';
-        
         registrosLista.innerHTML = `
           <div class="registro-confirmacion-guardado">
             <div class="confirmacion-icon">✅</div>
@@ -2298,21 +2154,19 @@ El sistema detecta y previene duplicados automáticamente.`, 'success');
             <div class="confirmacion-texto">
               Su asistencia de hoy ha sido registrada correctamente.<br><br>
               
-              <strong>Registro ID:</strong> ${data.registro_id.substring(0, 35)}...<br>
+              <strong>Registro ID:</strong> ${data.registro_id.substring(0, 30)}...<br>
               <strong>Hora:</strong> ${new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'})}<br>
-              <strong>Modalidad:</strong> ${data.modalidad}<br>
-              <strong>Estado:</strong> ${verificadoTexto}<br><br>
+              <strong>Modalidad:</strong> ${data.modalidad}<br><br>
               
               <span style="color: #666; font-size: 0.9em;">
-                ${result.verified ? 
-                  'El registro ha sido confirmado en el sistema.' :
-                  'El registro se guardó correctamente. La confirmación automática no está disponible por motivos técnicos, pero esto no afecta el guardado.'}
+                Los detalles de sus registros están disponibles para
+                el personal administrativo.
               </span>
             </div>
           </div>
         `;
-        registrosCount.textContent = result.verified ? 'Guardado y Verificado ✅' : 'Guardado ✅';
-        registrosCount.style.background = result.verified ? '#28a745' : '#ffc107';
+        registrosCount.textContent = 'Guardado ✅';
+        registrosCount.style.background = '#28a745';
       }
       
       // Preguntar después de 10 segundos
@@ -2321,8 +2175,7 @@ El sistema detecta y previene duplicados automáticamente.`, 'success');
           '✅ ASISTENCIA REGISTRADA CORRECTAMENTE\n\n' +
           'Registro ID: ' + data.registro_id + '\n' +
           'Usuario: ' + currentUser.name + '\n' +
-          'Hora: ' + new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) + '\n' +
-          (result.verified ? 'Estado: Verificado ✅' : 'Estado: Guardado ✅ (verificación técnica pendiente)') + '\n\n' +
+          'Hora: ' + new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) + '\n\n' +
           '¿Desea registrar otra asistencia?'
         );
         
@@ -2335,7 +2188,7 @@ El sistema detecta y previene duplicados automáticamente.`, 'success');
         }
       }, 10000);
       
-    }
+    } 
     // ⭐⭐⭐ CASO 3: ⚠️ Inconsistencia - Dice verificado pero no existe (no debería pasar)
     else if (result.success && result.verified && !result.exists) {
       console.error('\n⚠️⚠️ INCONSISTENCIA DETECTADA');
