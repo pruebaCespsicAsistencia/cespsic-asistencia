@@ -1,13 +1,12 @@
 // ========== CONFIGURACIÓN FIREBASE PARA CESPSIC ==========
-const firebaseConfig = {
-  apiKey: "AIzaSyBINCTkXd77-SKnCAlcT1wU6d-kpEkEAHs",
-  authDomain: "cespsic-asistencias.firebaseapp.com",
-  projectId: "cespsic-asistencias",
-  storageBucket: "cespsic-asistencias.firebasestorage.app",
-  messagingSenderId: "249910813853",
-  appId: "1:249910813853:web:f0764208f9db7727046074",
-  measurementId: "G-TXEEEQGY1X"
-};
+// Este archivo se configura automáticamente desde config.js
+// NO modifiques este archivo directamente, usa config.js para cambiar ambientes
+
+// Importar configuración de ambientes
+import { CONFIG } from './config.js';
+
+// Usar la configuración del ambiente activo
+const firebaseConfig = CONFIG.FIREBASE_CONFIG;
 
 // ========== IMPORTAR MÓDULOS DE FIREBASE (CDN) ==========
 // Usamos la versión 10.7.1 que es estable y compatible
