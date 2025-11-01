@@ -21,12 +21,35 @@ import {
   firebaseSignOut 
 } from './firebase-config.js';
 
-// ========== CONFIGURACIÓN GOOGLE APPS SCRIPT (Para evidencias en Drive) ==========
-// PRODUCCIÓN
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyllBO0vTORygvLlbTeRWfNXz1_Dt1khrM2z_BUxbNM6jWqEGYDqaLnd7LJs9Fl9Q9X/exec';
+// ========================================================================================================
+// 📊 IMPORTAR SISTEMA DE LOGS Y AUDITORÍA
+// ========================================================================================================
+import { 
+  guardarAsistenciaConLogs,
+  verificarDuplicado,
+  registrarIntentoRecibido,
+  registrarIntentoFallido,
+  registrarAuditoria,
+  obtenerEstadisticasLogs
+} from './firebase-logger.js';
 
-// PRUEBAS (descomentar si usas ambiente de pruebas)
-// const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw10UgiYsuGYi16MisVfk7fx-wlGU-gUmCKTz2bZmyqys_2ku1ghZ9zzv71UncZ_sXlDg/exec';
+console.log('📊 Sistema de logs Firebase: CARGADO');
+// ========================================================================================================
+// 🔧 CONFIGURACIÓN - Importada desde config.js
+// ========================================================================================================
+import { CONFIG, AMBIENTE_ACTUAL } from './config.js';
+
+// URL del backend de Google Apps Script (para evidencias en Drive)
+const GOOGLE_SCRIPT_URL = CONFIG.GOOGLE_SCRIPT_URL;
+
+// Logs de confirmación
+console.log('='.repeat(70));
+console.log('🔧 CONFIGURACIÓN FRONTEND CARGADA');
+console.log('='.repeat(70));
+console.log('🎯 Ambiente Activo:', AMBIENTE_ACTUAL);
+console.log('📍 Google Script URL:', GOOGLE_SCRIPT_URL.substring(0, 50) + '...');
+console.log('🔥 Firebase Project:', CONFIG.FIREBASE_CONFIG.projectId);
+console.log('='.repeat(70));
 
 // ========== DETECCIÓN DE DISPOSITIVO ==========
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || 
@@ -388,11 +411,12 @@ async function handleSubmit(e) {
         
         console.log('📊 Datos preparados:', asistenciaData);
         
-        // 3. 🔥 GUARDAR EN FIRESTORE
-        console.log('🔥 Guardando en Firestore...');
-        const docRef = await addDoc(collection(db, 'asistencias'), asistenciaData);
+        // 3. 🔥 GUARDAR EN FIRESTORE CON SISTEMA DE LOGS COMPLETO
+        console.log('🔥 Guardando en Firestore con logs y validaciones...');
+        const resultado = await guardarAsistenciaConLogs(asistenciaData);
         
-        console.log('✅✅✅ GUARDADO EXITOSO - Firestore ID:', docRef.id);
+        console.log('✅✅✅ GUARDADO EXITOSO - Firestore ID:', resultado.docId);
+        const docRef = { id: resultado.docId }; // Para compatibilidad con código existente
         
         // 4. Mostrar confirmación
         const hora = new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'});
@@ -432,16 +456,34 @@ Hora: ${hora}
     } catch (error) {
         console.error('❌ Error guardando en Firebase:', error);
         
-        showStatus(`❌ ERROR: No se pudo guardar
-
-Error: ${error.message}
-
-Por favor:
-1. Verifique su conexión a Internet
-2. Verifique que todos los campos estén llenos correctamente
-3. Intente nuevamente
-
-Si el problema persiste, contacte al administrador.`, 'error');
+        // Determinar si es error de duplicado
+        const esDuplicado = error.message.includes('DUPLICADO');
+        
+        let mensajeError = '';
+        
+        if (esDuplicado) {
+            // Error de duplicado - mensaje específico
+            mensajeError = `⚠️ REGISTRO DUPLICADO
+    
+    ${error.message}
+    
+    Este registro ya fue guardado anteriormente.
+    No es necesario volver a registrarlo.`;
+        } else {
+            // Otros errores
+            mensajeError = `❌ ERROR: No se pudo guardar
+    
+    Error: ${error.message}
+    
+    Por favor:
+    1. Verifique su conexión a Internet
+    2. Verifique que todos los campos estén llenos correctamente
+    3. Intente nuevamente
+    
+    Si el problema persiste, contacte al administrador.`;
+        }
+        
+        showStatus(mensajeError, esDuplicado ? 'warning' : 'error');
         
         submitBtn.disabled = false;
         submitBtn.textContent = originalText;
