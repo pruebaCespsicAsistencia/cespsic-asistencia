@@ -22,7 +22,7 @@ import {
 } from './firebase-config.js';
 
 // ========================================================================================================
-// ðŸ“Š IMPORTAR SISTEMA DE LOGS Y AUDITORÍA
+// 📊 IMPORTAR SISTEMA DE LOGS Y AUDITORÍA
 // ========================================================================================================
 import { 
   guardarAsistenciaConLogs,
@@ -33,9 +33,9 @@ import {
   obtenerEstadisticasLogs
 } from './firebase-logger.js';
 
-console.log('ðŸ“Š Sistema de logs Firebase: CARGADO');
+console.log('📊 Sistema de logs Firebase: CARGADO');
 // ========================================================================================================
-// ðŸ”§ CONFIGURACIÍ“N - Importada desde config.js
+// 🔧 CONFIGURACIÓN - Importada desde config.js
 // ========================================================================================================
 import { CONFIG, AMBIENTE_ACTUAL } from './config.js';
 
@@ -44,14 +44,14 @@ const GOOGLE_SCRIPT_URL = CONFIG.GOOGLE_SCRIPT_URL;
 
 // Logs de confirmación
 console.log('='.repeat(70));
-console.log('ðŸ”§ CONFIGURACIÍ“N FRONTEND CARGADA');
+console.log('🔧 CONFIGURACIÓN FRONTEND CARGADA');
 console.log('='.repeat(70));
 console.log('🎯 Ambiente Activo:', AMBIENTE_ACTUAL);
-console.log('ðŸ“ Google Script URL:', GOOGLE_SCRIPT_URL.substring(0, 50) + '...');
-console.log('ðŸ”¥ Firebase Project:', CONFIG.FIREBASE_CONFIG.projectId);
+console.log('📍 Google Script URL:', GOOGLE_SCRIPT_URL.substring(0, 50) + '...');
+console.log('🔥 Firebase Project:', CONFIG.FIREBASE_CONFIG.projectId);
 console.log('='.repeat(70));
 
-// ========== DETECCIÍ“N DE DISPOSITIVO ==========
+// ========== DETECCIÓN DE DISPOSITIVO ==========
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || 
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
@@ -102,13 +102,13 @@ const ubicacionesUAS = [
     { name: "Universidad Autónoma de Sinaloa - Campus Central", lat: 24.7990, lng: -107.3950, radius: 200 }
 ];
 
-console.log(`ðŸ“± Dispositivo: ${deviceType}`);
-console.log(`ðŸ’» Es Desktop: ${isDesktop ? 'Sí' : 'No'}`);
-console.log(`ðŸ“± Es iOS: ${isIOS ? 'Sí' : 'No'}`);
-console.log(`ðŸŒ Navegador: ${isSafari ? 'Safari' : 'Otro'}`);
-console.log(`ðŸ”¥ Firebase: Conectado`);
+console.log(`📱 Dispositivo: ${deviceType}`);
+console.log(`💻 Es Desktop: ${isDesktop ? 'Sí' : 'No'}`);
+console.log(`📱 Es iOS: ${isIOS ? 'Sí' : 'No'}`);
+console.log(`🌐 Navegador: ${isSafari ? 'Safari' : 'Otro'}`);
+console.log(`🔥 Firebase: Conectado`);
 
-// ========== FUNCIÍ“N: Información del Dispositivo ==========
+// ========== FUNCIÓN: Información del Dispositivo ==========
 function getDeviceInfo() {
     return {
         type: deviceType,
@@ -125,16 +125,16 @@ function getDeviceInfo() {
     };
 }
 
-// ========== INICIALIZACIÍ“N ==========
+// ========== INICIALIZACIÓN ==========
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('=== INFORMACIÍ“N DEL DISPOSITIVO ===');
+    console.log('=== INFORMACIÓN DEL DISPOSITIVO ===');
     console.log('Tipo:', deviceType);
     console.log('Es Desktop:', isDesktop);
     console.log('Precisión requerida:', REQUIRED_ACCURACY + 'm');
     console.log('Precisión óptima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
     
     if (isDesktop) {
-        console.log('âš ï¸ MODO DESKTOP ACTIVADO');
+        console.log('⚠️ MODO DESKTOP ACTIVADO');
         console.log('   Los ordenadores no tienen GPS integrado.');
         console.log('   La ubicación se obtiene por IP/WiFi (menor precisión).');
         console.log('   Precisión aceptada: hasta ' + REQUIRED_ACCURACY + 'm');
@@ -186,19 +186,19 @@ function showDesktopWarning() {
             line-height: 1.6;
         `;
         desktopWarning.innerHTML = `
-            <strong>ðŸ’» Dispositivo Desktop Detectado (${deviceType})</strong><br>
+            <strong>💻 Dispositivo Desktop Detectado (${deviceType})</strong><br>
             Los ordenadores no tienen GPS integrado y usan ubicación por IP/WiFi.<br>
             <strong>Precisión esperada:</strong> 100-1000 metros (vs 5-50m en móviles)<br>
-            ℹ️ El sistema aceptará precisiones de hasta ${REQUIRED_ACCURACY} metros.
+            ℹ️ El sistema aceptará precisiones de hasta ${REQUIRED_ACCURACY} metros.
         `;
         authSection.appendChild(desktopWarning);
     }
 }
 
-// ========== AUTENTICACIÍ“N CON FIREBASE ==========
+// ========== AUTENTICACIÓN CON FIREBASE ==========
 async function requestAuthentication() {
     try {
-        console.log('ðŸ” Iniciando autenticación con Firebase...');
+        console.log('🔐 Iniciando autenticación con Firebase...');
         
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({
@@ -225,13 +225,13 @@ async function requestAuthentication() {
         // Cargar registros del día
         setTimeout(() => mostrarRegistrosDelDia(), 2000);
         
-        showStatus(`✅ Â¡Bienvenido ${currentUser.name}!`, 'success');
+        showStatus(`✅ ¡Bienvenido ${currentUser.name}!`, 'success');
         setTimeout(() => hideStatus(), 3000);
         
         console.log('✅ Autenticación exitosa:', currentUser.email);
         
     } catch (error) {
-        console.error('âŒ Error en autenticación:', error);
+        console.error('❌ Error en autenticación:', error);
         showStatus('Error en la autenticación: ' + error.message, 'error');
     }
 }
@@ -254,7 +254,7 @@ function updateAuthenticationUI() {
         signinContainer.style.display = 'none';
     } else {
         authSection.classList.remove('authenticated');
-        authTitle.textContent = 'ðŸ”’ Autenticación Requerida';
+        authTitle.textContent = '🔒 Autenticación Requerida';
         authTitle.classList.remove('authenticated');
         userInfo.classList.remove('show');
         signinContainer.style.display = 'block';
@@ -307,22 +307,22 @@ async function handleSubmit(e) {
     e.preventDefault();
     
     console.log('\n' + '='.repeat(70));
-    console.log('ðŸ”¥ GUARDANDO EN FIREBASE FIRESTORE');
+    console.log('🔥 GUARDANDO EN FIREBASE FIRESTORE');
     console.log('='.repeat(70));
     
     // Validaciones
     if (!isAuthenticated || !currentUser) {
-        showStatus('âŒ Debe autenticarse con Google', 'error');
+        showStatus('❌ Debe autenticarse con Google', 'error');
         return;
     }
     
     if (!locationValid || !currentLocation) {
-        showStatus('âŒ Ubicación GPS requerida', 'error');
+        showStatus('❌ Ubicación GPS requerida', 'error');
         return;
     }
     
     if (currentLocation.accuracy > REQUIRED_ACCURACY) {
-        showStatus(`âŒ Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m`, 'error');
+        showStatus(`❌ Precisión GPS insuficiente: ${Math.round(currentLocation.accuracy)}m`, 'error');
         return;
     }
     
@@ -333,11 +333,11 @@ async function handleSubmit(e) {
     const submitBtn = document.querySelector('.submit-btn');
     const originalText = submitBtn.textContent;
     submitBtn.disabled = true;
-    submitBtn.textContent = 'â³ Guardando en Firebase...';
+    submitBtn.textContent = '⏳ Guardando en Firebase...';
     
     try {
         // 1. Subir evidencias a Google Drive
-        console.log('ðŸ“¸ Procesando evidencias...');
+        console.log('📸 Procesando evidencias...');
         const evidenciasUrls = await uploadEvidenciasToGoogleDrive();
         
         // 2. Preparar datos
@@ -410,10 +410,10 @@ async function handleSubmit(e) {
             version: '2.0 Firebase'
         };
         
-        console.log('ðŸ“Š Datos preparados:', asistenciaData);
+        console.log('📊 Datos preparados:', asistenciaData);
         
-        // 3. ðŸ”¥ GUARDAR EN FIRESTORE CON SISTEMA DE LOGS COMPLETO
-        console.log('ðŸ”¥ Guardando en Firestore con logs y validaciones...');
+        // 3. 🔥 GUARDAR EN FIRESTORE CON SISTEMA DE LOGS COMPLETO
+        console.log('🔥 Guardando en Firestore con logs y validaciones...');
         const resultado = await guardarAsistenciaConLogs(asistenciaData);
         
         console.log('✅✅✅ GUARDADO EXITOSO - Firestore ID:', resultado.docId);
@@ -430,11 +430,11 @@ Modalidad: ${asistenciaData.modalidad}
 Ubicación: ${asistenciaData.ubicacion.lugar}
 Hora: ${hora}
 
-â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ Guardado instantáneo en Firebase
-ðŸ“Š Firestore Document ID: ${docRef.id}
-âš¡ Sin necesidad de verificación adicional
-â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”`, 'success');
+📊 Firestore Document ID: ${docRef.id}
+⚡ Sin necesidad de verificación adicional
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
         
         // 5. Actualizar registros del día
         setTimeout(() => mostrarRegistrosDelDia(), 1000);
@@ -445,7 +445,7 @@ Hora: ${hora}
         
         // 7. Preguntar si desea continuar
         setTimeout(() => {
-            if (confirm(`✅ ASISTENCIA REGISTRADA CORRECTAMENTE\n\nRegistro ID: ${registroID}\nUsuario: ${currentUser.name}\nHora: ${hora}\n\nÂ¿Desea registrar otra asistencia?`)) {
+            if (confirm(`✅ ASISTENCIA REGISTRADA CORRECTAMENTE\n\nRegistro ID: ${registroID}\nUsuario: ${currentUser.name}\nHora: ${hora}\n\n¿Desea registrar otra asistencia?`)) {
                 resetFormOnly();
                 getCurrentLocation();
                 hideStatus();
@@ -455,7 +455,7 @@ Hora: ${hora}
         }, 5000);
         
     } catch (error) {
-        console.error('âŒ Error guardando en Firebase:', error);
+        console.error('❌ Error guardando en Firebase:', error);
         
         // Determinar si es error de duplicado
         const esDuplicado = error.message.includes('DUPLICADO');
@@ -464,7 +464,7 @@ Hora: ${hora}
         
         if (esDuplicado) {
             // Error de duplicado - mensaje específico
-            mensajeError = `âš ï¸ REGISTRO DUPLICADO
+            mensajeError = `⚠️ REGISTRO DUPLICADO
     
     ${error.message}
     
@@ -472,7 +472,7 @@ Hora: ${hora}
     No es necesario volver a registrarlo.`;
         } else {
             // Otros errores
-            mensajeError = `âŒ ERROR: No se pudo guardar
+            mensajeError = `❌ ERROR: No se pudo guardar
     
     Error: ${error.message}
     
@@ -497,18 +497,18 @@ function generateRegistroID() {
     const random = Math.random().toString(36).substring(2, 10);
     const registroID = `REG_${timestamp}_${email}_${random}`.replace(/[^a-zA-Z0-9_]/g, '');
     
-    console.log('ðŸ“‹ Registro ID generado:', registroID);
+    console.log('📋 Registro ID generado:', registroID);
     return registroID;
 }
 
 // ========== SUBIR EVIDENCIAS A GOOGLE DRIVE ==========
 async function uploadEvidenciasToGoogleDrive() {
     if (selectedFiles.length === 0) {
-        console.log('ℹ️ No hay evidencias para subir');
+        console.log('ℹ️ No hay evidencias para subir');
         return [];
     }
     
-    console.log(`ðŸ“¤ Subiendo ${selectedFiles.length} evidencia(s) a Google Drive...`);
+    console.log(`📤 Subiendo ${selectedFiles.length} evidencia(s) a Google Drive...`);
     
     const tipoRegistro = document.getElementById('tipo_registro').value || 'sin_tipo';
     const evidenciasInfo = [];
@@ -522,7 +522,7 @@ async function uploadEvidenciasToGoogleDrive() {
         const fullFileName = `${fileName}.${extension}`;
         
         try {
-            console.log(`ðŸ“¤ [${i+1}/${selectedFiles.length}] Procesando: ${file.name}`);
+            console.log(`📤 [${i+1}/${selectedFiles.length}] Procesando: ${file.name}`);
             showEvidenciasStatus(`Subiendo imagen ${i + 1}/${selectedFiles.length}: ${file.name}`, 'loading');
             
             if (!file || !file.type || file.size === 0) {
@@ -535,7 +535,7 @@ async function uploadEvidenciasToGoogleDrive() {
                 base64Data = await fileToBase64(file);
                 console.log(`✅ Conversión Base64 exitosa: ${(base64Data.length/1024).toFixed(1)}KB`);
             } catch (b64Error) {
-                console.error(`âŒ Error en conversión Base64:`, b64Error);
+                console.error(`❌ Error en conversión Base64:`, b64Error);
                 throw new Error(`Error al procesar la imagen: ${b64Error.message}`);
             }
             
@@ -550,7 +550,7 @@ async function uploadEvidenciasToGoogleDrive() {
                 timestamp: new Date().toISOString()
             });
             
-            console.log(`ðŸš€ Enviando archivo ${i + 1} a Google Drive: ${fullFileName}`);
+            console.log(`🚀 Enviando archivo ${i + 1} a Google Drive: ${fullFileName}`);
             
             // Subir a Google Drive usando Google Apps Script existente
             const uploadResult = await Promise.race([
@@ -582,7 +582,7 @@ async function uploadEvidenciasToGoogleDrive() {
             }
             
         } catch (error) {
-            console.error(`âŒ Error subiendo archivo ${file.name}:`, error);
+            console.error(`❌ Error subiendo archivo ${file.name}:`, error);
             
             evidenciasInfo.push({
                 fileName: fullFileName,
@@ -596,7 +596,7 @@ async function uploadEvidenciasToGoogleDrive() {
             });
             
             showEvidenciasStatus(
-                `âš ï¸ Error en ${file.name}: ${error.message}`, 
+                `⚠️ Error en ${file.name}: ${error.message}`, 
                 'warning'
             );
             
@@ -611,10 +611,10 @@ async function uploadEvidenciasToGoogleDrive() {
     const successCount = evidenciasInfo.filter(e => e.uploadStatus === 'SUCCESS').length;
     const failCount = evidenciasInfo.filter(e => e.uploadStatus === 'FAILED').length;
     
-    console.log(`\nðŸ“Š RESUMEN DE SUBIDA:`);
+    console.log(`\n📊 RESUMEN DE SUBIDA:`);
     console.log(`   ✅ Exitosas: ${successCount}`);
-    console.log(`   âŒ Fallidas: ${failCount}`);
-    console.log(`   ðŸ“ Total: ${evidenciasInfo.length}`);
+    console.log(`   ❌ Fallidas: ${failCount}`);
+    console.log(`   📁 Total: ${evidenciasInfo.length}`);
     
     if (successCount > 0) {
         showEvidenciasStatus(
@@ -623,7 +623,7 @@ async function uploadEvidenciasToGoogleDrive() {
         );
     } else if (failCount > 0) {
         showEvidenciasStatus(
-            `âŒ No se pudo subir ninguna evidencia. Errores: ${evidenciasInfo.map(e => e.error).join(', ')}`, 
+            `❌ No se pudo subir ninguna evidencia. Errores: ${evidenciasInfo.map(e => e.error).join(', ')}`, 
             'error'
         );
     }
@@ -682,7 +682,7 @@ function fileToBase64(file) {
             return;
         }
         
-        console.log(`ðŸ“„ Convirtiendo ${file.name} a Base64...`);
+        console.log(`📄 Convirtiendo ${file.name} a Base64...`);
         
         const reader = new FileReader();
         
@@ -703,49 +703,49 @@ function fileToBase64(file) {
                 console.log(`✅ Base64 generado: ${(base64.length/1024).toFixed(1)}KB`);
                 resolve(base64);
             } catch (error) {
-                console.error('âŒ Error procesando Base64:', error);
+                console.error('❌ Error procesando Base64:', error);
                 reject(new Error(`Error al procesar: ${error.message}`));
             }
         };
         
         reader.onerror = (error) => {
-            console.error('âŒ Error leyendo archivo:', error);
+            console.error('❌ Error leyendo archivo:', error);
             reject(new Error(`Error al leer archivo: ${file.name}`));
         };
         
         reader.onabort = () => {
-            console.error('âŒ Lectura abortada');
+            console.error('❌ Lectura abortada');
             reject(new Error('Lectura de archivo abortada'));
         };
         
         try {
             reader.readAsDataURL(file);
         } catch (error) {
-            console.error('âŒ Error iniciando lectura:', error);
+            console.error('❌ Error iniciando lectura:', error);
             reject(new Error(`No se pudo leer el archivo: ${error.message}`));
         }
     });
 }
 
-// ========== OBTENER REGISTROS DEL DÍA DESDE FIRESTORE ==========
+// ========== OBTENER REGISTROS DEL DÍA DESDE FIRESTORE ==========
 async function mostrarRegistrosDelDia() {
     const registrosSection = document.getElementById('registros-section');
     const registrosLista = document.getElementById('registros-lista');
     const registrosCount = document.getElementById('registros-count');
     
     if (!registrosSection || !registrosLista) {
-        console.warn('âš ï¸ Sección de registros no encontrada');
+        console.warn('⚠️ Sección de registros no encontrada');
         return;
     }
     
     if (!isAuthenticated || !currentUser) {
-        console.warn('âš ï¸ Usuario no autenticado');
+        console.warn('⚠️ Usuario no autenticado');
         return;
     }
     
     // Mostrar loading
     registrosSection.style.display = 'block';
-    registrosLista.innerHTML = '<div class="registro-loading">ðŸ“Š Cargando registros desde Firebase...</div>';
+    registrosLista.innerHTML = '<div class="registro-loading">📊 Cargando registros desde Firebase...</div>';
     registrosCount.textContent = 'Cargando...';
     registrosCount.style.background = '#6c757d';
     
@@ -757,9 +757,9 @@ async function mostrarRegistrosDelDia() {
         const dia = String(hoy.getDate()).padStart(2, '0');
         const fechaHoy = `${año}-${mes}-${dia}`;
         
-        console.log('ðŸ“Š Cargando registros de:', fechaHoy, 'para:', currentUser.email);
+        console.log('📊 Cargando registros de:', fechaHoy, 'para:', currentUser.email);
         
-        // Query a Firestore (sin orderBy para evitar requerir índice compuesto)
+        // Query a Firestore
         const q = query(
             collection(db, 'asistencias'),
             where('email', '==', currentUser.email),
@@ -790,7 +790,7 @@ async function mostrarRegistrosDelDia() {
         if (registros.length === 0) {
             registrosLista.innerHTML = `
                 <div class="registro-vacio">
-                    <div style="font-size: 2em; margin-bottom: 10px;">ðŸ“</div>
+                    <div style="font-size: 2em; margin-bottom: 10px;">📝</div>
                     <div><strong>No hay registros para hoy</strong></div>
                     <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
                         Cuando registre su primera asistencia aparecerá aquí
@@ -808,8 +808,8 @@ async function mostrarRegistrosDelDia() {
         let html = '';
         registros.forEach((reg, index) => {
             const tipoIcon = {
-                'entrada': 'ðŸ”µ',
-                'salida': 'ðŸ”´',
+                'entrada': '🔵',
+                'salida': '🔴',
                 'permiso': '🟡',
                 'otro': '⚪'
             };
@@ -821,19 +821,19 @@ async function mostrarRegistrosDelDia() {
                     <div class="registro-header-item">
                         <span class="registro-numero">#${index + 1}</span>
                         <span class="registro-tipo">${icon} ${reg.tipo_registro || 'N/A'}</span>
-                        <span class="registro-hora">â° ${reg.hora || 'N/A'}</span>
+                        <span class="registro-hora">⏰ ${reg.hora || 'N/A'}</span>
                     </div>
                     <div class="registro-body">
                         <div class="registro-detalle">
-                            <strong>ðŸ“‹ Modalidad:</strong> ${reg.modalidad || 'N/A'}
+                            <strong>📋 Modalidad:</strong> ${reg.modalidad || 'N/A'}
                         </div>
                         <div class="registro-detalle">
-                            <strong>ðŸ“ Ubicación:</strong> ${(reg.ubicacion?.lugar || 'N/A').substring(0, 50)}${reg.ubicacion?.lugar && reg.ubicacion.lugar.length > 50 ? '...' : ''}
+                            <strong>📍 Ubicación:</strong> ${(reg.ubicacion?.lugar || 'N/A').substring(0, 50)}${reg.ubicacion?.lugar && reg.ubicacion.lugar.length > 50 ? '...' : ''}
                         </div>
                         <div class="registro-detalle">
                             <strong>🎯 Precisión:</strong> ${reg.ubicacion?.precision_metros || 0} metros
                         </div>
-                        ${reg.total_evidencias > 0 ? `<div class="registro-detalle"><strong>ðŸ“¸ Evidencias:</strong> ${reg.total_evidencias}</div>` : ''}
+                        ${reg.total_evidencias > 0 ? `<div class="registro-detalle"><strong>📸 Evidencias:</strong> ${reg.total_evidencias}</div>` : ''}
                     </div>
                 </div>
             `;
@@ -843,16 +843,16 @@ async function mostrarRegistrosDelDia() {
         console.log('✅ Registros mostrados en pantalla');
         
     } catch (error) {
-        console.error('âŒ Error cargando registros:', error);
+        console.error('❌ Error cargando registros:', error);
         
         registrosLista.innerHTML = `
             <div class="registro-error">
-                <div class="error-icon">âš ï¸</div>
+                <div class="error-icon">⚠️</div>
                 <div class="error-text">
                     Error cargando registros: ${error.message}
                 </div>
                 <button class="btn-retry-registros" onclick="window.reintentarCargarRegistros()">
-                    ðŸ”„ Reintentar
+                    🔄 Reintentar
                 </button>
             </div>
         `;
@@ -919,7 +919,7 @@ function validateConditionalFields() {
         const sumaGrupos = ninos + adolescentes + adultos + mayores + familia;
         
         if (sumaGrupos !== intervenciones) {
-            showStatus(`Error: Total intervenciones (${intervenciones}) â‰  suma grupos (${sumaGrupos})`, 'error');
+            showStatus(`Error: Total intervenciones (${intervenciones}) ≠ suma grupos (${sumaGrupos})`, 'error');
             return false;
         }
     }
@@ -973,15 +973,15 @@ function updateSubmitButton() {
     
     if (!isAuthenticated) {
         submitBtn.disabled = true;
-        submitBtn.textContent = 'ðŸ”’ Autentíquese primero';
+        submitBtn.textContent = '🔒 Autentíquese primero';
         submitBtn.style.background = '#6c757d';
     } else if (locationValid) {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'ðŸ“‹ Registrar Asistencia';
+        submitBtn.textContent = '📋 Registrar Asistencia';
         submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
     } else {
         submitBtn.disabled = true;
-        submitBtn.textContent = 'âš ï¸ Ubicación GPS requerida';
+        submitBtn.textContent = '⚠️ Ubicación GPS requerida';
         submitBtn.style.background = '#6c757d';
     }
 }
@@ -1023,7 +1023,7 @@ function setupEvidenciasHandlers() {
 }
 
 function handleIOSFileSelection(files) {
-    console.log(`ðŸ“± iOS: Procesando ${files.length} archivo(s)...`);
+    console.log(`📱 iOS: Procesando ${files.length} archivo(s)...`);
     
     const fileArray = Array.from(files);
     const validFiles = [];
@@ -1122,7 +1122,7 @@ function addFilePreview(file, index) {
                 ${file.name.length > 15 ? file.name.substring(0, 15) + '...' : file.name}<br>
                 <small>${(file.size / 1024).toFixed(1)} KB</small>
             </div>
-            <button type="button" class="evidencia-remove" onclick="window.removeFile(${index})">Í—</button>
+            <button type="button" class="evidencia-remove" onclick="window.removeFile(${index})">×</button>
         `;
     };
     reader.readAsDataURL(file);
@@ -1155,7 +1155,7 @@ function updateFileInput() {
         selectedFiles.forEach(file => dt.items.add(file));
         input.files = dt.files;
     } catch (error) {
-        console.warn('âš ï¸ Error actualizando input.files:', error);
+        console.warn('⚠️ Error actualizando input.files:', error);
     }
 }
 
@@ -1176,7 +1176,7 @@ function resetEvidenciasSection() {
     document.getElementById('evidencias-status').style.display = 'none';
 }
 
-// ========== GEOLOCALIZACIÍ“N ==========
+// ========== GEOLOCALIZACIÓN ==========
 function getCurrentLocation() {
     if (!isAuthenticated) {
         updateLocationStatus('error', 'Autenticación requerida', '');
@@ -1213,7 +1213,7 @@ function getCurrentLocation() {
             document.getElementById('latitude').value = currentLocation.latitude;
             document.getElementById('longitude').value = currentLocation.longitude;
             
-            console.log(`ðŸ“ Ubicación obtenida - Precisión: ${Math.round(currentLocation.accuracy)}m (límite: ${REQUIRED_ACCURACY}m)`);
+            console.log(`📍 Ubicación obtenida - Precisión: ${Math.round(currentLocation.accuracy)}m (límite: ${REQUIRED_ACCURACY}m)`);
             
             if (currentLocation.accuracy <= REQUIRED_ACCURACY) {
                 locationValid = true;
@@ -1295,7 +1295,7 @@ function getCurrentLocation() {
 
 function updateLocationStatus(type, message, description) {
     const statusDiv = document.getElementById('location_status_display');
-    const icons = { loading: 'ðŸŒ', success: '✅', warning: 'âš ï¸', error: 'âŒ' };
+    const icons = { loading: '🌍', success: '✅', warning: '⚠️', error: '❌' };
     
     statusDiv.className = `location-status ${type}`;
     statusDiv.innerHTML = `${icons[type]} <strong>${message}</strong>${description ? '<br>' + description : ''}`;
@@ -1417,15 +1417,15 @@ function actualizarUbicacionEspecifica(direccionData) {
 }
 
 function calcularDistancia(lat1, lng1, lat2, lng2) {
-    const R = 6371e3; // Radio de la Tierra en metros
-    const phi1 = lat1 * Math.PI/180;
-    const phi2 = lat2 * Math.PI/180;
-    const deltaPhi = (lat2-lat1) * Math.PI/180;
-    const deltaLambda = (lng2-lng1) * Math.PI/180;
+    const R = 6371e3;
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lng2-lng1) * Math.PI/180;
 
-    const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
-            Math.cos(phi1) * Math.cos(phi2) *
-            Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
     return R * c;
@@ -1534,65 +1534,24 @@ window.signOut = signOut;
 
 // ========== LOG FINAL ==========
 console.log('✅ Script Firebase cargado completamente');
-console.log('ðŸ”¥ Firebase Firestore: Conectado');
-console.log('ðŸ“ Google Drive: Para evidencias');
+console.log('🔥 Firebase Firestore: Conectado');
+console.log('📁 Google Drive: Para evidencias');
 console.log('🎯 Versión: 2.0 Firebase');
-console.log('ðŸ“‹ Funciones disponibles:');
+console.log('📋 Funciones disponibles:');
 console.log('   - requestAuthentication()');
 console.log('   - signOut()');
 console.log('   - mostrarRegistrosDelDia()');
 console.log('='.repeat(70));
 
-// ========== FIX: Limpiar mensaje y actualizar botón periódicamente ==========
+// ========== FIX: Actualizar botón periódicamente ==========
 setInterval(() => {
-    const submitBtn = document.getElementById('submit_btn');
-    const statusDiv = document.getElementById('status');
-    
-    if (!submitBtn) return;
-    
-    // CASO 1: Autenticado Y ubicación válida ✅
     if (isAuthenticated && locationValid) {
-        // Habilitar botón si está deshabilitado
-        if (submitBtn.disabled) {
+        const submitBtn = document.getElementById('submit_btn');
+        if (submitBtn && submitBtn.disabled) {
             console.log('🔧 Auto-fix: Habilitando botón...');
             submitBtn.disabled = false;
             submitBtn.textContent = '📋 Registrar Asistencia';
             submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
-        }
-        
-        // Ocultar cualquier mensaje de error
-        if (statusDiv && statusDiv.style.display !== 'none' && statusDiv.className.includes('error')) {
-            console.log('🔧 Auto-fix: Ocultando mensaje de error...');
-            hideStatus();
-        }
-    }
-    // CASO 2: Autenticado PERO sin ubicación válida ⚠️
-    else if (isAuthenticated && !locationValid) {
-        // El botón debe estar deshabilitado con mensaje de ubicación
-        if (!submitBtn.disabled || !submitBtn.textContent.includes('Ubicación')) {
-            console.log('🔧 Auto-fix: Actualizando mensaje a "Ubicación GPS requerida"...');
-            submitBtn.disabled = true;
-            submitBtn.textContent = '⚠️ Ubicación GPS requerida';
-            submitBtn.style.background = '#6c757d';
-        }
-        
-        // Si hay un mensaje de "Autentíquese primero", cambiarlo
-        if (statusDiv && statusDiv.style.display !== 'none' && 
-            (statusDiv.textContent.includes('Autentíquese') || statusDiv.textContent.includes('autenticarse'))) {
-            console.log('🔧 Auto-fix: Cambiando mensaje a "Esperando ubicación GPS"...');
-            hideStatus();
-            // Opcionalmente podrías mostrar un mensaje de info en lugar de error
-            // showStatus('⏳ Esperando ubicación GPS válida...', 'warning');
-        }
-    }
-    // CASO 3: NO autenticado ❌
-    else if (!isAuthenticated) {
-        // El botón debe estar deshabilitado con mensaje de autenticación
-        if (!submitBtn.disabled || !submitBtn.textContent.includes('Autentíquese')) {
-            console.log('🔧 Auto-fix: Usuario no autenticado...');
-            submitBtn.disabled = true;
-            submitBtn.textContent = '🔒 Autentíquese primero';
-            submitBtn.style.background = '#6c757d';
         }
     }
 }, 1000);
