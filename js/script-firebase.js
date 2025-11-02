@@ -263,6 +263,7 @@ function updateAuthenticationUI() {
 
 function enableForm() {
     document.getElementById('form-container').classList.add('authenticated');
+    hideStatus(); // Limpiar cualquier mensaje de error previo
 }
 
 function disableForm() {
