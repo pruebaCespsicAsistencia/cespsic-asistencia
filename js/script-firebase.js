@@ -762,8 +762,7 @@ async function mostrarRegistrosDelDia() {
         const q = query(
             collection(db, 'asistencias'),
             where('email', '==', currentUser.email),
-            where('fecha', '==', fechaHoy),
-            orderBy('timestamp', 'desc')
+            where('fecha', '==', fechaHoy)
         );
         
         const querySnapshot = await getDocs(q);
@@ -775,6 +774,13 @@ async function mostrarRegistrosDelDia() {
                 id: documento.id,
                 ...data
             });
+        });
+        
+        // Ordenar en el cliente
+        registros.sort((a, b) => {
+            const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : new Date(a.timestamp).getTime();
+            const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : new Date(b.timestamp).getTime();
+            return timeB - timeA; // Descendente (más reciente primero)
         });
         
         console.log(`✅ ${registros.length} registro(s) encontrado(s)`);
