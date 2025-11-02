@@ -1531,6 +1531,17 @@ function setupEventListeners() {
 window.requestAuthentication = requestAuthentication;
 window.signOut = signOut;
 
+// ========== LOG FINAL ==========
+console.log('✅ Script Firebase cargado completamente');
+console.log('🔥 Firebase Firestore: Conectado');
+console.log('📁 Google Drive: Para evidencias');
+console.log('🎯 Versión: 2.0 Firebase');
+console.log('📋 Funciones disponibles:');
+console.log('   - requestAuthentication()');
+console.log('   - signOut()');
+console.log('   - mostrarRegistrosDelDia()');
+console.log('='.repeat(70));
+
 // ========== FIX: Actualizar botón periódicamente ==========
 setInterval(() => {
     if (isAuthenticated && locationValid) {
@@ -1543,14 +1554,3 @@ setInterval(() => {
         }
     }
 }, 1000);
-
-// ========== LOG FINAL ==========
-console.log('✅ Script Firebase cargado completamente');
-console.log('🔥 Firebase Firestore: Conectado');
-console.log('📁 Google Drive: Para evidencias');
-console.log('🎯 Versión: 2.0 Firebase');
-console.log('📋 Funciones disponibles:');
-console.log('   - requestAuthentication()');
-console.log('   - signOut()');
-console.log('   - mostrarRegistrosDelDia()');
-console.log('='.repeat(70));
