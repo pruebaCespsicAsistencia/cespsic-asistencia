@@ -1531,6 +1531,19 @@ function setupEventListeners() {
 window.requestAuthentication = requestAuthentication;
 window.signOut = signOut;
 
+// ========== FIX: Actualizar botón periódicamente ==========
+setInterval(() => {
+    if (isAuthenticated && locationValid) {
+        const submitBtn = document.getElementById('submit_btn');
+        if (submitBtn && submitBtn.disabled) {
+            console.log('🔧 Auto-fix: Habilitando botón...');
+            submitBtn.disabled = false;
+            submitBtn.textContent = '📋 Registrar Asistencia';
+            submitBtn.style.background = 'linear-gradient(45deg, #667eea, #764ba2)';
+        }
+    }
+}, 1000);
+
 // ========== LOG FINAL ==========
 console.log('✅ Script Firebase cargado completamente');
 console.log('🔥 Firebase Firestore: Conectado');
