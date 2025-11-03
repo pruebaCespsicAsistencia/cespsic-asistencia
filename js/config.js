@@ -40,13 +40,13 @@ const AMBIENTES = {
     
     // Firebase (misma configuración que pruebas, mismo proyecto)
     FIREBASE_CONFIG: {
-      apiKey: "AIzaSyBINCTkXd77-SKnCAlcT1wU6d-kpEkEAHs",
-      authDomain: "cespsic-asistencias.firebaseapp.com",
-      projectId: "cespsic-asistencias",
-      storageBucket: "cespsic-asistencias.firebasestorage.app",
-      messagingSenderId: "249910813853",
-      appId: "1:249910813853:web:f0764208f9db7727046074",
-      measurementId: "G-TXEEEQGY1X"
+      apiKey: "AIzaSyCcCqZ98oBrV1DrPjE6kYii6rOc2G_fiqI",
+      authDomain: "cespsic-asistencias-a2445.firebaseapp.com",
+      projectId: "cespsic-asistencias-a2445",
+      storageBucket: "cespsic-asistencias-a2445.firebasestorage.app",
+      messagingSenderId: "665878809773",
+      appId: "1:665878809773:web:fdddaa550a5ae402844a24",
+      measurementId: "G-PJWN1NQCPX"
     }
   }
 };
