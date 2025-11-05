@@ -512,6 +512,7 @@ async function uploadEvidenciasToGoogleDrive() {
     
     const tipoRegistro = document.getElementById('tipo_registro').value || 'sin_tipo';
     const evidenciasInfo = [];
+    const erroresDetallados = [];
     
     showEvidenciasStatus('Subiendo a Google Drive...', 'loading');
     
@@ -556,12 +557,19 @@ async function uploadEvidenciasToGoogleDrive() {
             const uploadResult = await Promise.race([
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
-                    body: uploadData
+                    body: uploadData,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
                 }),
                 new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout de 30 segundos')), 30000)
+                    setTimeout(() => reject(new Error('Timeout: El servidor no respondió en 30 segundos')), 30000)
                 )
             ]);
+            
+            if (!uploadResult.ok) {
+                throw new Error(`Error HTTP ${uploadResult.status}: ${uploadResult.statusText}`);
+            }
             
             const result = await uploadResult.json();
             
@@ -584,19 +592,33 @@ async function uploadEvidenciasToGoogleDrive() {
         } catch (error) {
             console.error(`❌ Error subiendo archivo ${file.name}:`, error);
             
+            // Construir mensaje de error detallado
+            let errorDetalle = error.message || 'Error desconocido';
+            if (error.message && error.message.includes('Failed to fetch')) {
+                errorDetalle = 'Error de conexión: No se pudo conectar con Google Drive. Verifique su internet.';
+            } else if (error.message && error.message.includes('NetworkError')) {
+                errorDetalle = 'Error de red: Problema de conectividad. Verifique su conexión a internet.';
+            } else if (error.message && error.message.includes('Timeout')) {
+                errorDetalle = 'Tiempo de espera agotado: El servidor tardó demasiado en responder.';
+            } else if (error.message && error.message.includes('Error HTTP')) {
+                errorDetalle = error.message; // Ya tiene el formato correcto
+            }
+            
             evidenciasInfo.push({
                 fileName: fullFileName,
                 originalName: file.name,
                 size: file.size,
                 uploadTime: new Date().toISOString(),
                 uploadStatus: 'FAILED',
-                error: error.message || 'Error desconocido',
+                error: errorDetalle,
                 errorType: error.name || 'Error',
                 storage: 'Google Drive'
             });
             
+            erroresDetallados.push(`${file.name}: ${errorDetalle}`);
+            
             showEvidenciasStatus(
-                `⚠️ Error en ${file.name}: ${error.message}`, 
+                `⚠️ Error en ${file.name}: ${errorDetalle}`, 
                 'warning'
             );
             
@@ -616,15 +638,17 @@ async function uploadEvidenciasToGoogleDrive() {
     console.log(`   ❌ Fallidas: ${failCount}`);
     console.log(`   📁 Total: ${evidenciasInfo.length}`);
     
+    // CRÍTICO: Si hay alguna evidencia fallida, lanzar error para detener el guardado en Firebase
+    if (failCount > 0) {
+        const mensajeError = `❌ ERROR CRÍTICO: ${failCount} de ${evidenciasInfo.length} evidencias NO se pudieron subir a Google Drive:\n\n${erroresDetallados.join('\n')}\n\n⚠️ Debe corregir estos errores antes de guardar el registro en Firebase.`;
+        showEvidenciasStatus(mensajeError, 'error');
+        throw new Error(mensajeError);
+    }
+    
     if (successCount > 0) {
         showEvidenciasStatus(
-            `✅ ${successCount} evidencia(s) subida(s) a Google Drive${failCount > 0 ? ` (${failCount} errores)` : ''}`, 
-            failCount > 0 ? 'warning' : 'success'
-        );
-    } else if (failCount > 0) {
-        showEvidenciasStatus(
-            `❌ No se pudo subir ninguna evidencia. Errores: ${evidenciasInfo.map(e => e.error).join(', ')}`, 
-            'error'
+            `✅ ${successCount} evidencia(s) subida(s) exitosamente a Google Drive`, 
+            'success'
         );
     }
     
