@@ -641,12 +641,7 @@ async function uploadEvidenciasToGoogleDrive() {
     
     // CRÍTICO: Si hay alguna evidencia fallida, lanzar error para detener el guardado en Firebase
     if (failCount > 0) {
-        const mensajeError = `❌ Error: ${failCount} de ${evidenciasInfo.length} evidencias NO se pudieron subir a Google Drive:
-
-${erroresDetallados.join('
-')}
-
-Debe corregir estos errores antes de guardar el registro en Firebase.`;
+        const mensajeError = `❌ Error: ${failCount} de ${evidenciasInfo.length} evidencias NO se pudieron subir a Google Drive:\n\n${erroresDetallados.join('\n')}\n\nDebe corregir estos errores antes de guardar el registro en Firebase.`;
         showEvidenciasStatus(mensajeError, 'error');
         throw new Error(mensajeError);
     }
