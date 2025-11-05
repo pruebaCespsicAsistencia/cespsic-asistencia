@@ -512,7 +512,6 @@ async function uploadEvidenciasToGoogleDrive() {
     
     const tipoRegistro = document.getElementById('tipo_registro').value || 'sin_tipo';
     const evidenciasInfo = [];
-    const erroresDetallados = [];
     
     showEvidenciasStatus('Subiendo a Google Drive...', 'loading');
     
@@ -557,19 +556,12 @@ async function uploadEvidenciasToGoogleDrive() {
             const uploadResult = await Promise.race([
                 fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
-                    body: uploadData,
-                    headers: {
-                        'Accept': 'application/json'
-                    }
+                    body: uploadData
                 }),
                 new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout: El servidor no respondió en 30 segundos')), 30000)
+                    setTimeout(() => reject(new Error('Timeout de 30 segundos')), 30000)
                 )
             ]);
-            
-            if (!uploadResult.ok) {
-                throw new Error(`Error HTTP ${uploadResult.status}: ${uploadResult.statusText}`);
-            }
             
             const result = await uploadResult.json();
             
@@ -584,25 +576,13 @@ async function uploadEvidenciasToGoogleDrive() {
                     storage: 'Google Drive'
                 });
                 
-                console.log(`✅ Archivo ${i+1}/${selectedFiles.length} subido exitosamente a Drive: ${fullFileName}`);
-                showEvidenciasStatus(`✅ Imagen ${i + 1}/${selectedFiles.length} subida correctamente`, 'success');
+                console.log(`✅ Archivo subido a Drive: ${fullFileName}`);
             } else {
-                const errorMsg = result.message || result.error || 'Error desconocido al subir a Drive';
-                throw new Error(errorMsg);
+                throw new Error(result.message || 'Error desconocido');
             }
             
         } catch (error) {
             console.error(`❌ Error subiendo archivo ${file.name}:`, error);
-            
-            // Construir mensaje de error detallado
-            let errorDetalle = error.message || 'Error desconocido';
-            if (error.message.includes('Failed to fetch')) {
-                errorDetalle = 'Error de conexión: No se pudo conectar con Google Drive. Verifique su internet.';
-            } else if (error.message.includes('NetworkError')) {
-                errorDetalle = 'Error de red: Problema de conectividad. Verifique su conexión a internet.';
-            } else if (error.message.includes('Timeout')) {
-                errorDetalle = 'Tiempo de espera agotado: El servidor tardó demasiado en responder.';
-            }
             
             evidenciasInfo.push({
                 fileName: fullFileName,
@@ -610,15 +590,13 @@ async function uploadEvidenciasToGoogleDrive() {
                 size: file.size,
                 uploadTime: new Date().toISOString(),
                 uploadStatus: 'FAILED',
-                error: errorDetalle,
+                error: error.message || 'Error desconocido',
                 errorType: error.name || 'Error',
                 storage: 'Google Drive'
             });
             
-            erroresDetallados.push(`${file.name}: ${errorDetalle}`);
-            
             showEvidenciasStatus(
-                `⚠️ Error en ${file.name}: ${errorDetalle}`, 
+                `⚠️ Error en ${file.name}: ${error.message}`, 
                 'warning'
             );
             
@@ -633,28 +611,20 @@ async function uploadEvidenciasToGoogleDrive() {
     const successCount = evidenciasInfo.filter(e => e.uploadStatus === 'SUCCESS').length;
     const failCount = evidenciasInfo.filter(e => e.uploadStatus === 'FAILED').length;
     
-    console.log(`
-📊 RESUMEN DE SUBIDA:`);
+    console.log(`\n📊 RESUMEN DE SUBIDA:`);
     console.log(`   ✅ Exitosas: ${successCount}`);
     console.log(`   ❌ Fallidas: ${failCount}`);
-    console.log(`   📝 Total: ${evidenciasInfo.length}`);
-    
-    // CRÍTICO: Si hay alguna evidencia fallida, lanzar error para detener el guardado en Firebase
-    if (failCount > 0) {
-        const mensajeError = `❌ Error: ${failCount} de ${evidenciasInfo.length} evidencias NO se pudieron subir a Google Drive:
-
-${erroresDetallados.join('
-')}
-
-Debe corregir estos errores antes de guardar el registro en Firebase.`;
-        showEvidenciasStatus(mensajeError, 'error');
-        throw new Error(mensajeError);
-    }
+    console.log(`   📁 Total: ${evidenciasInfo.length}`);
     
     if (successCount > 0) {
         showEvidenciasStatus(
-            `✅ ${successCount} evidencia(s) subidas exitosamente a Google Drive`, 
-            'success'
+            `✅ ${successCount} evidencia(s) subida(s) a Google Drive${failCount > 0 ? ` (${failCount} errores)` : ''}`, 
+            failCount > 0 ? 'warning' : 'success'
+        );
+    } else if (failCount > 0) {
+        showEvidenciasStatus(
+            `❌ No se pudo subir ninguna evidencia. Errores: ${evidenciasInfo.map(e => e.error).join(', ')}`, 
+            'error'
         );
     }
     
@@ -1209,11 +1179,11 @@ function resetEvidenciasSection() {
 // ========== GEOLOCALIZACIÓN ==========
 function getCurrentLocation() {
     if (!isAuthenticated) {
-        updateLocationStatus('error', 'Se requiere ubicación GPS', '');
+        updateLocationStatus('error', 'Autenticación requerida', '');
         ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
-            document.getElementById(id).value = 'Se requiere ubicación GPS';
+            document.getElementById(id).value = 'Esperando autenticación...';
         });
-        document.getElementById('location_status').value = 'Se requiere ubicación GPS';
+        document.getElementById('location_status').value = 'Autenticación requerida';
         return;
     }
 
@@ -1463,11 +1433,11 @@ function calcularDistancia(lat1, lng1, lat2, lng2) {
 
 function resetLocationFields() {
     ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
-        document.getElementById(id).value = 'Se requiere ubicación GPS';
+        document.getElementById(id).value = 'Esperando autenticación...';
         document.getElementById(id).className = 'location-field';
     });
     document.getElementById('retry_location_btn').style.display = 'none';
-    updateLocationStatus('loading', 'Autenticándose para obtener ubicación GPS', '');
+    updateLocationStatus('loading', 'Complete la autenticación para obtener ubicación GPS', '');
 }
 
 // ========== EVENT LISTENERS ==========
