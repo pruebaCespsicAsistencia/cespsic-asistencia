@@ -1179,11 +1179,11 @@ function resetEvidenciasSection() {
 // ========== GEOLOCALIZACIÓN ==========
 function getCurrentLocation() {
     if (!isAuthenticated) {
-        updateLocationStatus('error', 'Autenticación requerida', '');
+        updateLocationStatus('error', 'Se requiere ubicación GPS', '');
         ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
-            document.getElementById(id).value = 'Esperando autenticación...';
+            document.getElementById(id).value = 'Se requiere ubicación GPS';
         });
-        document.getElementById('location_status').value = 'Autenticación requerida';
+        document.getElementById('location_status').value = 'Se requiere ubicación GPS';
         return;
     }
 
@@ -1433,11 +1433,11 @@ function calcularDistancia(lat1, lng1, lat2, lng2) {
 
 function resetLocationFields() {
     ['ubicacion_detectada', 'direccion_completa', 'precision_gps'].forEach(id => {
-        document.getElementById(id).value = 'Esperando autenticación...';
+        document.getElementById(id).value = 'Se requiere ubicación GPS';
         document.getElementById(id).className = 'location-field';
     });
     document.getElementById('retry_location_btn').style.display = 'none';
-    updateLocationStatus('loading', 'Complete la autenticación para obtener ubicación GPS', '');
+    updateLocationStatus('loading', 'Autenticándose para obtener ubicación GPS', '');
 }
 
 // ========== EVENT LISTENERS ==========
