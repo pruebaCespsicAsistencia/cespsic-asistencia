@@ -332,12 +332,17 @@ async function handleSubmit(e) {
     
     const submitBtn = document.querySelector('.submit-btn');
     const originalText = submitBtn.textContent;
+    
+    // Deshabilitar botón inmediatamente
     submitBtn.disabled = true;
-    submitBtn.textContent = '⏳ Guardando en Firebase...';
+    submitBtn.style.opacity = '0.6';
+    submitBtn.style.cursor = 'not-allowed';
+    submitBtn.textContent = '⏳ Guardando, espere...';
     
     try {
         // 1. Subir evidencias a Google Drive
         console.log('📸 Procesando evidencias...');
+        submitBtn.textContent = '📤 Subiendo evidencias a Drive...';
         const evidenciasUrls = await uploadEvidenciasToGoogleDrive();
         
         // 2. Preparar datos
@@ -413,6 +418,7 @@ async function handleSubmit(e) {
         console.log('📊 Datos preparados:', asistenciaData);
         
         // 3. 🔥 GUARDAR EN FIRESTORE CON SISTEMA DE LOGS COMPLETO
+        submitBtn.textContent = '🔥 Guardando en Firebase...';
         console.log('🔥 Guardando en Firestore con logs y validaciones...');
         const resultado = await guardarAsistenciaConLogs(asistenciaData);
         
@@ -439,8 +445,10 @@ Hora: ${hora}
         // 5. Actualizar registros del día
         setTimeout(() => mostrarRegistrosDelDia(), 1000);
         
-        // 6. Rehabilitar botón
+        // 6. Rehabilitar botón completamente
         submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.style.cursor = 'pointer';
         submitBtn.textContent = originalText;
         
         // 7. Preguntar si desea continuar
@@ -486,7 +494,10 @@ Hora: ${hora}
         
         showStatus(mensajeError, esDuplicado ? 'warning' : 'error');
         
+        // Rehabilitar botón completamente
         submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.style.cursor = 'pointer';
         submitBtn.textContent = originalText;
     }
 }
@@ -542,7 +553,7 @@ async function uploadEvidenciasToGoogleDrive() {
             
             // Preparar datos para Google Apps Script (Drive)
             const uploadData = new URLSearchParams({
-                action: 'upload_evidencia',
+                action: 'uploadEvidencia',  // ⬅️ Cambiado de 'upload_evidencia' a 'uploadEvidencia'
                 fileName: fullFileName,
                 fileData: base64Data,
                 mimeType: file.type,
