@@ -13,7 +13,9 @@
 import { 
   db, 
   collection, 
-  addDoc, 
+  addDoc,
+  setDoc,      
+  doc,          
   getDocs,
   query, 
   where,
@@ -233,9 +235,10 @@ export async function guardarAsistenciaConLogs(asistenciaData) {
     
     // 3️⃣ GUARDAR EN FIRESTORE
     console.log('\n3️⃣ Guardando asistencia en Firestore...');
-    const docRef = await addDoc(collection(db, 'asistencias'), asistenciaData);
+    const docRef = doc(db, 'asistencias', asistenciaData.registro_id);
+    await setDoc(docRef, asistenciaData);
     console.log('✅ Asistencia guardada exitosamente');
-    console.log('🆔 Firestore Document ID:', docRef.id);
+    console.log('🆔 Firestore Document ID:', asistenciaData.registro_id);
     
     registradoExitosamente = true;
     
@@ -249,7 +252,7 @@ export async function guardarAsistenciaConLogs(asistenciaData) {
     
     return {
       success: true,
-      docId: docRef.id,
+      docId: asistenciaData.registro_id,
       registroId: asistenciaData.registro_id,
       message: 'Asistencia guardada correctamente con logs completos'
     };
