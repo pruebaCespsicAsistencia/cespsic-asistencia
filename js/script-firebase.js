@@ -571,7 +571,15 @@ async function uploadEvidenciasToGoogleDrive() {
                 throw new Error(`Error HTTP ${uploadResult.status}: ${uploadResult.statusText}`);
             }
             
-            const result = await uploadResult.json();
+            let result;
+            try {
+                result = await uploadResult.json();
+            } catch (jsonError) {
+                console.error('❌ Error parseando respuesta JSON:', jsonError);
+                throw new Error('Error del servidor: Respuesta inválida (no es JSON válido)');
+            }
+            
+            console.log(`📋 Respuesta del servidor para ${fullFileName}:`, result);
             
             if (result.success) {
                 evidenciasInfo.push({
@@ -584,24 +592,44 @@ async function uploadEvidenciasToGoogleDrive() {
                     storage: 'Google Drive'
                 });
                 
-                console.log(`✅ Archivo subido a Drive: ${fullFileName}`);
+                console.log(`✅ Archivo ${i+1}/${selectedFiles.length} subido exitosamente a Drive: ${fullFileName}`);
+                showEvidenciasStatus(`✅ Imagen ${i + 1}/${selectedFiles.length} subida correctamente`, 'success');
             } else {
-                throw new Error(result.message || 'Error desconocido');
+                // Construir mensaje de error más específico del servidor
+                const serverError = result.message || result.error || result.details || 'El servidor rechazó el archivo sin proporcionar detalles';
+                throw new Error(`Error del servidor: ${serverError}`);
             }
             
         } catch (error) {
             console.error(`❌ Error subiendo archivo ${file.name}:`, error);
+            console.error(`   Tipo de error: ${error.name}`);
+            console.error(`   Mensaje: ${error.message}`);
+            console.error(`   Stack:`, error.stack);
             
             // Construir mensaje de error detallado
-            let errorDetalle = error.message || 'Error desconocido';
+            let errorDetalle = error.message || 'Error no especificado';
+            
+            // Detectar tipos específicos de error
             if (error.message && error.message.includes('Failed to fetch')) {
                 errorDetalle = 'Error de conexión: No se pudo conectar con Google Drive. Verifique su internet.';
             } else if (error.message && error.message.includes('NetworkError')) {
                 errorDetalle = 'Error de red: Problema de conectividad. Verifique su conexión a internet.';
             } else if (error.message && error.message.includes('Timeout')) {
-                errorDetalle = 'Tiempo de espera agotado: El servidor tardó demasiado en responder.';
+                errorDetalle = 'Tiempo de espera agotado: El servidor tardó demasiado en responder (>30 seg).';
             } else if (error.message && error.message.includes('Error HTTP')) {
                 errorDetalle = error.message; // Ya tiene el formato correcto
+            } else if (error.message && error.message.includes('Error del servidor')) {
+                errorDetalle = error.message; // Mensaje del servidor de Google Drive
+            } else if (error.message && error.message.includes('Archivo inválido')) {
+                errorDetalle = 'Archivo inválido o corrupto. Verifique el archivo.';
+            } else if (error.message && error.message.includes('Error al procesar la imagen')) {
+                errorDetalle = error.message; // Error de conversión Base64
+            } else if (error.name === 'TypeError') {
+                errorDetalle = 'Error de tipo: El servidor no respondió correctamente. Intente nuevamente.';
+            } else if (error.name === 'SyntaxError') {
+                errorDetalle = 'Error de sintaxis: Respuesta inválida del servidor. Contacte al administrador.';
+            } else if (!error.message || error.message === 'Error desconocido') {
+                errorDetalle = 'Error no identificado: Verifique su conexión y el tamaño del archivo (<10MB).';
             }
             
             evidenciasInfo.push({
