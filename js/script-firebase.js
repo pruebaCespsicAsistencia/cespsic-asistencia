@@ -622,11 +622,11 @@ async function uploadEvidenciasToGoogleDrive() {
             
             // Detectar tipos específicos de error
             if (error.message && error.message.includes('Failed to fetch')) {
-                errorDetalle = 'Error de conexión: No se pudo conectar con Google Drive. Verifique su internet.';
+                errorDetalle = 'Error de conexión: No se pudo conectar con Google Drive. Verifique su internet o intente nuevamente.';
             } else if (error.message && error.message.includes('NetworkError')) {
                 errorDetalle = 'Error de red: Problema de conectividad. Verifique su conexión a internet.';
             } else if (error.message && error.message.includes('Timeout')) {
-                errorDetalle = 'Tiempo de espera agotado: El servidor tardó demasiado en responder (>30 seg).';
+                errorDetalle = 'Tiempo de espera agotado: El servidor tardó demasiado en responder (>30 seg). Intente con archivos más pequeños.';
             } else if (error.message && error.message.includes('Error HTTP')) {
                 errorDetalle = error.message; // Ya tiene el formato correcto
             } else if (error.message && error.message.includes('Error del servidor')) {
@@ -636,11 +636,11 @@ async function uploadEvidenciasToGoogleDrive() {
             } else if (error.message && error.message.includes('Error al procesar la imagen')) {
                 errorDetalle = error.message; // Error de conversión Base64
             } else if (error.name === 'TypeError') {
-                errorDetalle = 'Error de tipo: El servidor no respondió correctamente. Intente nuevamente.';
+                errorDetalle = 'Error de tipo: El servidor no respondió correctamente. Puede ser un problema temporal. Intente nuevamente.';
             } else if (error.name === 'SyntaxError') {
                 errorDetalle = 'Error de sintaxis: Respuesta inválida del servidor. Contacte al administrador.';
             } else if (!error.message || error.message === 'Error desconocido') {
-                errorDetalle = 'Error no identificado: Verifique su conexión y el tamaño del archivo (<10MB).';
+                errorDetalle = 'Error no identificado: Verifique su conexión y el tamaño del archivo (<10MB). Si el problema persiste, intente con una conexión más estable.';
             }
             
             evidenciasInfo.push({
@@ -661,11 +661,14 @@ async function uploadEvidenciasToGoogleDrive() {
                 'warning'
             );
             
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Esperar más tiempo después de un error para permitir recuperación
+            await new Promise(resolve => setTimeout(resolve, 3000));
         }
         
+        // Esperar entre archivos para evitar saturar el servidor
         if (i < selectedFiles.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            console.log(`⏳ Esperando 2 segundos antes del siguiente archivo...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
     
