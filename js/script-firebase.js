@@ -459,6 +459,7 @@ Hora: ${hora}
                 hideStatus();
             } else {
                 hideStatus();
+                signOut();
             }
         }, 5000);
         
