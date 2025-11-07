@@ -62,6 +62,7 @@ export {
   collection,            // collection(db, 'asistencias')
   addDoc,                // addDoc(collection(db, 'asistencias'), data)
   doc,                   // doc(db, 'asistencias', 'id')
+  setDoc,                // ← AGREGAR ESTA LÍNEA
   getDoc,                // getDoc(docRef)
   getDocs,               // getDocs(querySnapshot)
   query,                 // query(collectionRef, where(...), orderBy(...))
