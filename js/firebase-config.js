@@ -19,8 +19,8 @@ import {
   getFirestore,           // Obtener instancia de Firestore
   collection,             // Referencia a colección
   addDoc,                 // Agregar documento nuevo
-  doc,                    // Referencia a documento específico
   setDoc,                 // ← Agregar
+  doc,                    // Referencia a documento específico
   getDoc,                 // Obtener un documento
   getDocs,                // Obtener múltiples documentos
   query,                  // Crear consulta
@@ -61,8 +61,8 @@ export {
   // Funciones de Firestore
   collection,            // collection(db, 'asistencias')
   addDoc,                // addDoc(collection(db, 'asistencias'), data)
-  doc,                   // doc(db, 'asistencias', 'id')
   setDoc,                // ← AGREGAR ESTA LÍNEA
+  doc,                   // doc(db, 'asistencias', 'id')
   getDoc,                // getDoc(docRef)
   getDocs,               // getDocs(querySnapshot)
   query,                 // query(collectionRef, where(...), orderBy(...))
