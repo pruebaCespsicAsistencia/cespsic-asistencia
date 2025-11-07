@@ -20,6 +20,7 @@ import {
   collection,             // Referencia a colección
   addDoc,                 // Agregar documento nuevo
   doc,                    // Referencia a documento específico
+  setDoc,                 // ← Agregar
   getDoc,                 // Obtener un documento
   getDocs,                // Obtener múltiples documentos
   query,                  // Crear consulta
