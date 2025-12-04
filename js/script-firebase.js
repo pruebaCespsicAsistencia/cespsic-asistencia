@@ -16,9 +16,14 @@ import {
   where, 
   orderBy, 
   serverTimestamp, 
-  signInWithPopup, 
+  signInWithPopup,
+  signInWithRedirect,              // ⭐ NUEVO
+  getRedirectResult,               // ⭐ NUEVO
   GoogleAuthProvider, 
-  firebaseSignOut 
+  firebaseSignOut,
+  setPersistence,                  // ⭐ NUEVO
+  browserSessionPersistence,       // ⭐ NUEVO
+  inMemoryPersistence              // ⭐ NUEVO
 } from './firebase-config.js';
 
 // ========================================================================================================
@@ -55,6 +60,7 @@ console.log('='.repeat(70));
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || 
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+const isFirefox = /firefox/i.test(navigator.userAgent);
 
 function detectDesktop() {
     const ua = navigator.userAgent.toLowerCase();
@@ -88,6 +94,7 @@ let isAuthenticated = false;
 let locationValid = false;
 let locationAttempts = 0;
 let selectedFiles = [];
+let authInProgress = false; // ⭐ NUEVO: Prevenir múltiples intentos
 
 const REQUIRED_ACCURACY = isDesktop ? 1000 : 50;
 const REQUIRED_ACCURACY_OPTIMAL = isDesktop ? 300 : 30;
@@ -108,6 +115,65 @@ console.log(`📱 Es iOS: ${isIOS ? 'Sí' : 'No'}`);
 console.log(`🌐 Navegador: ${isSafari ? 'Safari' : 'Otro'}`);
 console.log(`🔥 Firebase: Conectado`);
 
+// ========== 🆕 FUNCIÓN: Detectar si Safari está bloqueando almacenamiento ==========
+function detectarBloqueoSafari() {
+    if (!isSafari) return false;
+    
+    try {
+        // Intentar usar sessionStorage
+        sessionStorage.setItem('__test', 'test');
+        sessionStorage.removeItem('__test');
+        return false; // No está bloqueado
+    } catch (e) {
+        console.warn('⚠️ Safari está bloqueando sessionStorage:', e);
+        return true; // Está bloqueado
+    }
+}
+
+// ========== 🆕 FUNCIÓN: Mostrar advertencia específica de Safari ==========
+function mostrarAdvertenciaSafari() {
+    const authSection = document.getElementById('auth-section');
+    let safariWarning = document.getElementById('safari-warning');
+    
+    if (!safariWarning) {
+        safariWarning = document.createElement('div');
+        safariWarning.id = 'safari-warning';
+        safariWarning.style.cssText = `
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 2px solid #ff9800;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 15px;
+            color: #856404;
+            font-size: 14px;
+            line-height: 1.8;
+        `;
+        safariWarning.innerHTML = `
+            <strong>🍎 Usuario de Safari Detectado</strong><br><br>
+            
+            <strong>⚠️ IMPORTANTE:</strong> Safari tiene configuraciones de privacidad que pueden bloquear la autenticación.<br><br>
+            
+            <strong>📱 Para iOS/iPad:</strong><br>
+            1. Abre <strong>Ajustes → Safari</strong><br>
+            2. <strong>DESACTIVA</strong> "Impedir seguimiento entre sitios" (o "Prevent Cross-Site Tracking")<br>
+            3. Cierra y vuelve a abrir Safari<br>
+            4. Recarga esta página<br><br>
+            
+            <strong>💻 Para Mac (Safari):</strong><br>
+            1. Safari → Preferencias → Privacidad<br>
+            2. <strong>DESMARCA</strong> "Impedir el rastreo entre sitios web"<br>
+            3. Cierra y vuelve a abrir Safari<br>
+            4. Recarga esta página<br><br>
+            
+            <strong>✅ Alternativa recomendada:</strong><br>
+            Si los pasos anteriores no funcionan, intenta usar <strong>Google Chrome</strong> o <strong>Firefox</strong> en su lugar.
+        `;
+        
+        // Insertar al inicio de auth-section
+        authSection.insertBefore(safariWarning, authSection.firstChild);
+    }
+}
+
 // ========== FUNCIÓN: Información del Dispositivo ==========
 function getDeviceInfo() {
     return {
@@ -125,8 +191,109 @@ function getDeviceInfo() {
     };
 }
 
+// ========== 🆕 CONFIGURAR PERSISTENCIA SEGÚN NAVEGADOR ==========
+async function configurarPersistenciaFirebase() {
+    try {
+        if (isSafari || detectarBloqueoSafari()) {
+            // Safari: usar persistencia en memoria (no requiere localStorage)
+            console.log('🍎 Safari detectado: usando persistencia en memoria');
+            await setPersistence(auth, inMemoryPersistence);
+            mostrarAdvertenciaSafari();
+        } else {
+            // Otros navegadores: usar persistencia de sesión normal
+            console.log('✅ Usando persistencia de sesión estándar');
+            await setPersistence(auth, browserSessionPersistence);
+        }
+    } catch (error) {
+        console.error('⚠️ Error configurando persistencia:', error);
+        // Si falla, intentar con persistencia en memoria como fallback
+        try {
+            await setPersistence(auth, inMemoryPersistence);
+            console.log('🔄 Usando persistencia en memoria como fallback');
+        } catch (fallbackError) {
+            console.error('❌ Error en fallback de persistencia:', fallbackError);
+        }
+    }
+}
+
+// ========== 🆕 VERIFICAR RESULTADO DE REDIRECCIÓN AL CARGAR ==========
+async function verificarRedirectResult() {
+    try {
+        console.log('🔍 Verificando si hay resultado de redirección...');
+        const result = await getRedirectResult(auth);
+        
+        if (result && result.user) {
+            console.log('✅ Usuario autenticado desde redirección');
+            await procesarUsuarioAutenticado(result);
+        } else {
+            console.log('ℹ️ No hay resultado de redirección pendiente');
+        }
+    } catch (error) {
+        console.error('❌ Error verificando redirección:', error);
+        mostrarErrorAutenticacion(error);
+    }
+}
+
+// ========== 🆕 PROCESAR USUARIO AUTENTICADO (reutilizable) ==========
+async function procesarUsuarioAutenticado(result) {
+    // Obtener el Google User ID real del proveedor de Google
+    const googleUserID = result.user.providerData.find(p => p.providerId === 'google.com')?.uid || result.user.uid;
+    
+    currentUser = {
+        id: googleUserID,
+        email: result.user.email,
+        name: result.user.displayName,
+        picture: result.user.photoURL
+    };
+    
+    console.log('🆔 Google User ID:', googleUserID);
+    
+    isAuthenticated = true;
+    authInProgress = false;
+    
+    document.getElementById('email').value = currentUser.email;
+    document.getElementById('google_user_id').value = currentUser.id;
+    
+    updateAuthenticationUI();
+    enableForm();
+    getCurrentLocation();
+    
+    // Cargar registros del día
+    setTimeout(() => mostrarRegistrosDelDia(), 2000);
+    
+    showStatus(`✅ ¡Bienvenido ${currentUser.name}!`, 'success');
+    setTimeout(() => hideStatus(), 3000);
+    
+    console.log('✅ Autenticación exitosa:', currentUser.email);
+}
+
+// ========== 🆕 MOSTRAR ERROR DE AUTENTICACIÓN CON GUÍA ==========
+function mostrarErrorAutenticacion(error) {
+    authInProgress = false;
+    console.error('❌ Error en autenticación:', error);
+    
+    let mensaje = 'Error en la autenticación. ';
+    
+    // Mensajes específicos según el error
+    if (error.code === 'auth/popup-blocked') {
+        mensaje = '🚫 El navegador bloqueó la ventana emergente. Por favor, permite ventanas emergentes para este sitio.';
+    } else if (error.code === 'auth/popup-closed-by-user') {
+        mensaje = '❌ Ventana de autenticación cerrada. Inténtalo nuevamente.';
+    } else if (error.code === 'auth/cancelled-popup-request') {
+        mensaje = 'ℹ️ Solicitud de autenticación cancelada.';
+    } else if (error.code === 'auth/web-storage-unsupported') {
+        mensaje = '⚠️ Tu navegador está bloqueando el almacenamiento web. ' +
+                  (isSafari ? 'Ve a Ajustes → Safari y desactiva "Impedir seguimiento entre sitios".' : 
+                   'Verifica la configuración de privacidad del navegador.');
+    } else {
+        mensaje += error.message;
+    }
+    
+    showStatus(mensaje, 'error');
+}
+
 // ========== INICIALIZACIÓN ==========
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     console.log('=== INFORMACIÓN DEL DISPOSITIVO ===');
     console.log('Tipo:', deviceType);
     console.log('Es Desktop:', isDesktop);
@@ -144,6 +311,19 @@ document.addEventListener('DOMContentLoaded', function() {
     if (isIOS) {
         console.log('🎯 Modo iOS activado - Aplicando compatibilidad especial');
     }
+    
+    if (isSafari) {
+        console.log('🍎 Modo Safari activado - Verificando configuración de privacidad');
+        
+        // Detectar bloqueo de almacenamiento
+        if (detectarBloqueoSafari()) {
+            console.warn('⚠️ Safari está bloqueando el almacenamiento - Mostrando advertencia');
+            mostrarAdvertenciaSafari();
+        }
+    }
+    
+    // 🆕 Verificar si hay resultado de redirección pendiente (Safari)
+    await verificarRedirectResult();
     
     initializeForm();
     setupEventListeners();
@@ -197,47 +377,43 @@ function showDesktopWarning() {
 
 // ========== AUTENTICACIÓN CON FIREBASE ==========
 async function requestAuthentication() {
+    // Prevenir múltiples clics
+    if (authInProgress) {
+        console.log('⏳ Autenticación ya en progreso...');
+        return;
+    }
+    
+    authInProgress = true;
+    
     try {
         console.log('🔐 Iniciando autenticación con Firebase...');
+        
+        // Configurar persistencia antes de autenticar
+        await configurarPersistenciaFirebase();
         
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({
             prompt: 'select_account'
         });
         
-        const result = await signInWithPopup(auth, provider);
+        let result;
         
-        // Obtener el Google User ID real del proveedor de Google
-        const googleUserID = result.user.providerData.find(p => p.providerId === 'google.com')?.uid || result.user.uid;
-        
-        currentUser = {
-            id: googleUserID,                    // ✅ Google User ID real
-            email: result.user.email,
-            name: result.user.displayName,
-            picture: result.user.photoURL
-        };
-        
-        console.log('🆔 Google User ID:', googleUserID);
-        
-        isAuthenticated = true;
-        document.getElementById('email').value = currentUser.email;
-        document.getElementById('google_user_id').value = currentUser.id;
-        
-        updateAuthenticationUI();
-        enableForm();
-        getCurrentLocation();
-        
-        // Cargar registros del día
-        setTimeout(() => mostrarRegistrosDelDia(), 2000);
-        
-        showStatus(`✅ ¡Bienvenido ${currentUser.name}!`, 'success');
-        setTimeout(() => hideStatus(), 3000);
-        
-        console.log('✅ Autenticación exitosa:', currentUser.email);
+        if (isSafari || isIOS) {
+            // 🍎 Safari/iOS: usar redirect (más confiable que popup)
+            console.log('🍎 Safari/iOS: usando signInWithRedirect');
+            showStatus('🔄 Redirigiendo a Google para autenticación...', 'info');
+            await signInWithRedirect(auth, provider);
+            // El resultado se procesará cuando la página recargue
+            return;
+        } else {
+            // 🌐 Otros navegadores: usar popup (más rápido)
+            console.log('🌐 Usando signInWithPopup');
+            result = await signInWithPopup(auth, provider);
+            await procesarUsuarioAutenticado(result);
+        }
         
     } catch (error) {
-        console.error('❌ Error en autenticación:', error);
-        showStatus('Error en la autenticación: ' + error.message, 'error');
+        mostrarErrorAutenticacion(error);
     }
 }
 
@@ -257,6 +433,12 @@ function updateAuthenticationUI() {
         document.getElementById('user-name').textContent = currentUser.name;
         userInfo.classList.add('show');
         signinContainer.style.display = 'none';
+        
+        // 🆕 Ocultar advertencia de Safari si existe
+        const safariWarning = document.getElementById('safari-warning');
+        if (safariWarning) {
+            safariWarning.style.display = 'none';
+        }
     } else {
         authSection.classList.remove('authenticated');
         authTitle.textContent = '🔒 Autenticación Requerida';
@@ -286,6 +468,7 @@ async function signOut() {
         locationValid = false;
         currentLocation = null;
         selectedFiles = [];
+        authInProgress = false;
         
         ['email', 'google_user_id', 'latitude', 'longitude', 'location_status'].forEach(id => {
             document.getElementById(id).value = '';
@@ -296,6 +479,11 @@ async function signOut() {
         resetLocationFields();
         resetEvidenciasSection();
         ocultarRegistrosDelDia();
+        
+        // 🆕 Mostrar advertencia de Safari si corresponde
+        if (isSafari && detectarBloqueoSafari()) {
+            mostrarAdvertenciaSafari();
+        }
         
         showStatus('Sesión cerrada correctamente.', 'success');
         setTimeout(() => hideStatus(), 3000);
