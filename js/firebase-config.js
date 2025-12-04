@@ -34,10 +34,15 @@ import {
 
 // Authentication
 import { 
-  getAuth,                // Obtener instancia de Auth
-  signInWithPopup,        // Login con popup
-  GoogleAuthProvider,     // Proveedor de Google
-  signOut as firebaseSignOut  // Cerrar sesión (renombrado para evitar conflictos)
+  getAuth,                         // Obtener instancia de Auth
+  signInWithPopup,                 // Login con popup (Chrome, Firefox)
+  signInWithRedirect,              // ⭐ NUEVO: Login con redirección (Safari, iOS)
+  getRedirectResult,               // ⭐ NUEVO: Obtener resultado de redirección
+  GoogleAuthProvider,              // Proveedor de Google
+  signOut as firebaseSignOut,      // Cerrar sesión
+  setPersistence,                  // ⭐ NUEVO: Configurar persistencia
+  browserSessionPersistence,       // ⭐ NUEVO: Persistencia de sesión (default)
+  inMemoryPersistence              // ⭐ NUEVO: Persistencia en memoria (Safari)
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
 // ========== INICIALIZAR FIREBASE ==========
