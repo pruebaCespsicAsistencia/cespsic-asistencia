@@ -1,7 +1,5 @@
 // ========== CESPSIC - SISTEMA DE ASISTENCIAS CON FIREBASE ==========
-// Versión: 2.3 Firebase - AUTENTICACIÓN HÍBRIDA
-// - Chrome/Android: Firebase Auth (popup - rápido)
-// - Safari/iOS: Google Apps Script (sin problemas de bloqueo)
+// Versión: 2.0 Firebase
 // Mantiene Google Drive para evidencias fotográficas
 // Usa Firebase Firestore para datos de asistencias
 
@@ -24,7 +22,7 @@ import {
 } from './firebase-config.js';
 
 // ========================================================================================================
-// 📊 IMPORTAR SISTEMA DE LOGS Y AUDITORÁA
+// 📊 IMPORTAR SISTEMA DE LOGS Y AUDITORÍA
 // ========================================================================================================
 import { 
   guardarAsistenciaConLogs,
@@ -49,7 +47,7 @@ console.log('='.repeat(70));
 console.log('🔧 CONFIGURACIÓN FRONTEND CARGADA');
 console.log('='.repeat(70));
 console.log('🎯 Ambiente Activo:', AMBIENTE_ACTUAL);
-console.log('📜 Google Script URL:', GOOGLE_SCRIPT_URL.substring(0, 50) + '...');
+console.log('📍 Google Script URL:', GOOGLE_SCRIPT_URL.substring(0, 50) + '...');
 console.log('🔥 Firebase Project:', CONFIG.FIREBASE_CONFIG.projectId);
 console.log('='.repeat(70));
 
@@ -90,8 +88,6 @@ let isAuthenticated = false;
 let locationValid = false;
 let locationAttempts = 0;
 let selectedFiles = [];
-let authInProgress = false;
-let persistenceConfigured = false;
 
 const REQUIRED_ACCURACY = isDesktop ? 1000 : 50;
 const REQUIRED_ACCURACY_OPTIMAL = isDesktop ? 300 : 30;
@@ -125,20 +121,17 @@ function getDeviceInfo() {
         screenHeight: window.screen.height,
         touchPoints: navigator.maxTouchPoints || 0,
         requiredAccuracy: REQUIRED_ACCURACY,
-        oóptimalAccuracy: REQUIRED_ACCURACY_OPTIMAL
+        optimalAccuracy: REQUIRED_ACCURACY_OPTIMAL
     };
 }
 
 // ========== INICIALIZACIÓN ==========
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', function() {
     console.log('=== INFORMACIÓN DEL DISPOSITIVO ===');
     console.log('Tipo:', deviceType);
-    console.log(`💻 Es Desktop: ${isDesktop ? 'Sí' : 'No'}`);
-    console.log('Es iOS:', isIOS);
-    console.log('Es Safari:', isSafari);	
+    console.log('Es Desktop:', isDesktop);
     console.log('Precisión requerida:', REQUIRED_ACCURACY + 'm');
-    console.log('Precisión óóptima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
-	console.log('Método de autenticación:', (isSafari || isIOS) ? 'Google Apps Script' : 'Firebase Auth');
+    console.log('Precisión óptima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
     
     if (isDesktop) {
         console.log('⚠️ MODO DESKTOP ACTIVADO');
@@ -150,18 +143,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     if (isIOS) {
         console.log('🎯 Modo iOS activado - Aplicando compatibilidad especial');
-    }
-    
-    console.log('🔍 Verificando si hay autenticación pendiente...');
-    const authPending = verificarAutenticacionAppsScript();
-    
-    if (!authPending) {
-        console.log('ℹ️ No hay autenticación pendiente');
-        
-        if (!isSafari && !isIOS) {
-            console.log('📋 Configurando persistencia Firebase...');
-            await configurarPersistenciaFirebase();
-        }
     }
     
     initializeForm();
@@ -215,378 +196,50 @@ function showDesktopWarning() {
 }
 
 // ========== AUTENTICACIÓN CON FIREBASE ==========
-// ========== FUNCIÓN PRINCIPAL DE AUTENTICACIÓN (HÍBRIDA) ==========
-// ========================================================================================================
-// 🔐 SISTEMA DE AUTENTICACIÓN HÍBRIDA
-// ========================================================================================================
-
-// ========== CONFIGURAR PERSISTENCIA FIREBASE ==========
-async function configurarPersistenciaFirebase() {
-    if (persistenceConfigured) {
-        console.log('ℹ️ Persistencia ya configurada');
-        return;
-    }
-    
-    if (isSafari || isIOS) {
-        console.log('🍎 Safari/iOS detectado: omitiendo configuración de persistencia Firebase');
-        persistenceConfigured = true;
-        return;
-    }
-    
+async function requestAuthentication() {
     try {
-        console.log('🌐 Configurando persistencia Firebase para Chrome/Android...');
-        await setPersistence(auth, browserSessionPersistence);
-        console.log('✅ Persistencia de sesión configurada');
-        persistenceConfigured = true;
-    } catch (error) {
-        console.error('⚠️ Error configurando persistencia:', error);
-        try {
-            await setPersistence(auth, inMemoryPersistence);
-            console.log('🔄 Usando persistencia en memoria como fallback');
-            persistenceConfigured = true;
-        } catch (fallbackError) {
-            console.error('❌ Error crítico en persistencia:', fallbackError);
-            persistenceConfigured = true;
-        }
-    }
-}
-
-// ========== AUTENTICACIÓN CON FIREBASE (Chrome/Android) ==========
-async function autenticarConFirebase() {
-    console.log('🔐 Iniciando autenticación con Firebase Auth...');
-    
-    try {
-        await configurarPersistenciaFirebase();
+        console.log('🔐 Iniciando autenticación con Firebase...');
         
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({
             prompt: 'select_account'
         });
         
-        showStatus('🔐 Abriendo Google para autenticación...', 'info');
-        
         const result = await signInWithPopup(auth, provider);
         
+        // Obtener el Google User ID real del proveedor de Google
         const googleUserID = result.user.providerData.find(p => p.providerId === 'google.com')?.uid || result.user.uid;
         
         currentUser = {
-            id: googleUserID,
+            id: googleUserID,                    // ✅ Google User ID real
             email: result.user.email,
             name: result.user.displayName,
-            picture: result.user.photoURL,
-            authMethod: 'firebase'
+            picture: result.user.photoURL
         };
         
         console.log('🆔 Google User ID:', googleUserID);
-        console.log('✅ Autenticación Firebase exitosa');
         
-        finalizarAutenticacion();
+        isAuthenticated = true;
+        document.getElementById('email').value = currentUser.email;
+        document.getElementById('google_user_id').value = currentUser.id;
         
-    } catch (error) {
-        throw error;
-    }
-}
-
-// ========== AUTENTICACIÓN CON APPS SCRIPT (Safari/iOS) ==========
-async function autenticarConAppsScript() {
-    console.log('🍎 Iniciando autenticación con Google Apps Script...');
-    
-    try {
-        const baseUrl = window.location.origin + window.location.pathname;
-        const authUrl = `${GOOGLE_SCRIPT_URL}?action=authenticate&redirect=${encodeURIComponent(baseUrl)}`;
+        updateAuthenticationUI();
+        enableForm();
+        getCurrentLocation();
         
-        console.log('🔄 Redirigiendo a:', authUrl);
+        // Cargar registros del día
+        setTimeout(() => mostrarRegistrosDelDia(), 2000);
         
-        try {
-            sessionStorage.setItem('auth_in_progress', 'true');
-            sessionStorage.setItem('auth_timestamp', Date.now().toString());
-            sessionStorage.setItem('auth_device', deviceType);
-        } catch (e) {
-            console.warn('⚠️ No se pudo guardar en sessionStorage (esperado en Safari)');
-        }
+        showStatus(`✅ ¡Bienvenido ${currentUser.name}!`, 'success');
+        setTimeout(() => hideStatus(), 3000);
         
-        showStatus('🔄 Redirigiendo a Google para autenticación...', 'info');
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        window.location.href = authUrl;
+        console.log('✅ Autenticación exitosa:', currentUser.email);
         
     } catch (error) {
-        throw error;
+        console.error('❌ Error en autenticación:', error);
+        showStatus('Error en la autenticación: ' + error.message, 'error');
     }
 }
-
-// ========== VERIFICAR SI VIENE DE AUTENTICACIÓN DE APPS SCRIPT ==========
-function verificarAutenticacionAppsScript() {
-    const params = new URLSearchParams(window.location.search);
-    
-    if (params.has('auth_success') && params.get('auth_success') === 'true') {
-        console.log('✅ Detectada autenticación exitosa desde Apps Script');
-        
-        const email = params.get('email');
-        const name = params.get('name');
-        const picture = params.get('picture');
-        const sessionId = params.get('session_id');
-        
-        if (email && sessionId) {
-            currentUser = {
-                id: email,
-                email: email,
-                name: name || email.split('@')[0],
-                picture: picture || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(name || email),
-                authMethod: 'appsscript',
-                sessionId: sessionId
-            };
-            
-            console.log('👤 Usuario autenticado:', currentUser.email);
-            console.log('🔑 Session ID:', sessionId);
-            
-            window.history.replaceState({}, document.title, window.location.pathname);
-            
-            finalizarAutenticacion();
-            
-            return true;
-        } else {
-            console.error('❌ Datos de autenticación incompletos');
-            showStatus('❌ Error: Datos de autenticación incompletos', 'error');
-        }
-    } else if (params.has('auth_error')) {
-        const error = params.get('auth_error');
-        console.error('❌ Error de autenticación desde Apps Script:', error);
-        
-        showStatus('❌ Error de autenticación: ' + error, 'error');
-        
-        window.history.replaceState({}, document.title, window.location.pathname);
-        
-        authInProgress = false;
-        
-        return true;
-    }
-    
-    return false;
-}
-
-// ========== FINALIZAR AUTENTICACIÓN (común para ambos métodos) ==========
-function finalizarAutenticacion() {
-    console.log('✅ Finalizando autenticación...');
-    console.log('   Email:', currentUser.email);
-    console.log('   Método:', currentUser.authMethod);
-    
-    isAuthenticated = true;
-    authInProgress = false;
-    
-    document.getElementById('email').value = currentUser.email;
-    document.getElementById('google_user_id').value = currentUser.id;
-    
-    updateAuthenticationUI();
-    enableForm();
-    getCurrentLocation();
-    
-    setTimeout(() => mostrarRegistrosDelDia(), 2000);
-    
-    showStatus(`✅ ¡Bienvenido ${currentUser.name}!`, 'success');
-    setTimeout(() => hideStatus(), 3000);
-    
-    console.log('✅ Proceso de autenticación completado');
-}
-
-// ========== MANEJO ROBUSTO DE ERRORES DE AUTENTICACIÓN ==========
-function manejarErrorAutenticacion(error) {
-    authInProgress = false;
-    console.error('❌ Error en autenticación:', error);
-    console.error('   Código:', error.code);
-    console.error('   Mensaje:', error.message);
-    
-    let mensaje = '';
-    let mostrarInstruccionesSafari = false;
-    
-    if (error.code) {
-        switch (error.code) {
-            case 'auth/popup-blocked':
-                if (isSafari || isIOS) {
-                    mensaje = '🚫 Safari bloqueó la ventana de autenticación.\n\n' +
-                             '💡 SOLUCIÓN: El sistema te redirigirá automáticamente.\n\n' +
-                             'Si ves esta pantalla de nuevo, sigue las instrucciones abajo.';
-                    mostrarInstruccionesSafari = true;
-                } else {
-                    mensaje = '🚫 El navegador bloqueó la ventana de autenticación.\n\n' +
-                             'Por favor, permite ventanas emergentes para este sitio.';
-                }
-                break;
-                
-            case 'auth/popup-closed-by-user':
-                mensaje = '❌ Cerraste la ventana antes de completar el proceso.\n\n' +
-                         'Intenta de nuevo y completa el inicio de sesión.';
-                break;
-                
-            case 'auth/cancelled-popup-request':
-                mensaje = 'ℹ️ Solicitud cancelada.\n\n' +
-                         'Puedes intentar autenticarte nuevamente.';
-                break;
-                
-            case 'auth/unauthorized-domain':
-                mensaje = '⚠️ Este dominio no está autorizado.\n\n' +
-                         'Contacta al administrador del sistema.';
-                break;
-                
-            case 'auth/operation-not-allowed':
-                mensaje = '⚠️ La autenticación con Google no está habilitada.\n\n' +
-                         'Contacta al administrador del sistema.';
-                break;
-                
-            case 'auth/network-request-failed':
-                mensaje = '📡 Error de conexión a Internet.\n\n' +
-                         'Verifica tu conexión y vuelve a intentar.';
-                break;
-                
-            case 'auth/web-storage-unsupported':
-            case 'auth/internal-error':
-                if (isSafari || isIOS) {
-                    mensaje = '⚠️ Safari está bloqueando el almacenamiento web.\n\n' +
-                             '💡 No te preocupes: El sistema usará método alternativo.\n\n' +
-                             'Intenta de nuevo y serás redirigido automáticamente.';
-                    mostrarInstruccionesSafari = true;
-                } else {
-                    mensaje = '⚠️ Error interno del sistema.\n\n' +
-                             'Verifica la configuración de privacidad del navegador.';
-                }
-                break;
-                
-            default:
-                mensaje = `⚠️ Error de autenticación: ${error.message}\n\n`;
-                if (isSafari || isIOS) {
-                    mensaje += '💡 Si el problema persiste, intenta usar Chrome o Firefox.';
-                    mostrarInstruccionesSafari = true;
-                }
-        }
-    } else {
-        mensaje = `⚠️ Error: ${error.message || error.toString()}`;
-        if (isSafari || isIOS) {
-            mostrarInstruccionesSafari = true;
-        }
-    }
-    
-    showStatus(mensaje, 'error');
-    
-    if (mostrarInstruccionesSafari) {
-        mostrarInstruccionesSafariUI();
-    }
-}
-
-// ========== MOSTRAR INSTRUCCIONES PARA SAFARI EN LA UI ==========
-function mostrarInstruccionesSafariUI() {
-    const authSection = document.getElementById('auth-section');
-    let safariHelp = document.getElementById('safari-help');
-    
-    if (!safariHelp) {
-        safariHelp = document.createElement('div');
-        safariHelp.id = 'safari-help';
-        safariHelp.style.cssText = `
-            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-            border: 2px solid #ff9800;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 15px 0;
-            color: #856404;
-            font-size: 14px;
-            line-height: 1.8;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            animation: slideDown 0.5s ease-out;
-        `;
-        safariHelp.innerHTML = `
-            <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #ff6b6b;">
-                🍎 Problema detectado en Safari/iOS
-            </div>
-            
-            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                <strong style="color: #e74c3c;">⚠️ Safari está bloqueando la autenticación</strong><br><br>
-                Esto es común en Safari debido a configuraciones de privacidad estrictas.
-            </div>
-            
-            <div style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 10px;">
-                <strong style="color: #3498db;">📱 Solución para iPhone/iPad:</strong><br>
-                1️⃣ Abre <strong>Ajustes</strong> del iPhone/iPad<br>
-                2️⃣ Busca y abre <strong>Safari</strong><br>
-                3️⃣ Busca <strong>"Impedir seguimiento entre sitios"</strong><br>
-                4️⃣ <strong style="color: #e74c3c;">DESACTÍVALA</strong> (debe quedar gris/apagado)<br>
-                5️⃣ <strong>Cierra Safari</strong> completamente<br>
-                6️⃣ Vuelve a abrir Safari y recarga esta página<br>
-                7️⃣ Intenta autenticarte de nuevo
-            </div>
-            
-            <div style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 10px;">
-                <strong style="color: #9b59b6;">💻 Solución para Mac (Safari):</strong><br>
-                1️⃣ Safari → <strong>Preferencias</strong><br>
-                2️⃣ Pestaña <strong>"Privacidad"</strong><br>
-                3️⃣ <strong style="color: #e74c3c;">DESMARCA</strong> "Impedir el rastreo entre sitios web"<br>
-                4️⃣ Cierra y vuelve a abrir Safari<br>
-                5️⃣ Recarga esta página<br>
-                6️⃣ Intenta autenticarte de nuevo
-            </div>
-            
-            <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50;">
-                <strong style="color: #2e7d32;">✅ Solución más rápida:</strong><br>
-                Usa <strong>Google Chrome</strong> o <strong>Firefox</strong> en lugar de Safari.<br>
-                Estos navegadores no tienen este problema.
-            </div>
-        `;
-        
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideDown {
-                from {
-                    opacity: 0;
-                    transform: translateY(-20px);
-                }
-                to {
-                    opacity: 1;
-                    transform: translateY(0);
-                }
-            }
-        `;
-        document.head.appendChild(style);
-        
-        authSection.insertBefore(safariHelp, authSection.firstChild);
-    }
-    
-    safariHelp.style.display = 'block';
-}
-
-// ========== OCULTAR INSTRUCCIONES DE SAFARI ==========
-function ocultarInstruccionesSafariUI() {
-    const safariHelp = document.getElementById('safari-help');
-    if (safariHelp) {
-        safariHelp.style.display = 'none';
-    }
-}
-
-
-async function requestAuthentication() {
-    if (authInProgress) {
-        console.log('⏳ Autenticación ya en progreso...');
-        showStatus('⏳ Procesando autenticación, espera un momento...', 'info');
-        return;
-    }
-    
-    authInProgress = true;
-    console.log('🔐 Iniciando proceso de autenticación híbrida...');
-console.log(`📱 Dispositivo: ${deviceType}`);
-    console.log('   Navegador:', isSafari ? 'Safari' : 'Otro');
-    
-    try {
-        if (isSafari || isIOS) {
-            console.log('🍎 Ruta: Autenticación con Google Apps Script');
-            await autenticarConAppsScript();
-        } else {
-            console.log('🌐 Ruta: Autenticación con Firebase Auth');
-            await autenticarConFirebase();
-        }
-        
-    } catch (error) {
-        manejarErrorAutenticacion(error);
-    }
-}
-
 
 function updateAuthenticationUI() {
     const authSection = document.getElementById('auth-section');
@@ -624,71 +277,42 @@ function disableForm() {
     updateSubmitButton();
 }
 
-// ========== CERRAR SESIÓN ADAPTADO PARA AMBOS MÉTODOS ==========
 async function signOut() {
     try {
-        console.log('🚪 Cerrando sesión...');
-        console.log('   Método actual:', currentUser ? currentUser.authMethod : 'ninguno');
-        
-        if (currentUser && currentUser.authMethod === 'appsscript') {
-            console.log('🍎 Cerrando sesión de Apps Script...');
-            
-            if (currentUser.sessionId) {
-                try {
-                    const signoutUrl = `${GOOGLE_SCRIPT_URL}?action=signout&session_id=${currentUser.sessionId}`;
-                    await fetch(signoutUrl);
-                    console.log('✅ Sesión de Apps Script cerrada');
-                } catch (error) {
-                    console.warn('⚠️ Error cerrando sesión en backend:', error);
-                }
-            }
-        } else if (currentUser && currentUser.authMethod === 'firebase') {
-            console.log('🌐 Cerrando sesión de Firebase...');
-            await firebaseSignOut(auth);
-            console.log('✅ Sesión de Firebase cerrada');
-        }
+        await firebaseSignOut(auth);
         
         isAuthenticated = false;
         currentUser = null;
         locationValid = false;
         currentLocation = null;
         selectedFiles = [];
-        authInProgress = false;
         
         ['email', 'google_user_id', 'latitude', 'longitude', 'location_status'].forEach(id => {
-            const element = document.getElementById(id);
-            if (element) element.value = '';
+            document.getElementById(id).value = '';
         });
-        
-        if (window.location.search) {
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
         
         updateAuthenticationUI();
         disableForm();
         resetLocationFields();
         resetEvidenciasSection();
         ocultarRegistrosDelDia();
-        ocultarInstruccionesSafariUI();
         
         showStatus('Sesión cerrada correctamente.', 'success');
         setTimeout(() => hideStatus(), 3000);
         
-        console.log('✅ Sesión cerrada completamente');
-        
+        console.log('✅ Sesión cerrada');
     } catch (error) {
-        console.error('❌ Error cerrando sesión:', error);
-        showStatus('Error al cerrar sesión: ' + error.message, 'error');
+        console.error('Error cerrando sesión:', error);
+        showStatus('Error al cerrar sesión.', 'error');
     }
 }
-
 
 // ========== GUARDAR ASISTENCIA EN FIRESTORE ==========
 async function handleSubmit(e) {
     e.preventDefault();
     
     console.log('\n' + '='.repeat(70));
-    console.log('💾 GUARDANDO EN FIREBASE FIRESTORE');
+    console.log('🔥 GUARDANDO EN FIREBASE FIRESTORE');
     console.log('='.repeat(70));
     
     // Validaciones
@@ -793,13 +417,13 @@ async function handleSubmit(e) {
             gps_method: isDesktop ? 'IP/WiFi' : 'GPS',
             required_accuracy: REQUIRED_ACCURACY,
             device_info: getDeviceInfo(),
-            version: '2.3 Híbrida'
+            version: '2.0 Firebase'
         };
         
-        console.log('💾 Datos preparados:', asistenciaData);
+        console.log('📊 Datos preparados:', asistenciaData);
         
         // 3. 🔥 GUARDAR EN FIRESTORE CON SISTEMA DE LOGS COMPLETO
-        submitBtn.textContent = '🍎 Guardando en Firebase...';
+        submitBtn.textContent = '🔥 Guardando en Firebase...';
         console.log('🔥 Guardando en Firestore con logs y validaciones...');
         const resultado = await guardarAsistenciaConLogs(asistenciaData);
         
@@ -817,11 +441,11 @@ Modalidad: ${asistenciaData.modalidad}
 Ubicación: ${asistenciaData.ubicacion.lugar}
 Hora: ${hora}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ Guardado instantáneo en Firebase
-🔥 Firestore Document ID: ${docRef.id}
-📊 Sin necesidad de verificación adicional
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+📊 Firestore Document ID: ${docRef.id}
+⚡ Sin necesidad de verificación adicional
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
         
         // 5. Actualizar registros del día
         setTimeout(() => mostrarRegistrosDelDia(), 1000);
@@ -834,7 +458,7 @@ Hora: ${hora}
         
         // 7. Preguntar si desea continuar
         setTimeout(() => {
-            if (confirm(`✅ ASISTENCIA REGISTRADA CORRECTAMENTE\n\nRegistro ID: ${registroID}\nUsuario: ${currentUser.name}\nHora: ${hora}\n\nÂ¿Desea registrar otra asistencia?`)) {
+            if (confirm(`✅ ASISTENCIA REGISTRADA CORRECTAMENTE\n\nRegistro ID: ${registroID}\nUsuario: ${currentUser.name}\nHora: ${hora}\n\n¿Desea registrar otra asistencia?`)) {
                 resetFormOnly();
                 getCurrentLocation();
                 hideStatus();
@@ -854,7 +478,7 @@ Hora: ${hora}
         
         if (esDuplicado) {
             // Error de duplicado - mensaje específico
-            mensajeError = `❌ REGISTRO DUPLICADO
+            mensajeError = `⚠️ REGISTRO DUPLICADO
     
     ${error.message}
     
@@ -1057,7 +681,7 @@ async function uploadEvidenciasToGoogleDrive() {
     const successCount = evidenciasInfo.filter(e => e.uploadStatus === 'SUCCESS').length;
     const failCount = evidenciasInfo.filter(e => e.uploadStatus === 'FAILED').length;
     
-    console.log(`\📊 RESUMEN DE SUBIDA:`);
+    console.log(`\n📊 RESUMEN DE SUBIDA:`);
     console.log(`   ✅ Exitosas: ${successCount}`);
     console.log(`   ❌ Fallidas: ${failCount}`);
     console.log(`   📁 Total: ${evidenciasInfo.length}`);
@@ -1193,7 +817,7 @@ async function mostrarRegistrosDelDia() {
     
     // Mostrar loading
     registrosSection.style.display = 'block';
-    registrosLista.innerHTML = '<div class="registro-loading">ðŸ“Š Cargando registros desde Firebase...</div>';
+    registrosLista.innerHTML = '<div class="registro-loading">📊 Cargando registros desde Firebase...</div>';
     registrosCount.textContent = 'Cargando...';
     registrosCount.style.background = '#6c757d';
     
@@ -1238,7 +862,7 @@ async function mostrarRegistrosDelDia() {
         if (registros.length === 0) {
             registrosLista.innerHTML = `
                 <div class="registro-vacio">
-                    <div style="font-size: 2em; margin-bottom: 10px;">ðŸ“</div>
+                    <div style="font-size: 2em; margin-bottom: 10px;">📝</div>
                     <div><strong>No hay registros para hoy</strong></div>
                     <div style="font-size: 0.9em; color: #666; margin-top: 5px;">
                         Cuando registre su primera asistencia aparecerá aquí
@@ -1281,7 +905,7 @@ async function mostrarRegistrosDelDia() {
                         <div class="registro-detalle">
                             <strong>🎯 Precisión:</strong> ${reg.ubicacion?.precision_metros || 0} metros
                         </div>
-                        ${reg.total_evidencias > 0 ? `<div class="registro-detalle"><strong>ðŸ“¸ Evidencias:</strong> ${reg.total_evidencias}</div>` : ''}
+                        ${reg.total_evidencias > 0 ? `<div class="registro-detalle"><strong>📸 Evidencias:</strong> ${reg.total_evidencias}</div>` : ''}
                     </div>
                 </div>
             `;
@@ -1300,7 +924,7 @@ async function mostrarRegistrosDelDia() {
                     Error cargando registros: ${error.message}
                 </div>
                 <button class="btn-retry-registros" onclick="window.reintentarCargarRegistros()">
-                    ðŸ”„ Reintentar
+                    🔄 Reintentar
                 </button>
             </div>
         `;
@@ -1377,18 +1001,6 @@ function validateConditionalFields() {
 
 function resetFormOnly() {
     document.getElementById('attendanceForm').reset();
-    console.log('🔍 Verificando si hay autenticación pendiente...');
-    const authPending = verificarAutenticacionAppsScript();
-    
-    if (!authPending) {
-        console.log('ℹ️ No hay autenticación pendiente');
-        
-        if (!isSafari && !isIOS) {
-            console.log('📋 Configurando persistencia Firebase...');
-            await configurarPersistenciaFirebase();
-        }
-    }
-    
     initializeForm();
     
     document.querySelectorAll('.conditional-field').forEach(field => {
@@ -1582,7 +1194,7 @@ function addFilePreview(file, index) {
                 ${file.name.length > 15 ? file.name.substring(0, 15) + '...' : file.name}<br>
                 <small>${(file.size / 1024).toFixed(1)} KB</small>
             </div>
-            <button type="button" class="evidencia-remove" onclick="window.removeFile(${index})">Á—</button>
+            <button type="button" class="evidencia-remove" onclick="window.removeFile(${index})">×</button>
         `;
     };
     reader.readAsDataURL(file);
@@ -1878,14 +1490,14 @@ function actualizarUbicacionEspecifica(direccionData) {
 
 function calcularDistancia(lat1, lng1, lat2, lng2) {
     const R = 6371e3;
-    const Ï†1 = lat1 * Math.PI/180;
-    const Ï†2 = lat2 * Math.PI/180;
-    const Î”Ï† = (lat2-lat1) * Math.PI/180;
-    const Î”Î» = (lng2-lng1) * Math.PI/180;
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lng2-lng1) * Math.PI/180;
 
-    const a = Math.sin(Î”Ï†/2) * Math.sin(Î”Ï†/2) +
-            Math.cos(Ï†1) * Math.cos(Ï†2) *
-            Math.sin(Î”Î»/2) * Math.sin(Î”Î»/2);
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
     return R * c;
@@ -1993,16 +1605,13 @@ window.requestAuthentication = requestAuthentication;
 window.signOut = signOut;
 
 // ========== LOG FINAL ==========
-console.log('✅ Script Firebase HÍBRIDO cargado completamente');
+console.log('✅ Script Firebase cargado completamente');
 console.log('🔥 Firebase Firestore: Conectado');
-console.log('🔐 Autenticación: Híbrida (Firebase + Apps Script)');
-console.log('   - Chrome/Android: Firebase Auth');
-console.log('   - Safari/iOS: Google Apps Script');
-console.log('📜 Google Drive: Para evidencias');
-console.log('🎯 Versión: 2.3 Híbrida');
+console.log('📁 Google Drive: Para evidencias');
+console.log('🎯 Versión: 2.0 Firebase');
 console.log('📋 Funciones disponibles:');
-console.log('   - requestAuthentication() - Híbrida');
-console.log('   - signOut() - Adaptada');
+console.log('   - requestAuthentication()');
+console.log('   - signOut()');
 console.log('   - mostrarRegistrosDelDia()');
 console.log('='.repeat(70));
 
