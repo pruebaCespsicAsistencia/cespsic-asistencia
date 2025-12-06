@@ -59,7 +59,7 @@
             <!-- Enlace para revocar permisos (solo visible cuando hay permisos) -->
             <div class="revoke-section" id="revoke-section" style="display: none;">
                 <button class="revoke-link" onclick="requestRevocation()">
-                    🔐 Revocar permisos en este dispositivo
+                    🔓 Revocar permisos en este dispositivo
                 </button>
             </div>
 			
@@ -174,13 +174,19 @@
                 <div class="form-section">
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="fecha">Fecha</label>
-                            <input type="date" id="fecha" name="fecha" readonly>
+                            <label for="fecha">Fecha <span class="required">*</span></label>
+                            <input type="date" id="fecha" name="fecha" required>
+                            <small style="color: #666; font-size: 0.85em;">📅 Seleccione la fecha de asistencia</small>
                         </div>
                         <div class="form-group">
-                            <label for="hora">Hora</label>
-                            <input type="time" id="hora" name="hora" readonly>
+                            <label for="hora">Hora <span class="required">*</span></label>
+                            <input type="time" id="hora" name="hora" required>
+                            <small style="color: #666; font-size: 0.85em;">🕐 Seleccione la hora de asistencia</small>
                         </div>
+                    </div>
+                    <div class="info-message" style="margin-bottom: 15px;">
+                        ℹ️ <strong>Importante:</strong> La fecha y hora mostradas corresponden al momento de su asistencia. 
+                        Puede modificarlas si registra posterior al evento. La fecha/hora real de registro se guarda automáticamente para validación.
                     </div>
                     
                     <!-- CAMPOS DE UBICACIÓN -->
