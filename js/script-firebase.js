@@ -503,20 +503,34 @@ function updateSignInButton(text, disabled) {
 }
 
 function mostrarUsuarioAutenticado() {
+    // ✅ ACTUALIZAR TÍTULO DE LA SECCIÓN DE AUTENTICACIÓN
+    const authSection = document.getElementById('auth-section');
+    const authTitle = document.getElementById('auth-title');
+    
+    authSection.classList.add('authenticated');
+    authTitle.textContent = '✅ Autenticación Exitosa';
+    authTitle.classList.add('authenticated');
+    
+    // Ocultar botón de signin
     document.getElementById('signin-button-container').style.display = 'none';
     
+    // Mostrar información del usuario
     const userInfo = document.getElementById('user-info');
     userInfo.style.display = 'flex';
+    userInfo.classList.add('show');  // ✅ AGREGADO
     
+    // Actualizar datos del usuario
     document.getElementById('user-email').textContent = currentUser.email;
     document.getElementById('user-name').textContent = currentUser.name || currentUser.email.split('@')[0];
     
+    // Actualizar avatar
     if (currentUser.picture) {
         document.getElementById('user-avatar').src = currentUser.picture;
     } else {
         document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name || currentUser.email)}&background=667eea&color=fff&size=80`;
     }
     
+    // Ocultar información del método de autenticación
     const authMethodInfo = document.getElementById('auth-method-info');
     if (authMethodInfo) {
         authMethodInfo.style.display = 'none';
@@ -552,7 +566,19 @@ async function signOut() {
             console.warn('⚠️ Error limpiando localStorage:', e);
         }
         
-        document.getElementById('user-info').style.display = 'none';
+        // ✅ RESTAURAR TÍTULO DE LA SECCIÓN DE AUTENTICACIÓN
+        const authSection = document.getElementById('auth-section');
+        const authTitle = document.getElementById('auth-title');
+        
+        authSection.classList.remove('authenticated');
+        authTitle.textContent = '🔒 Autenticación Requerida';
+        authTitle.classList.remove('authenticated');
+        
+        // Ocultar user-info y mostrar botón de signin
+        const userInfo = document.getElementById('user-info');
+        userInfo.style.display = 'none';
+        userInfo.classList.remove('show');  // ✅ AGREGADO
+        
         document.getElementById('signin-button-container').style.display = 'block';
         document.getElementById('form-container').classList.add('form-overlay');
         
