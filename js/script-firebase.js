@@ -855,7 +855,17 @@ async function handleSubmit(event) {
         const asistenciaData = {
             registro_id: registroID,
             timestamp: serverTimestamp(),
-            fecha_creacion: new Date().toISOString(),
+            fecha_creacion: new Date().toLocaleString('es-MX', { 
+                timeZone: 'America/Mazatlan',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            }),
+            fecha_creacion_iso: new Date().toISOString(), // Mantener ISO para compatibilidad
             
             email: currentUser.email,
             google_user_id: currentUser.id || currentUser.uid,
@@ -1474,21 +1484,85 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ Sistema inicializado correctamente');
 });
 
+// ========== FUNCIÓN PARA OBTENER FECHA/HORA CON TIMEZONE MAZATLÁN ==========
+function getFechaMazatlan() {
+    // Crear fecha actual en timezone America/Mazatlan
+    const opciones = {
+        timeZone: 'America/Mazatlan',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    };
+    
+    const formatter = new Intl.DateTimeFormat('es-MX', opciones);
+    const partes = formatter.formatToParts(new Date());
+    
+    const valores = {};
+    partes.forEach(parte => {
+        valores[parte.type] = parte.value;
+    });
+    
+    return {
+        year: valores.year,
+        month: valores.month,
+        day: valores.day,
+        hour: valores.hour,
+        minute: valores.minute
+    };
+}
+
 function initializeForm() {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    document.getElementById('fecha').value = `${year}-${month}-${day}`;
-    updateCurrentTime();
+    // Obtener fecha/hora actual en timezone Mazatlán
+    const fechaMazatlan = getFechaMazatlan();
+    
+    // Establecer fecha en formato yyyy-mm-dd para el input tipo date
+    document.getElementById('fecha').value = `${fechaMazatlan.year}-${fechaMazatlan.month}-${fechaMazatlan.day}`;
+    
+    // Establecer hora en formato HH:mm para el input tipo time
+    document.getElementById('hora').value = `${fechaMazatlan.hour}:${fechaMazatlan.minute}`;
+    
+    console.log('📅 Formulario inicializado con fecha/hora de Mazatlán:', 
+        `${fechaMazatlan.day}/${fechaMazatlan.month}/${fechaMazatlan.year} ${fechaMazatlan.hour}:${fechaMazatlan.minute}`);
 }
 
 function updateCurrentTime() {
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    document.getElementById('hora').value = `${hours}:${minutes}`;
+    // Mantener función legacy para compatibilidad
+    const fechaMazatlan = getFechaMazatlan();
+    document.getElementById('hora').value = `${fechaMazatlan.hour}:${fechaMazatlan.minute}`;
 }
+
+// Actualizar la hora cada minuto (opcional, puede comentarse si no se desea)
+setInterval(() => {
+    const fechaMazatlan = getFechaMazatlan();
+    const horaActual = document.getElementById('hora').value;
+    
+    // Solo actualizar si el usuario no ha modificado manualmente la hora
+    // (comparamos con la hora del sistema)
+    if (!document.getElementById('hora').dataset.userModified) {
+        document.getElementById('hora').value = `${fechaMazatlan.hour}:${fechaMazatlan.minute}`;
+    }
+}, 60000); // Actualizar cada minuto
+
+// Marcar cuando el usuario modifica manualmente la hora
+document.addEventListener('DOMContentLoaded', function() {
+    const horaInput = document.getElementById('hora');
+    const fechaInput = document.getElementById('fecha');
+    
+    if (horaInput) {
+        horaInput.addEventListener('change', function() {
+            this.dataset.userModified = 'true';
+        });
+    }
+    
+    if (fechaInput) {
+        fechaInput.addEventListener('change', function() {
+            this.dataset.userModified = 'true';
+        });
+    }
+});
 
 function setupEventListeners() {
     document.getElementById('tipo_registro').addEventListener('change', function() {
