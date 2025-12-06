@@ -110,38 +110,47 @@ h1 {
     display: none;
     background: white;
     border-radius: 10px;
-    padding: 20px;
+    padding: 25px;
     margin: 15px 0;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     text-align: center;
 }
 
 .user-info.show {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
 }
 
 .user-avatar {
-    width: 60px;
-    height: 60px;
+    width: 70px;
+    height: 70px;
     border-radius: 50%;
-    margin: 0 auto 15px;
-    display: block;
     border: 3px solid #4caf50;
+    display: block;
 }
 
 .user-email {
     font-weight: 600;
     color: #2e7d32;
     font-size: 1.1em;
-    margin-bottom: 8px;
+    width: 100%;
+    word-break: break-word;
 }
 
 .user-name {
     color: #666;
-    font-size: 0.95em;
-    margin-bottom: 15px;
+    font-size: 1em;
+    width: 100%;
+    margin-bottom: 5px;
 }
 
+.signout-btn {
+    margin-top: 10px;
+    width: auto;
+    min-width: 150px;
+}
 .google-signin-btn, .signout-btn {
     background: #4285f4;
     color: white;
