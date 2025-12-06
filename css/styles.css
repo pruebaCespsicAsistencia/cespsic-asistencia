@@ -76,7 +76,7 @@ h1 {
     font-weight: bold;
 }
 
-/* ESTILOS PARA AUTENTICACIÓN */
+/* ESTILOS PARA AUTENTICACIÃ“N */
 .auth-section {
     background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
     border: 2px solid #64b5f6;
@@ -110,9 +110,10 @@ h1 {
     display: none;
     background: white;
     border-radius: 10px;
-    padding: 15px;
+    padding: 20px;
     margin: 15px 0;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    text-align: center;
 }
 
 .user-info.show {
@@ -120,24 +121,25 @@ h1 {
 }
 
 .user-avatar {
-    width: 50px;
-    height: 50px;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
-    margin: 0 auto 10px;
+    margin: 0 auto 15px;
     display: block;
-    border: 2px solid #4caf50;
+    border: 3px solid #4caf50;
 }
 
 .user-email {
     font-weight: 600;
     color: #2e7d32;
     font-size: 1.1em;
+    margin-bottom: 8px;
 }
 
 .user-name {
     color: #666;
-    font-size: 0.9em;
-    margin-top: 5px;
+    font-size: 0.95em;
+    margin-bottom: 15px;
 }
 
 .google-signin-btn, .signout-btn {
@@ -206,7 +208,7 @@ h1 {
     gap: 8px;
 }
 
-/* ESTILOS PARA SECCIÓN DE REVOCAR */
+/* ESTILOS PARA SECCIÃ“N DE REVOCAR */
 .revoke-section {
     margin-top: 15px;
     padding-top: 15px;
@@ -382,7 +384,7 @@ h1 {
     box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
 }
 
-/* ESTILOS PARA REGISTROS DEL DÍA */
+/* ESTILOS PARA REGISTROS DEL DÃA */
 .registros-section {
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border: 2px solid #dee2e6;
@@ -516,7 +518,7 @@ h1 {
     line-height: 1.6;
 }
 
-/* ESTILOS PARA CONFIRMACIÓN DE GUARDADO */
+/* ESTILOS PARA CONFIRMACIÃ“N DE GUARDADO */
 .registro-confirmacion-guardado {
     background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
     border: 2px solid #28a745;
@@ -560,7 +562,7 @@ h1 {
     color: #0d4625;
 }
 
-/* ESTILOS PARA INFO 403 SIN BOTÓN */
+/* ESTILOS PARA INFO 403 SIN BOTÃ“N */
 .registro-info-403 {
     background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
     border: 2px solid #ffc107;
@@ -665,6 +667,20 @@ h1 {
 /* ESTILOS DEL FORMULARIO */
 .form-section {
     margin-bottom: 25px;
+}
+
+.info-message {
+    background: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    padding: 12px 15px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    color: #1565c0;
+    line-height: 1.5;
+}
+
+.info-message strong {
+    color: #0d47a1;
 }
 
 .form-group {
