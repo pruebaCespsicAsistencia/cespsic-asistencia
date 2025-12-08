@@ -15,7 +15,7 @@ const AMBIENTES = {
     EVIDENCIAS_FOLDER_ID: '1tt6yqPycpYT9My16frwjo_c0auz8Du_g',
     
     // Google Apps Script URL (Backend)
-    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbw10UgiYsuGYi16MisVfk7fx-wlGU-gUmCKTz2bZmyqys_2ku1ghZ9zzv71UncZ_sXlDg/exec',
+    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzmk-V0AyYsvF2IdKl3QaD1RtlV5EzUWt0TmooLJTZT7uLSRwvrPM9BcyoNj3V4y5SC/exec',
     
     // Firebase
     FIREBASE_CONFIG: {
