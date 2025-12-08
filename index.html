@@ -22,7 +22,7 @@
 				<img src="https://lh3.googleusercontent.com/d/12tYxfzWgy3BVYjadXOEKlX5-uSsxIrBt" alt="CESPSIC" class="logo">
 				<img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicología" class="logo">
             </div>
-            <h1>Servicio de atención psicológica, rescatando la inclusión del psicólogo a través del Centro de Servicios Psicológicos a la Comunidad (CESPSIC) v. 1.5.96</h1>
+            <h1>Servicio de atención psicológica, rescatando la inclusión del psicólogo a través del Centro de Servicios Psicológicos a la Comunidad (CESPSIC) v. 1.43</h1>
         </div>
 
         <!-- Sección de Autenticación -->
@@ -59,7 +59,7 @@
             <!-- Enlace para revocar permisos (solo visible cuando hay permisos) -->
             <div class="revoke-section" id="revoke-section" style="display: none;">
                 <button class="revoke-link" onclick="requestRevocation()">
-                    🔓 Revocar permisos en este dispositivo
+                    🔐 Revocar permisos en este dispositivo
                 </button>
             </div>
 			
@@ -174,19 +174,13 @@
                 <div class="form-section">
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="fecha">Fecha <span class="required">*</span></label>
-                            <input type="date" id="fecha" name="fecha" required>
-                            <small style="color: #666; font-size: 0.85em;">📅 Seleccione la fecha de asistencia</small>
+                            <label for="fecha">Fecha</label>
+                            <input type="date" id="fecha" name="fecha" readonly>
                         </div>
                         <div class="form-group">
-                            <label for="hora">Hora <span class="required">*</span></label>
-                            <input type="time" id="hora" name="hora" required>
-                            <small style="color: #666; font-size: 0.85em;">🕐 Seleccione la hora de asistencia</small>
+                            <label for="hora">Hora</label>
+                            <input type="time" id="hora" name="hora" readonly>
                         </div>
-                    </div>
-                    <div class="info-message" style="margin-bottom: 15px;">
-                        ℹ️ <strong>Importante:</strong> La fecha y hora mostradas corresponden al momento de su asistencia. 
-                        Puede modificarlas si registra posterior al evento. La fecha/hora real de registro se guarda automáticamente para validación.
                     </div>
                     
                     <!-- CAMPOS DE UBICACIÓN -->
