@@ -149,7 +149,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     setupEvidenciasHandlers();
     updateCurrentTime();
-    setInterval(updateCurrentTime, 1000);
+    //se comentarizo la siguiente linea por que se habilito el cambiar la hora asi que ya no ocupa estarse refrescando por que se actualiza siempre a la hora actual
+    //setInterval(updateCurrentTime, 1000);
 });
 
 function initializeForm() {
