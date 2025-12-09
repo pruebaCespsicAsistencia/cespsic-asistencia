@@ -153,18 +153,34 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeForm() {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
+    // Obtener fecha y hora actual en zona horaria America/Mazatlan
+    const now = new Date();
+    const options = { timeZone: 'America/Mazatlan' };
+    
+    // Convertir a timezone local
+    const mazatlanDate = new Date(now.toLocaleString('en-US', options));
+    
+    const year = mazatlanDate.getFullYear();
+    const month = String(mazatlanDate.getMonth() + 1).padStart(2, '0');
+    const day = String(mazatlanDate.getDate()).padStart(2, '0');
+    
+    // Establecer en formato yyyy-mm-dd para el input type="date"
     document.getElementById('fecha').value = `${year}-${month}-${day}`;
     updateCurrentTime();
 }
 
 function updateCurrentTime() {
+    // Obtener hora actual en zona horaria America/Mazatlan
     const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const options = { timeZone: 'America/Mazatlan' };
+    
+    // Convertir a timezone local
+    const mazatlanDate = new Date(now.toLocaleString('en-US', options));
+    
+    const hours = String(mazatlanDate.getHours()).padStart(2, '0');
+    const minutes = String(mazatlanDate.getMinutes()).padStart(2, '0');
+    
+    // Establecer en formato 24 horas para el input type="time"
     document.getElementById('hora').value = `${hours}:${minutes}`;
 }
 
@@ -358,7 +374,16 @@ async function handleSubmit(e) {
             // IDs y timestamps
             registro_id: registroID,
             timestamp: serverTimestamp(),
-            fecha_creacion: new Date().toISOString(),
+            fecha_creacion: new Date().toLocaleString('en-US', { 
+                timeZone: 'America/Mazatlan',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            }).replace(/(\d+)\/(\d+)\/(\d+),?\s*(\d+):(\d+):(\d+)/, '$3-$1-$2 $4:$5:$6'),
             
             // Usuario
             email: currentUser.email,
@@ -431,7 +456,13 @@ async function handleSubmit(e) {
         const docRef = { id: resultado.docId }; // Para compatibilidad con código existente
         
         // 4. Mostrar confirmación
-        const hora = new Date().toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'});
+        const now = new Date();
+        const hora = now.toLocaleTimeString('es-MX', {
+            timeZone: 'America/Mazatlan',
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true
+        });
         
         showStatus(`✅✅✅ ASISTENCIA REGISTRADA
 
