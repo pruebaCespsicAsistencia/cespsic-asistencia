@@ -110,6 +110,79 @@ console.log(`📱 Es iOS: ${isIOS ? 'Sí' : 'No'}`);
 console.log(`🌐 Navegador: ${isSafari ? 'Safari' : 'Otro'}`);
 console.log(`🔥 Firebase: Conectado`);
 
+// ========== VERIFICACIÓN INMEDIATA DE REDIRECT (ANTES DE DOMCONTENTLOADED) ==========
+// Esto DEBE ejecutarse lo antes posible para capturar el resultado del redirect
+(async function verificarRedirectInmediato() {
+    if (isIOS || isSafari) {
+        console.log('🚀 INICIANDO: Verificación inmediata de redirect para iOS/Safari');
+        console.log('📍 URL actual:', window.location.href);
+        console.log('🔗 Referrer:', document.referrer);
+        
+        try {
+            // Mostrar indicador visual ANTES de verificar
+            const authSection = document.getElementById('auth-section');
+            const authTitle = document.getElementById('auth-title');
+            if (authTitle) {
+                authTitle.innerHTML = '⏳ Verificando autenticación...';
+            }
+            
+            console.log('⏳ Llamando a getRedirectResult()...');
+            const result = await getRedirectResult(auth);
+            
+            console.log('📦 Resultado recibido:', result);
+            
+            if (result && result.user) {
+                console.log('✅✅✅ REDIRECT EXITOSO - Usuario encontrado');
+                console.log('👤 Email:', result.user.email);
+                console.log('🆔 UID:', result.user.uid);
+                console.log('📸 Photo:', result.user.photoURL);
+                
+                // Procesar autenticación exitosa
+                await handleAuthenticationSuccess(result);
+            } else {
+                console.log('ℹ️ No hay resultado de redirect (primera carga o ya procesado)');
+                if (authTitle) {
+                    authTitle.innerHTML = '🔒 Autenticación Requerida';
+                }
+            }
+        } catch (error) {
+            console.error('❌❌❌ ERROR en verificación inmediata:', error);
+            console.error('Código:', error.code);
+            console.error('Mensaje:', error.message);
+            console.error('Stack:', error.stack);
+            
+            // Mostrar error detallado
+            const authTitle = document.getElementById('auth-title');
+            if (authTitle) {
+                authTitle.innerHTML = '❌ Error en autenticación';
+            }
+            
+            let errorMsg = '❌ Error: ' + error.message;
+            
+            if (error.code === 'auth/unauthorized-domain') {
+                errorMsg = '❌ DOMINIO NO AUTORIZADO\n\n' +
+                          'Debe agregar este dominio en Firebase Console:\n' +
+                          window.location.hostname + '\n\n' +
+                          'Firebase Console → Authentication → Settings → Authorized domains';
+                console.error('🔥🔥🔥 ACCIÓN REQUERIDA: Agregar dominio a Firebase');
+            } else if (error.code === 'auth/operation-not-allowed') {
+                errorMsg = '❌ Método de autenticación deshabilitado.\n' +
+                          'Habilite Google en Firebase Console → Authentication → Sign-in method';
+            } else if (error.code === 'auth/invalid-api-key') {
+                errorMsg = '❌ API Key inválida. Verifique firebase-config.js';
+            } else if (error.code === 'auth/network-request-failed') {
+                errorMsg = '❌ Error de red. Verifique su conexión a Internet';
+            }
+            
+            setTimeout(() => {
+                alert(errorMsg);
+            }, 1000);
+        }
+    } else {
+        console.log('🌐 Chrome/Android - No se requiere verificación de redirect');
+    }
+})();
+
 // ========== FUNCIÓN: Información del Dispositivo ==========
 function getDeviceInfo() {
     return {
@@ -128,7 +201,7 @@ function getDeviceInfo() {
 }
 
 // ========== INICIALIZACIÓN ==========
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', function() {
     console.log('=== INFORMACIÓN DEL DISPOSITIVO ===');
     console.log('Tipo:', deviceType);
     console.log('Es Desktop:', isDesktop);
@@ -152,14 +225,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     setupEvidenciasHandlers();
     updateCurrentTime();
     
-    // Verificar redirect result DESPUÉS de inicializar todo
-    // Dar tiempo a Firebase para estar listo
-    setTimeout(async () => {
-        if (isIOS || isSafari) {
-            console.log('🔍 Verificando resultado de redirect (iOS/Safari)...');
-            await checkRedirectResult();
-        }
-    }, 500);
+    // La verificación de redirect ya se hizo ANTES de DOMContentLoaded
     
     //se comentarizo la siguiente linea por que se habilito el cambiar la hora asi que ya no ocupa estarse refrescando por que se actualiza siempre a la hora actual
     //setInterval(updateCurrentTime, 1000);
