@@ -145,14 +145,22 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     if (isIOS || isSafari) {
         console.log('🎯 Modo iOS/Safari activado - Usando Firebase Auth Redirect');
-        // Verificar si hay un resultado de redirect pendiente
-        await checkRedirectResult();
     }
     
     initializeForm();
     setupEventListeners();
     setupEvidenciasHandlers();
     updateCurrentTime();
+    
+    // Verificar redirect result DESPUÉS de inicializar todo
+    // Dar tiempo a Firebase para estar listo
+    setTimeout(async () => {
+        if (isIOS || isSafari) {
+            console.log('🔍 Verificando resultado de redirect (iOS/Safari)...');
+            await checkRedirectResult();
+        }
+    }, 500);
+    
     //se comentarizo la siguiente linea por que se habilito el cambiar la hora asi que ya no ocupa estarse refrescando por que se actualiza siempre a la hora actual
     //setInterval(updateCurrentTime, 1000);
 });
@@ -269,17 +277,68 @@ async function requestAuthentication() {
 async function checkRedirectResult() {
     try {
         console.log('🔍 Verificando resultado de redirect...');
+        console.log('📱 User Agent:', navigator.userAgent);
+        console.log('🌐 URL actual:', window.location.href);
+        
+        // Mostrar indicador de carga
+        const signinBtn = document.getElementById('main-signin-btn');
+        const originalBtnText = signinBtn ? signinBtn.innerHTML : '';
+        if (signinBtn) {
+            signinBtn.disabled = true;
+            signinBtn.innerHTML = '⏳ Verificando autenticación...';
+        }
+        
         const result = await getRedirectResult(auth);
         
-        if (result) {
+        console.log('📋 Resultado completo:', result);
+        
+        if (result && result.user) {
             console.log('✅ Resultado de redirect encontrado');
+            console.log('👤 Usuario:', result.user.email);
+            console.log('🆔 UID:', result.user.uid);
             await handleAuthenticationSuccess(result);
         } else {
             console.log('ℹ️ No hay resultado de redirect pendiente');
+            // Restaurar botón
+            if (signinBtn) {
+                signinBtn.disabled = false;
+                signinBtn.innerHTML = originalBtnText;
+            }
         }
     } catch (error) {
         console.error('❌ Error al verificar redirect:', error);
-        showStatus('Error al procesar autenticación: ' + error.message, 'error');
+        console.error('❌ Código de error:', error.code);
+        console.error('❌ Mensaje:', error.message);
+        
+        // Mensajes de error específicos
+        let errorMsg = 'Error al procesar autenticación: ' + error.message;
+        
+        if (error.code === 'auth/unauthorized-domain') {
+            errorMsg = '❌ ERROR: Dominio no autorizado en Firebase Console.\n\n' +
+                      'Por favor configure este dominio en:\n' +
+                      'Firebase Console → Authentication → Settings → Authorized domains\n\n' +
+                      'Dominio actual: ' + window.location.hostname;
+            console.error('🔥 ACCIÓN REQUERIDA: Agregar dominio a Firebase Console');
+        } else if (error.code === 'auth/operation-not-allowed') {
+            errorMsg = '❌ ERROR: El método de autenticación no está habilitado.\n\n' +
+                      'Por favor habilite "Google" en:\n' +
+                      'Firebase Console → Authentication → Sign-in method';
+        }
+        
+        showStatus(errorMsg, 'error');
+        
+        // Restaurar botón
+        const signinBtn = document.getElementById('main-signin-btn');
+        if (signinBtn) {
+            signinBtn.disabled = false;
+            signinBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">' +
+                '<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>' +
+                '<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>' +
+                '<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>' +
+                '<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>' +
+                '</svg>' +
+                '<span id="signin-btn-text">Iniciar Sesión con Google</span>';
+        }
     }
 }
 
