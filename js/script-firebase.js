@@ -151,6 +151,14 @@ document.addEventListener('DOMContentLoaded', function() {
     updateCurrentTime();
     //se comentarizo la siguiente linea por que se habilito el cambiar la hora asi que ya no ocupa estarse refrescando por que se actualiza siempre a la hora actual
     //setInterval(updateCurrentTime, 1000);
+    // Actualizar hora automáticamente cada segundo hasta que el usuario la edite
+    let horaInterval = setInterval(updateCurrentTime, 1000);
+    
+    // Detener actualización automática cuando el usuario edita manualmente
+    document.getElementById('hora').addEventListener('focus', function() {
+        clearInterval(horaInterval);
+        console.log('⏰ Actualización automática de hora detenida - modo edición manual');
+    });
 });
 
 function initializeForm() {
