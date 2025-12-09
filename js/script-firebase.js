@@ -16,7 +16,9 @@ import {
   where, 
   orderBy, 
   serverTimestamp, 
-  signInWithPopup, 
+  signInWithPopup,      // Para Chrome/Android
+  signInWithRedirect,   // Para Safari/iOS
+  getRedirectResult,    // Para obtener resultado de redirect
   GoogleAuthProvider, 
   firebaseSignOut 
 } from './firebase-config.js';
@@ -126,12 +128,12 @@ function getDeviceInfo() {
 }
 
 // ========== INICIALIZACIÓN ==========
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     console.log('=== INFORMACIÓN DEL DISPOSITIVO ===');
     console.log('Tipo:', deviceType);
     console.log('Es Desktop:', isDesktop);
     console.log('Precisión requerida:', REQUIRED_ACCURACY + 'm');
-    console.log('Precisión óptima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
+    console.log('Precisión ótima:', REQUIRED_ACCURACY_OPTIMAL + 'm');
     
     if (isDesktop) {
         console.log('⚠️ MODO DESKTOP ACTIVADO');
@@ -141,8 +143,10 @@ document.addEventListener('DOMContentLoaded', function() {
         showDesktopWarning();
     }
     
-    if (isIOS) {
-        console.log('🎯 Modo iOS activado - Aplicando compatibilidad especial');
+    if (isIOS || isSafari) {
+        console.log('🎯 Modo iOS/Safari activado - Usando Firebase Auth Redirect');
+        // Verificar si hay un resultado de redirect pendiente
+        await checkRedirectResult();
     }
     
     initializeForm();
@@ -222,8 +226,66 @@ async function requestAuthentication() {
             prompt: 'select_account'
         });
         
-        const result = await signInWithPopup(auth, provider);
+        // Detectar si es Safari o iOS para usar redirect
+        if (isIOS || isSafari) {
+            console.log('🍎 Dispositivo Safari/iOS detectado - Usando signInWithRedirect');
+            // Mostrar mensaje al usuario antes del redirect
+            showStatus('🔄 Redirigiendo para autenticación...', 'loading');
+            
+            // Iniciar el flujo de redirect
+            await signInWithRedirect(auth, provider);
+            // Nota: después de esto la página se recarga automáticamente
+            // El resultado se maneja en checkRedirectResult()
+            
+        } else {
+            console.log('🌐 Chrome/Android detectado - Usando signInWithPopup');
+            // Usar popup para Chrome/Android (método original)
+            const result = await signInWithPopup(auth, provider);
+            await handleAuthenticationSuccess(result);
+        }
         
+    } catch (error) {
+        console.error('❌ Error en autenticación:', error);
+        
+        // Mensajes de error específicos para Safari/iOS
+        let errorMessage = 'Error en la autenticación: ' + error.message;
+        
+        if ((isIOS || isSafari) && error.code === 'auth/popup-blocked') {
+            errorMessage = '❌ Error: Los popups están bloqueados. Usando método de redirect...';
+            console.log('🔄 Intentando con redirect debido a popup bloqueado');
+            try {
+                await signInWithRedirect(auth, new GoogleAuthProvider());
+                return;
+            } catch (redirectError) {
+                errorMessage = 'Error al redirigir: ' + redirectError.message;
+            }
+        }
+        
+        showStatus(errorMessage, 'error');
+    }
+}
+
+// ========== VERIFICAR RESULTADO DE REDIRECT (Safari/iOS) ==========
+async function checkRedirectResult() {
+    try {
+        console.log('🔍 Verificando resultado de redirect...');
+        const result = await getRedirectResult(auth);
+        
+        if (result) {
+            console.log('✅ Resultado de redirect encontrado');
+            await handleAuthenticationSuccess(result);
+        } else {
+            console.log('ℹ️ No hay resultado de redirect pendiente');
+        }
+    } catch (error) {
+        console.error('❌ Error al verificar redirect:', error);
+        showStatus('Error al procesar autenticación: ' + error.message, 'error');
+    }
+}
+
+// ========== MANEJAR ÉXITO DE AUTENTICACIÓN (COMÚN PARA AMBOS MÉTODOS) ==========
+async function handleAuthenticationSuccess(result) {
+    try {
         // Obtener el Google User ID real del proveedor de Google
         const googleUserID = result.user.providerData.find(p => p.providerId === 'google.com')?.uid || result.user.uid;
         
@@ -253,8 +315,8 @@ async function requestAuthentication() {
         console.log('✅ Autenticación exitosa:', currentUser.email);
         
     } catch (error) {
-        console.error('❌ Error en autenticación:', error);
-        showStatus('Error en la autenticación: ' + error.message, 'error');
+        console.error('❌ Error procesando autenticación exitosa:', error);
+        showStatus('Error al completar autenticación: ' + error.message, 'error');
     }
 }
 
