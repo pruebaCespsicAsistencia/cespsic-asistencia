@@ -118,6 +118,10 @@ console.log(`🔥 Firebase: Conectado`);
         console.log('📍 URL actual:', window.location.href);
         console.log('🔗 Referrer:', document.referrer);
         
+        // Verificar si hay un estado de autenticación pendiente
+        const authPending = sessionStorage.getItem('auth_pending');
+        console.log('🔍 Estado de autenticación pendiente:', authPending);
+        
         try {
             // Mostrar indicador visual ANTES de verificar
             const authSection = document.getElementById('auth-section');
@@ -137,12 +141,44 @@ console.log(`🔥 Firebase: Conectado`);
                 console.log('🆔 UID:', result.user.uid);
                 console.log('📸 Photo:', result.user.photoURL);
                 
+                // Limpiar estado pendiente
+                sessionStorage.removeItem('auth_pending');
+                
+                // Guardar estado de autenticación
+                sessionStorage.setItem('auth_user', JSON.stringify({
+                    email: result.user.email,
+                    uid: result.user.uid,
+                    name: result.user.displayName,
+                    photo: result.user.photoURL
+                }));
+                
                 // Procesar autenticación exitosa
                 await handleAuthenticationSuccess(result);
             } else {
-                console.log('ℹ️ No hay resultado de redirect (primera carga o ya procesado)');
-                if (authTitle) {
-                    authTitle.innerHTML = '🔒 Autenticación Requerida';
+                console.log('ℹ️ No hay resultado de redirect');
+                
+                // Si había autenticación pendiente pero no hay resultado, hay un problema
+                if (authPending === 'true') {
+                    console.error('⚠️ Autenticación pendiente pero sin resultado - posible error');
+                    sessionStorage.removeItem('auth_pending');
+                    
+                    if (authTitle) {
+                        authTitle.innerHTML = '❌ Error: Autenticación no completada';
+                    }
+                    
+                    setTimeout(() => {
+                        alert('⚠️ La autenticación no se completó correctamente.\n\n' +
+                              'Por favor, intente nuevamente.\n\n' +
+                              'Si el problema persiste:\n' +
+                              '1. Cierre todas las pestañas de esta página\n' +
+                              '2. Limpie el caché del navegador\n' +
+                              '3. Intente nuevamente');
+                    }, 1000);
+                } else {
+                    // Primera carga normal
+                    if (authTitle) {
+                        authTitle.innerHTML = '🔒 Autenticación Requerida';
+                    }
                 }
             }
         } catch (error) {
@@ -150,6 +186,9 @@ console.log(`🔥 Firebase: Conectado`);
             console.error('Código:', error.code);
             console.error('Mensaje:', error.message);
             console.error('Stack:', error.stack);
+            
+            // Limpiar estado pendiente en caso de error
+            sessionStorage.removeItem('auth_pending');
             
             // Mostrar error detallado
             const authTitle = document.getElementById('auth-title');
@@ -172,6 +211,10 @@ console.log(`🔥 Firebase: Conectado`);
                 errorMsg = '❌ API Key inválida. Verifique firebase-config.js';
             } else if (error.code === 'auth/network-request-failed') {
                 errorMsg = '❌ Error de red. Verifique su conexión a Internet';
+            } else if (error.code === 'auth/popup-closed-by-user') {
+                errorMsg = '⚠️ Autenticación cancelada por el usuario';
+            } else if (error.code === 'auth/cancelled-popup-request') {
+                errorMsg = '⚠️ Solicitud de autenticación cancelada';
             }
             
             setTimeout(() => {
@@ -302,9 +345,13 @@ async function requestAuthentication() {
         
         // Detectar si es Safari o iOS para usar redirect
         if (isIOS || isSafari) {
-            console.log('🍎 Dispositivo Safari/iOS detectado - Usando signInWithRedirect');
+            console.log('🎯 Dispositivo Safari/iOS detectado - Usando signInWithRedirect');
             // Mostrar mensaje al usuario antes del redirect
             showStatus('🔄 Redirigiendo para autenticación...', 'loading');
+            
+            // Marcar que hay autenticación pendiente
+            sessionStorage.setItem('auth_pending', 'true');
+            console.log('✅ Estado auth_pending guardado en sessionStorage');
             
             // Iniciar el flujo de redirect
             await signInWithRedirect(auth, provider);
@@ -1496,7 +1543,11 @@ function getCurrentLocation() {
     
     updateLocationStatus('loading', statusMsg, '');
 
-    const options = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
+    // Safari/iOS necesita más tiempo para obtener geolocalización
+    const timeoutValue = (isIOS || isSafari) ? 30000 : 20000;
+    const options = { enableHighAccuracy: true, timeout: timeoutValue, maximumAge: 0 };
+    
+    console.log(`⏱️ Timeout de geolocalización: ${timeoutValue}ms (${(isIOS || isSafari) ? "Safari/iOS" : "Chrome/Android"})`);
     
     navigator.geolocation.getCurrentPosition(
         function(position) {
