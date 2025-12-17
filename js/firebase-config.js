@@ -39,7 +39,9 @@ import {
   signInWithRedirect,          // Login con redirect (Safari/iOS)
   getRedirectResult,           // Obtener resultado del redirect
   GoogleAuthProvider,          // Proveedor de Google
-  signOut as firebaseSignOut   // Cerrar sesión (renombrado para evitar conflictos)
+  signOut as firebaseSignOut,  // Cerrar sesión (renombrado para evitar conflictos)
+  setPersistence,              // Configurar persistencia de sesión
+  browserLocalPersistence      // Persistencia en localStorage
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
 // ========== INICIALIZAR FIREBASE ==========
@@ -80,5 +82,7 @@ export {
   signInWithRedirect,    // signInWithRedirect(auth, provider) - Safari/iOS
   getRedirectResult,     // getRedirectResult(auth) - Obtener resultado redirect
   GoogleAuthProvider,    // new GoogleAuthProvider()
-  firebaseSignOut        // firebaseSignOut(auth)
+  firebaseSignOut,       // firebaseSignOut(auth)
+  setPersistence,        // setPersistence(auth, browserLocalPersistence)
+  browserLocalPersistence // Tipo de persistencia
 };
