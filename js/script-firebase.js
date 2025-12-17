@@ -157,28 +157,16 @@ console.log(`🔥 Firebase: Conectado`);
             } else {
                 console.log('ℹ️ No hay resultado de redirect');
                 
-                // Si había autenticación pendiente pero no hay resultado, hay un problema
+                // Si había autenticación pendiente, limpiar pero NO mostrar error
+                // (puede ser primera carga después de redirect, aún procesando)
                 if (authPending === 'true') {
-                    console.error('⚠️ Autenticación pendiente pero sin resultado - posible error');
+                    console.log('⏳ Autenticación pendiente detectada, limpiando estado...');
                     sessionStorage.removeItem('auth_pending');
-                    
-                    if (authTitle) {
-                        authTitle.innerHTML = '❌ Error: Autenticación no completada';
-                    }
-                    
-                    setTimeout(() => {
-                        alert('⚠️ La autenticación no se completó correctamente.\n\n' +
-                              'Por favor, intente nuevamente.\n\n' +
-                              'Si el problema persiste:\n' +
-                              '1. Cierre todas las pestañas de esta página\n' +
-                              '2. Limpie el caché del navegador\n' +
-                              '3. Intente nuevamente');
-                    }, 1000);
-                } else {
-                    // Primera carga normal
-                    if (authTitle) {
-                        authTitle.innerHTML = '🔒 Autenticación Requerida';
-                    }
+                }
+                
+                // Primera carga normal o después de redirect sin resultado
+                if (authTitle) {
+                    authTitle.innerHTML = '🔒 Autenticación Requerida';
                 }
             }
         } catch (error) {
