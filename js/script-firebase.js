@@ -117,6 +117,11 @@ console.log(`🔥 Firebase: Conectado`);
         console.log('🚀 INICIANDO: Verificación inmediata de redirect para iOS/Safari');
         console.log('📍 URL actual:', window.location.href);
         console.log('🔗 Referrer:', document.referrer);
+        console.log('🕐 Timestamp:', new Date().toISOString());
+        
+        // Obtener parámetros de URL para debugging
+        const urlParams = new URLSearchParams(window.location.search);
+        console.log('📋 Parámetros URL:', Array.from(urlParams.entries()));
         
         try {
             // Mostrar indicador visual ANTES de verificar
@@ -124,11 +129,16 @@ console.log(`🔥 Firebase: Conectado`);
             const authTitle = document.getElementById('auth-title');
             if (authTitle) {
                 authTitle.innerHTML = '⏳ Verificando autenticación...';
+                authTitle.style.color = '#ff9800';
             }
             
             console.log('⏳ Llamando a getRedirectResult()...');
+            const startTime = performance.now();
+            
             const result = await getRedirectResult(auth);
             
+            const endTime = performance.now();
+            console.log(`⏱️ getRedirectResult() completado en ${(endTime - startTime).toFixed(0)}ms`);
             console.log('📦 Resultado recibido:', result);
             
             if (result && result.user) {
@@ -136,13 +146,53 @@ console.log(`🔥 Firebase: Conectado`);
                 console.log('👤 Email:', result.user.email);
                 console.log('🆔 UID:', result.user.uid);
                 console.log('📸 Photo:', result.user.photoURL);
+                console.log('🔑 Provider Data:', result.user.providerData);
+                
+                // Guardar en sessionStorage para evitar reprocesar
+                sessionStorage.setItem('auth_processed', 'true');
+                sessionStorage.setItem('auth_email', result.user.email);
                 
                 // Procesar autenticación exitosa
                 await handleAuthenticationSuccess(result);
+                
+                console.log('✅ Autenticación procesada exitosamente');
+                
             } else {
-                console.log('ℹ️ No hay resultado de redirect (primera carga o ya procesado)');
-                if (authTitle) {
-                    authTitle.innerHTML = '🔒 Autenticación Requerida';
+                console.log('ℹ️ No hay resultado de redirect');
+                
+                // Verificar si ya procesamos antes
+                const wasProcessed = sessionStorage.getItem('auth_processed');
+                const savedEmail = sessionStorage.getItem('auth_email');
+                
+                if (wasProcessed === 'true' && savedEmail) {
+                    console.log('⚠️ ADVERTENCIA: Auth ya fue procesada antes');
+                    console.log('📧 Email guardado:', savedEmail);
+                    console.log('🔄 Posible problema: redirect loop o sesión perdida');
+                    
+                    // Mostrar mensaje al usuario
+                    if (authTitle) {
+                        authTitle.innerHTML = '⚠️ Problema detectado - Intente nuevamente';
+                        authTitle.style.color = '#f44336';
+                    }
+                    
+                    // Limpiar sessionStorage para permitir nuevo intento
+                    sessionStorage.removeItem('auth_processed');
+                    sessionStorage.removeItem('auth_email');
+                    
+                    setTimeout(() => {
+                        if (authTitle) {
+                            authTitle.innerHTML = '🔒 Autenticación Requerida';
+                            authTitle.style.color = '';
+                        }
+                        alert('⚠️ Hubo un problema con la autenticación.\n\nPor favor:\n1. Asegúrese de tener buena conexión\n2. Permita cookies de terceros\n3. Intente nuevamente');
+                    }, 2000);
+                    
+                } else {
+                    // Primera carga normal
+                    if (authTitle) {
+                        authTitle.innerHTML = '🔒 Autenticación Requerida';
+                        authTitle.style.color = '';
+                    }
                 }
             }
         } catch (error) {
@@ -151,10 +201,18 @@ console.log(`🔥 Firebase: Conectado`);
             console.error('Mensaje:', error.message);
             console.error('Stack:', error.stack);
             
+            // Guardar error en sessionStorage para análisis
+            sessionStorage.setItem('last_auth_error', JSON.stringify({
+                code: error.code,
+                message: error.message,
+                timestamp: new Date().toISOString()
+            }));
+            
             // Mostrar error detallado
             const authTitle = document.getElementById('auth-title');
             if (authTitle) {
                 authTitle.innerHTML = '❌ Error en autenticación';
+                authTitle.style.color = '#f44336';
             }
             
             let errorMsg = '❌ Error: ' + error.message;
@@ -165,18 +223,35 @@ console.log(`🔥 Firebase: Conectado`);
                           window.location.hostname + '\n\n' +
                           'Firebase Console → Authentication → Settings → Authorized domains';
                 console.error('🔥🔥🔥 ACCIÓN REQUERIDA: Agregar dominio a Firebase');
+                
             } else if (error.code === 'auth/operation-not-allowed') {
                 errorMsg = '❌ Método de autenticación deshabilitado.\n' +
                           'Habilite Google en Firebase Console → Authentication → Sign-in method';
+                          
             } else if (error.code === 'auth/invalid-api-key') {
                 errorMsg = '❌ API Key inválida. Verifique firebase-config.js';
+                
             } else if (error.code === 'auth/network-request-failed') {
                 errorMsg = '❌ Error de red. Verifique su conexión a Internet';
+                
+            } else if (error.code === 'auth/popup-closed-by-user') {
+                errorMsg = '❌ Ventana cerrada por el usuario. Intente nuevamente.';
+                
+            } else if (error.code === 'auth/cancelled-popup-request') {
+                errorMsg = '❌ Solicitud cancelada. Intente nuevamente.';
             }
             
             setTimeout(() => {
-                alert(errorMsg);
+                alert(errorMsg + '\n\nSi el problema persiste:\n1. Limpie cache del navegador\n2. Permita cookies de terceros\n3. Intente en modo incógnito');
             }, 1000);
+            
+            // Restaurar UI después de error
+            setTimeout(() => {
+                if (authTitle) {
+                    authTitle.innerHTML = '🔒 Autenticación Requerida';
+                    authTitle.style.color = '';
+                }
+            }, 5000);
         }
     } else {
         console.log('🌐 Chrome/Android - No se requiere verificación de redirect');
@@ -294,6 +369,11 @@ function showDesktopWarning() {
 async function requestAuthentication() {
     try {
         console.log('🔐 Iniciando autenticación con Firebase...');
+        console.log('📱 Dispositivo:', deviceType);
+        console.log('🌐 Navegador:', isSafari ? 'Safari' : isIOS ? 'iOS Browser' : 'Otro');
+        
+        // Limpiar cualquier error previo
+        sessionStorage.removeItem('last_auth_error');
         
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({
@@ -302,24 +382,58 @@ async function requestAuthentication() {
         
         // Detectar si es Safari o iOS para usar redirect
         if (isIOS || isSafari) {
-            console.log('🍎 Dispositivo Safari/iOS detectado - Usando signInWithRedirect');
+            console.log('🎯 Dispositivo Safari/iOS detectado - Usando signInWithRedirect');
+            console.log('⏰ Timestamp antes de redirect:', new Date().toISOString());
+            
+            // Guardar estado antes del redirect
+            sessionStorage.setItem('auth_attempt_time', Date.now().toString());
+            sessionStorage.setItem('auth_method', 'redirect');
+            
             // Mostrar mensaje al usuario antes del redirect
             showStatus('🔄 Redirigiendo para autenticación...', 'loading');
             
+            // Deshabilitar botón para evitar múltiples clicks
+            const signinBtn = document.getElementById('main-signin-btn');
+            if (signinBtn) {
+                signinBtn.disabled = true;
+                signinBtn.innerHTML = '⏳ Redirigiendo...';
+            }
+            
+            console.log('🚀 Llamando signInWithRedirect...');
+            
             // Iniciar el flujo de redirect
             await signInWithRedirect(auth, provider);
+            
+            console.log('✅ signInWithRedirect llamado (página debería recargar)');
             // Nota: después de esto la página se recarga automáticamente
-            // El resultado se maneja en checkRedirectResult()
+            // El resultado se maneja en verificarRedirectInmediato()
             
         } else {
             console.log('🌐 Chrome/Android detectado - Usando signInWithPopup');
+            
+            // Guardar intento
+            sessionStorage.setItem('auth_attempt_time', Date.now().toString());
+            sessionStorage.setItem('auth_method', 'popup');
+            
             // Usar popup para Chrome/Android (método original)
             const result = await signInWithPopup(auth, provider);
+            
+            console.log('✅ signInWithPopup exitoso');
             await handleAuthenticationSuccess(result);
         }
         
     } catch (error) {
         console.error('❌ Error en autenticación:', error);
+        console.error('Código de error:', error.code);
+        console.error('Mensaje:', error.message);
+        
+        // Guardar error para diagnóstico
+        sessionStorage.setItem('last_auth_error', JSON.stringify({
+            code: error.code,
+            message: error.message,
+            method: (isIOS || isSafari) ? 'redirect' : 'popup',
+            timestamp: new Date().toISOString()
+        }));
         
         // Mensajes de error específicos para Safari/iOS
         let errorMessage = 'Error en la autenticación: ' + error.message;
@@ -333,9 +447,32 @@ async function requestAuthentication() {
             } catch (redirectError) {
                 errorMessage = 'Error al redirigir: ' + redirectError.message;
             }
+        } else if (error.code === 'auth/unauthorized-domain') {
+            errorMessage = '❌ Dominio no autorizado en Firebase.\nContacte al administrador.';
+        } else if (error.code === 'auth/operation-not-allowed') {
+            errorMessage = '❌ Autenticación con Google no habilitada.\nContacte al administrador.';
+        } else if (error.code === 'auth/popup-closed-by-user') {
+            errorMessage = '❌ Ventana de autenticación cerrada.\nIntente nuevamente.';
+        } else if (error.code === 'auth/network-request-failed') {
+            errorMessage = '❌ Error de red.\nVerifique su conexión a Internet.';
         }
         
         showStatus(errorMessage, 'error');
+        
+        // Restaurar botón
+        const signinBtn = document.getElementById('main-signin-btn');
+        if (signinBtn) {
+            signinBtn.disabled = false;
+            signinBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">' +
+                '<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>' +
+                '<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>' +
+                '<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>' +
+                '<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>' +
+                '</svg>' +
+                '<span id="signin-btn-text">Iniciar Sesión con Google</span>';
+        }
+        
+        console.log('❌ Autenticación fallida - usuario puede intentar nuevamente');
     }
 }
 
@@ -1496,7 +1633,9 @@ function getCurrentLocation() {
     
     updateLocationStatus('loading', statusMsg, '');
 
-    const options = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
+    // Timeout más largo para iOS/Safari (45 segundos vs 20)
+    const timeoutDuration = (isIOS || isSafari) ? 45000 : 20000;
+    const options = { enableHighAccuracy: true, timeout: timeoutDuration, maximumAge: 0 };
     
     navigator.geolocation.getCurrentPosition(
         function(position) {
