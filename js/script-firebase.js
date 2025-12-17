@@ -35,19 +35,6 @@ import {
   obtenerEstadisticasLogs
 } from './firebase-logger.js';
 
-// ========== CONFIGURAR PERSISTENCIA DE SESIÓN ==========
-import { setPersistence, browserLocalPersistence } from "./firebase-config.js";
-
-// Configurar persistencia INMEDIATAMENTE
-(async () => {
-    try {
-        await setPersistence(auth, browserLocalPersistence);
-        console.log("✅ Persistencia de sesión configurada: browserLocalPersistence");
-    } catch (error) {
-        console.error("⚠️ Error configurando persistencia:", error);
-    }
-})();
-
 console.log('📊 Sistema de logs Firebase: CARGADO');
 // ========================================================================================================
 // 🔧 CONFIGURACIÓN - Importada desde config.js
@@ -111,77 +98,8 @@ const MAX_FILES = 5;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-// ========== VERIFICACIÓN DE REDIRECT PARA SAFARI/iOS ==========
-async function verificarRedirectSafari() {
-    console.log("🚀 Verificación de redirect para iOS/Safari");
-    console.log("📍 URL actual:", window.location.href);
-    
-    const authTitle = document.getElementById("auth-title");
-    
-    try {
-        if (authTitle) {
-            authTitle.innerHTML = "⏳ Verificando autenticación...";
-        }
-        
-        console.log("⏳ Llamando a getRedirectResult()...");
-        const result = await getRedirectResult(auth);
-        
-        console.log("📦 Resultado recibido:", result);
-        
-        if (result && result.user) {
-            console.log("✅✅✅ REDIRECT EXITOSO - Usuario encontrado");
-            console.log("👤 Email:", result.user.email);
-            console.log("🆔 UID:", result.user.uid);
-            
-            // Limpiar estado pendiente
-            sessionStorage.removeItem("auth_pending");
-            
-            // Procesar autenticación exitosa
-            await handleAuthenticationSuccess(result);
-        } else {
-            console.log("ℹ️ No hay resultado de redirect");
-            
-            // Limpiar auth_pending si existe
-            const authPending = sessionStorage.getItem("auth_pending");
-            if (authPending === "true") {
-                console.log("⏳ Limpiando auth_pending...");
-                sessionStorage.removeItem("auth_pending");
-            }
-            
-            if (authTitle) {
-                authTitle.innerHTML = "🔒 Autenticación Requerida";
-            }
-        }
-    } catch (error) {
-        console.error("❌❌❌ ERROR en verificación de redirect:", error);
-        console.error("Código:", error.code);
-        console.error("Mensaje:", error.message);
-        
-        sessionStorage.removeItem("auth_pending");
-        
-        if (authTitle) {
-            authTitle.innerHTML = "❌ Error en autenticación";
-        }
-        
-        let errorMsg = "❌ Error: " + error.message;
-        ilitado.\n" +
-                      "Habilite Google en Firebase Console → Authentication → Sign-in method";
-        }
-        
-        alert(errorMsg);
-    }
-}
-
 const ubicacionesUAS = [
-    { name: "CESPSIC - Centro de Servicios Psicológicos", lat: 24.8278, lng: -107.3812, radi
-        if (error.code === "auth/unauthorized-domain") {
-            errorMsg = "❌ DOMINIO NO AUTORIZADO\n\n" +
-                      "Debe agregar este dominio en Firebase Console:\n" +
-                      window.location.hostname + "\n\n" +
-                      "Firebase Console → Authentication → Settings → Authorized domains";
-            console.error("🔥🔥🔥 ACCIÓN REQUERIDA: Agregar dominio a Firebase");
-        } else if (error.code === "auth/operation-not-allowed") {
-            errorMsg = "❌ Método de autenticación deshabus: 50 },
+    { name: "CESPSIC - Centro de Servicios Psicológicos", lat: 24.8278, lng: -107.3812, radius: 50 },
     { name: "Facultad de Psicología UAS", lat: 24.7993, lng: -107.3950, radius: 100 },
     { name: "Universidad Autónoma de Sinaloa - Campus Central", lat: 24.7990, lng: -107.3950, radius: 200 }
 ];
@@ -191,6 +109,79 @@ console.log(`💻 Es Desktop: ${isDesktop ? 'Sí' : 'No'}`);
 console.log(`📱 Es iOS: ${isIOS ? 'Sí' : 'No'}`);
 console.log(`🌐 Navegador: ${isSafari ? 'Safari' : 'Otro'}`);
 console.log(`🔥 Firebase: Conectado`);
+
+// ========== VERIFICACIÓN INMEDIATA DE REDIRECT (ANTES DE DOMCONTENTLOADED) ==========
+// Esto DEBE ejecutarse lo antes posible para capturar el resultado del redirect
+(async function verificarRedirectInmediato() {
+    if (isIOS || isSafari) {
+        console.log('🚀 INICIANDO: Verificación inmediata de redirect para iOS/Safari');
+        console.log('📍 URL actual:', window.location.href);
+        console.log('🔗 Referrer:', document.referrer);
+        
+        try {
+            // Mostrar indicador visual ANTES de verificar
+            const authSection = document.getElementById('auth-section');
+            const authTitle = document.getElementById('auth-title');
+            if (authTitle) {
+                authTitle.innerHTML = '⏳ Verificando autenticación...';
+            }
+            
+            console.log('⏳ Llamando a getRedirectResult()...');
+            const result = await getRedirectResult(auth);
+            
+            console.log('📦 Resultado recibido:', result);
+            
+            if (result && result.user) {
+                console.log('✅✅✅ REDIRECT EXITOSO - Usuario encontrado');
+                console.log('👤 Email:', result.user.email);
+                console.log('🆔 UID:', result.user.uid);
+                console.log('📸 Photo:', result.user.photoURL);
+                
+                // Procesar autenticación exitosa
+                await handleAuthenticationSuccess(result);
+            } else {
+                console.log('ℹ️ No hay resultado de redirect (primera carga o ya procesado)');
+                if (authTitle) {
+                    authTitle.innerHTML = '🔒 Autenticación Requerida';
+                }
+            }
+        } catch (error) {
+            console.error('❌❌❌ ERROR en verificación inmediata:', error);
+            console.error('Código:', error.code);
+            console.error('Mensaje:', error.message);
+            console.error('Stack:', error.stack);
+            
+            // Mostrar error detallado
+            const authTitle = document.getElementById('auth-title');
+            if (authTitle) {
+                authTitle.innerHTML = '❌ Error en autenticación';
+            }
+            
+            let errorMsg = '❌ Error: ' + error.message;
+            
+            if (error.code === 'auth/unauthorized-domain') {
+                errorMsg = '❌ DOMINIO NO AUTORIZADO\n\n' +
+                          'Debe agregar este dominio en Firebase Console:\n' +
+                          window.location.hostname + '\n\n' +
+                          'Firebase Console → Authentication → Settings → Authorized domains';
+                console.error('🔥🔥🔥 ACCIÓN REQUERIDA: Agregar dominio a Firebase');
+            } else if (error.code === 'auth/operation-not-allowed') {
+                errorMsg = '❌ Método de autenticación deshabilitado.\n' +
+                          'Habilite Google en Firebase Console → Authentication → Sign-in method';
+            } else if (error.code === 'auth/invalid-api-key') {
+                errorMsg = '❌ API Key inválida. Verifique firebase-config.js';
+            } else if (error.code === 'auth/network-request-failed') {
+                errorMsg = '❌ Error de red. Verifique su conexión a Internet';
+            }
+            
+            setTimeout(() => {
+                alert(errorMsg);
+            }, 1000);
+        }
+    } else {
+        console.log('🌐 Chrome/Android - No se requiere verificación de redirect');
+    }
+})();
 
 // ========== FUNCIÓN: Información del Dispositivo ==========
 function getDeviceInfo() {
@@ -210,7 +201,7 @@ function getDeviceInfo() {
 }
 
 // ========== INICIALIZACIÓN ==========
-document.addEventListener("DOMContentLoaded", async function() {
+document.addEventListener('DOMContentLoaded', function() {
     console.log('=== INFORMACIÓN DEL DISPOSITIVO ===');
     console.log('Tipo:', deviceType);
     console.log('Es Desktop:', isDesktop);
@@ -226,8 +217,7 @@ document.addEventListener("DOMContentLoaded", async function() {
     }
     
     if (isIOS || isSafari) {
-        console.log('📱 Safari/iOS detectado - Verificando redirect primero...');
-        await verificarRedirectSafari();
+        console.log('🎯 Modo iOS/Safari activado - Usando Firebase Auth Redirect');
     }
     
     initializeForm();
@@ -312,19 +302,9 @@ async function requestAuthentication() {
         
         // Detectar si es Safari o iOS para usar redirect
         if (isIOS || isSafari) {
-            console.log('🎯 Dispositivo Safari/iOS detectado - Usando signInWithRedirect');
+            console.log('🍎 Dispositivo Safari/iOS detectado - Usando signInWithRedirect');
             // Mostrar mensaje al usuario antes del redirect
             showStatus('🔄 Redirigiendo para autenticación...', 'loading');
-            
-            // Marcar que hay autenticación pendiente
-            sessionStorage.setItem("auth_pending", "true");
-            sessionStorage.setItem("auth_timestamp", Date.now().toString());
-            console.log("✅ Estado auth_pending guardado en sessionStorage");
-            console.log("🕐 Timestamp guardado:", Date.now());
-            console.log("🌐 URL actual antes de redirect:", window.location.href);
-            console.log("🔑 Firebase Auth estado:", auth.currentUser);
-            
-            console.log("🚀 Ejecutando signInWithRedirect...");
             
             // Iniciar el flujo de redirect
             await signInWithRedirect(auth, provider);
@@ -1516,12 +1496,7 @@ function getCurrentLocation() {
     
     updateLocationStatus('loading', statusMsg, '');
 
-    // Safari/iOS necesita más tiempo para obtener geolocalización
-    const timeoutValue = (isIOS || isSafari) ? 30000 : 20000;
-    const options = { enableHighAccuracy: true, timeout: timeoutValue, maximumAge: 0 };
-    console.log(`⏱️ Timeout: ${timeoutValue}ms`);
-    
-    console.log(`⏱️ Timeout de geolocalización: ${timeoutValue}ms (${(isIOS || isSafari) ? "Safari/iOS" : "Chrome/Android"})`);
+    const options = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
     
     navigator.geolocation.getCurrentPosition(
         function(position) {
